@@ -3,7 +3,7 @@
 # MAGIC # Egress check
 # MAGIC Free Edition serverless compute can only reach a whitelist of domains.
 # MAGIC This notebook tests every candidate data source and decides whether scraping
-# MAGIC can run inside Databricks or has to move to GitHub Actions (see docs/PLAN.md, step 1.3).
+# MAGIC can run inside Databricks or has to move to GitHub Actions (see docs/PLAN.md, step 1.2).
 
 # COMMAND ----------
 
