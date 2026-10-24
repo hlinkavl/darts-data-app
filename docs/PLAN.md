@@ -79,7 +79,7 @@ An end-to-end data app about PDC darts with two core features:
 - [x] `databricks aitools install --agents claude-code --scope global` (Databricks plugin v0.2.32), Claude Code reloaded
 - [x] `scripts/bootstrap_databricks.sh`: schemas `workspace.darts_bronze/silver/gold` + Volume `workspace.darts_bronze.raw`
 - [x] `databricks bundle validate -t dev` passes
-- [ ] (optional) Verify identity via LinkedIn in the workspace to raise some Free Edition limits
+- [x] Verify identity via LinkedIn in the workspace (raises some Free Edition limits)
 
 ## Day 1: Data foundation
 
