@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets / local config
+.env
+.env.*
+!.env.example
+.databrickscfg
+.streamlit/secrets.toml
+
+# Databricks bundle state
+.databricks/
+
+# Local data
+data/*
+!data/.gitkeep
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/

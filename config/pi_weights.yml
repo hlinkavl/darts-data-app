@@ -1,0 +1,9 @@
+# Performance Index v1 weights (must sum to 1.0). See docs/DESIGN.md.
+reference_group_top_n: 128
+shrinkage_k: 5
+components:
+  form: 0.30
+  big_stage: 0.25
+  scoring: 0.15
+  finishing: 0.15
+  results: 0.15

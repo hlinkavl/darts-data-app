@@ -1,0 +1,6 @@
+resources:
+  apps:
+    darts_app:
+      name: darts-performance-analyzer
+      description: PDC darts tournament predictions and player Performance Index.
+      source_code_path: ../app

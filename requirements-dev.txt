@@ -1,0 +1,11 @@
+databricks-sdk
+databricks-sql-connector
+streamlit
+pandas
+plotly
+requests
+beautifulsoup4
+python-dotenv
+pyyaml
+pytest
+ruff
