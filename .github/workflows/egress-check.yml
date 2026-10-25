@@ -1,0 +1,37 @@
+# Checks whether data sources accept requests from GitHub-hosted runners (see docs/PLAN.md, step 3.7).
+# One job per source, so each result is visible as a job conclusion.
+name: egress-check
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/egress-check.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: ${{ matrix.source }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - source: orakel-site
+            url: https://dartsorakel.com/
+          - source: orakel-api
+            url: https://dartsorakel.com/api/rankings?rankKey=0&isCurrent=1&draw=1&start=0&length=1
+          - source: wikipedia
+            url: https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo&format=json
+          - source: wikidata
+            url: https://www.wikidata.org/w/api.php?action=wbsearchentities&search=Luke%20Littler&language=en&format=json
+    steps:
+      - name: Request ${{ matrix.source }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+            -A "darts-data-app/0.1 (+https://github.com/hlinkavl/darts-data-app; non-commercial)" \
+            "${{ matrix.url }}")
+          echo "HTTP $code"
+          test "$code" = "200"

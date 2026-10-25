@@ -2,7 +2,8 @@
 # MAGIC %md
 # MAGIC # Bronze: load raw files from the Volume
 # MAGIC Every `raw/<source>/<run_date>/<dataset>.jsonl` file is loaded 1:1, plus lineage columns.
-# MAGIC Tables are rebuilt from all files, so every historical run stays queryable via `_run_date`.
+# MAGIC Tables are rebuilt from all files, so every historical run stays queryable via `_run_date`
+# MAGIC (folder name: YYYY-MM-DD or YYYY-MM-DDTHHMMSS, both sort chronologically as strings).
 
 # COMMAND ----------
 
@@ -26,7 +27,7 @@ for table, (pattern, hints) in TABLES.items():
         CREATE OR REPLACE TABLE {catalog}.darts_bronze.{table} AS
         SELECT
           * EXCEPT (_rescued_data),
-          regexp_extract(_metadata.file_path, '/raw/[^/]+/([0-9-]+)/', 1) AS _run_date,
+          regexp_extract(_metadata.file_path, '/raw/[^/]+/([^/]+)/', 1) AS _run_date,
           _metadata.file_path AS _source_file,
           current_timestamp() AS _ingested_at
         FROM read_files('{raw}/{pattern}', format => 'json', schemaHints => '{hints}')

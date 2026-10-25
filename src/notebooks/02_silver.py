@@ -2,7 +2,8 @@
 # MAGIC %md
 # MAGIC # Silver: clean, typed, one row per entity
 # MAGIC The Orakel `player_key` is the canonical player ID. Wikipedia background was matched to it at ingestion,
-# MAGIC so all sources join on `player_key`. Only the latest run of each dataset is used.
+# MAGIC so all sources join on `player_key`. Ingestion is incremental, so entities are deduplicated across runs
+# MAGIC (newest run wins); the current ranking comes from the latest run only.
 
 # COMMAND ----------
 
@@ -15,7 +16,12 @@ spark.sql(f"USE CATALOG {catalog}")
 BIG_STAGE = "('WC', 'MJ', 'WGP', 'U')"
 
 def latest(table: str) -> str:
+    """Rows of the most recent run only (full snapshots such as the ranking)."""
     return f"(SELECT * FROM darts_bronze.{table} WHERE _run_date = (SELECT max(_run_date) FROM darts_bronze.{table}))"
+
+def dedup(table: str, key: str) -> str:
+    """Newest version of each key across all runs (incremental datasets)."""
+    return f"(SELECT * FROM darts_bronze.{table} QUALIFY row_number() OVER (PARTITION BY {key} ORDER BY _run_date DESC) = 1)"
 
 # COMMAND ----------
 
@@ -40,7 +46,7 @@ SELECT DISTINCT
   player_key AS winner_key,
   winner_name,
   category IN {BIG_STAGE} AS is_big_stage
-FROM {latest("orakel_events")}
+FROM {dedup("orakel_events", "event_key")}
 """)
 
 # COMMAND ----------
@@ -51,7 +57,7 @@ FROM {latest("orakel_events")}
 
 spark.sql(f"""
 CREATE OR REPLACE TABLE darts_silver.player_matches AS
-WITH m AS (SELECT * FROM {latest("orakel_matches")} WHERE is_bye = 0)
+WITH m AS (SELECT * FROM {dedup("orakel_matches", "match_key, player_key, stat_name")} WHERE is_bye = 0)
 SELECT
   match_key,
   player_key,
@@ -110,7 +116,7 @@ SELECT
   any_value(loser_name) AS loser_name,
   any_value(winner_score) AS winner_score,
   any_value(loser_score) AS loser_score
-FROM {latest("orakel_matches")}
+FROM {dedup("orakel_matches", "match_key, player_key, stat_name")}
 WHERE is_bye = 0
 GROUP BY match_key
 """)
@@ -139,7 +145,7 @@ wiki AS (
   SELECT
     player_key, wikidata_id, enwiki_title, description, intro,
     nickname[0] AS nickname, image[0] AS image_file, citizenship[0] AS citizenship_qid
-  FROM {latest("wiki_player_background")}
+  FROM {dedup("wiki_player_background", "player_key")}
 )
 SELECT
   coalesce(t.player_key, o.player_key) AS player_key,
@@ -162,7 +168,7 @@ LEFT JOIN wiki w ON w.player_key = coalesce(t.player_key, o.player_key)
 spark.sql("""
 CREATE OR REPLACE TABLE darts_silver.rankings AS
 SELECT DISTINCT
-  to_date(_run_date) AS snapshot_date,
+  to_date(left(_run_date, 10)) AS snapshot_date,
   rank,
   player_key,
   player_name,
@@ -172,8 +178,8 @@ FROM darts_bronze.orakel_rankings
 
 spark.sql(f"""
 CREATE OR REPLACE TABLE darts_silver.tournament_pages AS
-SELECT title, revid, wikitext, error, to_date(_run_date) AS fetched_on
-FROM {latest("wiki_tournament_pages")}
+SELECT title, revid, wikitext, error, to_date(left(_run_date, 10)) AS fetched_on
+FROM {dedup("wiki_tournament_pages", "title")}
 """)
 
 for t in ["events", "player_matches", "matches", "players", "rankings", "tournament_pages"]:

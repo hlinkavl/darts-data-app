@@ -96,6 +96,8 @@ An end-to-end data app about PDC darts with two core features:
 1.2 [x] **Egress test from Databricks** (job `darts_egress_check`): PDC 200, Wikipedia 200, PyPI 200, DartsDatabase 200, **Darts Orakel 403**, Mastercaller 418. Orakel works locally with the same honest User-Agent, so it's an IP block on its side. **Decision: ingestion runs outside Databricks, transformations inside.**
 
 1.3 [x] **Scrapers** in `ingestion/`: `http.py` (polite client: rate limit, retries, disk cache in `data/cache/`), `orakel.py`, `wikipedia.py`, `run.py` (CLI that writes `data/raw/<source>/<run_date>/*.jsonl` and uploads them to the Volume with `--upload`).
+   **Incremental by default** (`make ingest`): players tracked in the previous run get matches from (previous run − 14 days), players new to the top 150 get full history, and Wikipedia background is fetched for new players only. Each run writes its own folder `raw/<source>/<YYYY-MM-DDTHHMMSS>/`, so no run overwrites another. Silver deduplicates across runs (newest wins). Full re-pull: `make backfill`.
+   Note: the request count stays about the same (1 request per player per stat, ~600 per run, ~20 min); what shrinks is the data volume per run.
 
 1.4 [ ] **Backfill:** top 150 players, matches since 2023-01-01 → Volume `raw/orakel/2026-10-25/`, `raw/wikipedia/2026-10-25/`.
 
