@@ -43,7 +43,7 @@ An end-to-end data app about PDC darts with two core features:
 
 **Why not Airflow:** Databricks handles the refresh on its own. A Job supports a cron schedule (monthly) and a "Run now" trigger from the UI, the CLI or the app. Airflow would need an always-on server, which costs money. Free Edition has no managed orchestrator besides Jobs.
 
-**Where scraping runs (decided in step 1.2):** Databricks serverless *can* reach the internet (PDC, Wikipedia and PyPI returned 200), but **Darts Orakel's Cloudflare returns 403 to Databricks IPs**, while the same request from a home connection works. We don't work around that block. So scraping runs **outside Databricks** (`python -m ingestion.run --upload`: locally today, GitHub Actions for the monthly schedule if Orakel doesn't block GitHub runners, otherwise a local scheduled task). The Databricks Job then does all transformations.
+**Where scraping runs (decided in step 1.2):** Databricks serverless *can* reach the internet (PDC, Wikipedia and PyPI returned 200), but **Darts Orakel's Cloudflare returns 403 to Databricks IPs**, while the same request from a home connection works. We don't work around that block. So scraping runs **outside Databricks**: locally on demand (`make ingest`) and monthly in **GitHub Actions**, whose runners Orakel does accept (verified by the `egress-check` workflow). The Databricks Job then does all transformations.
 
 ## Databricks Free Edition limits that shape the design
 
@@ -133,7 +133,7 @@ An end-to-end data app about PDC darts with two core features:
 3.4 [ ] **Streamlit app**: pages as described in [DESIGN.md](DESIGN.md#app-design), developed locally (`streamlit run app/app.py`) against the SQL warehouse.
 3.5 [ ] **Refresh data** button → `jobs.run_now` (the app's service principal gets CAN_MANAGE_RUN on the job).
 3.6 [ ] Job `darts_refresh` with the full task chain `bronze → silver → quality → gold → predict → ai_summaries`. The schedule is the **1st of each month at 06:00 Europe/Prague** (already in the bundle).
-3.7 [ ] Scheduled ingestion outside Databricks: test whether Orakel allows GitHub Actions runners. If yes, `refresh.yml` (monthly cron + `workflow_dispatch`, secrets `DATABRICKS_HOST` / `DATABRICKS_TOKEN`) runs `ingestion.run --upload`, then triggers `darts_refresh`. If not, a local scheduled task (launchd) on the Mac + a `make refresh` command for on-demand runs.
+3.7 [ ] Scheduled ingestion in **GitHub Actions**. Workflow `egress-check` (run 2026-10-25) proved that GitHub-hosted runners get 200 from Orakel (site + API), Wikipedia and Wikidata. `refresh.yml`: monthly cron + `workflow_dispatch` → `python -m ingestion.run --upload` (incremental) → `databricks jobs run-now darts_refresh`. Secrets: `DATABRICKS_HOST` + `DATABRICKS_TOKEN` (PAT or service principal). The "Refresh data" button in the app can dispatch this workflow.
 3.8 [ ] Deploy: `databricks bundle deploy -t dev` + `databricks bundle run darts_app`.
 3.9 [ ] README: link to the video, infrastructure overview, explanation of the Databricks limits, screenshots.
 
