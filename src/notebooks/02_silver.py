@@ -57,7 +57,8 @@ FROM {dedup("orakel_events", "event_key")}
 
 spark.sql(f"""
 CREATE OR REPLACE TABLE darts_silver.player_matches AS
-WITH m AS (SELECT * FROM {dedup("orakel_matches", "match_key, player_key, stat_name")} WHERE is_bye = 0)
+WITH m AS (SELECT * FROM {dedup("orakel_matches", "match_key, player_key, stat_name")} WHERE is_bye = 0),
+pivoted AS (
 SELECT
   match_key,
   player_key,
@@ -82,6 +83,16 @@ SELECT
   max(IF(stat_name = '180s', stat1, NULL)) AS one_eighties
 FROM m
 GROUP BY match_key, player_key
+)
+-- The source has a handful of impossible values (~0.01 %): checkouts hit > attempts, averages outside 30-140.
+-- Keep the match, drop only the broken stat.
+SELECT
+  * EXCEPT (points, darts, checkouts_hit, checkout_attempts),
+  IF(3 * points / nullif(darts, 0) BETWEEN 30 AND 140, points, NULL) AS points,
+  IF(3 * points / nullif(darts, 0) BETWEEN 30 AND 140, darts, NULL) AS darts,
+  IF(checkouts_hit <= checkout_attempts, checkouts_hit, NULL) AS checkouts_hit,
+  IF(checkouts_hit <= checkout_attempts, checkout_attempts, NULL) AS checkout_attempts
+FROM pivoted
 """)
 
 spark.sql("""
@@ -144,7 +155,7 @@ opponents AS (
 wiki AS (
   SELECT
     player_key, wikidata_id, enwiki_title, description, intro,
-    nickname[0] AS nickname, image[0] AS image_file, citizenship[0] AS citizenship_qid
+    get(nickname, 0) AS nickname, get(image, 0) AS image_file, get(citizenship, 0) AS citizenship_qid
   FROM {dedup("wiki_player_background", "player_key")}
 )
 SELECT

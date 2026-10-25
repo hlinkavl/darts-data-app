@@ -62,8 +62,8 @@ An end-to-end data app about PDC darts with two core features:
 | Day | Focus | Status |
 |---|---|---|
 | Day 0 | Admin and setup | ✅ done (2026-10-24) |
-| Day 1 | Data foundation: sources, ingestion, bronze → silver | ⏳ in progress |
-| Day 2 | Analytics: Performance Index, prediction model, backtests | ⬜ |
+| Day 1 | Data foundation: sources, ingestion, bronze → silver | ✅ done (2026-10-25) |
+| Day 2 | Analytics: Performance Index, prediction model, backtests | ⏳ next |
 | Day 3 | AI layer, Genie, Streamlit app, deploy, automation | ⬜ |
 
 ---
@@ -81,7 +81,7 @@ An end-to-end data app about PDC darts with two core features:
 - [x] `databricks bundle validate -t dev` passes
 - [x] Verify identity via LinkedIn in the workspace (raises some Free Edition limits)
 
-## Day 1: Data foundation
+## Day 1: Data foundation ✅
 
 **Goal by end of day:** real data in `silver.players`, `silver.matches`, `silver.tournaments` and `silver.rankings`, plus the decision on where scraping runs.
 
@@ -99,7 +99,7 @@ An end-to-end data app about PDC darts with two core features:
    **Incremental by default** (`make ingest`): players tracked in the previous run get matches from (previous run − 14 days), players new to the top 150 get full history, and Wikipedia background is fetched for new players only. Each run writes its own folder `raw/<source>/<YYYY-MM-DDTHHMMSS>/`, so no run overwrites another. Silver deduplicates across runs (newest wins). Full re-pull: `make backfill`.
    Note: the request count stays about the same (1 request per player per stat, ~600 per run, ~20 min); what shrinks is the data volume per run.
 
-1.4 [ ] **Backfill:** top 150 players, matches since 2023-01-01 → Volume `raw/orakel/2026-10-25/`, `raw/wikipedia/2026-10-25/`.
+1.4 [x] **Backfill:** top 150 players, matches since 2023-01-01 → Volume `raw/orakel/2026-10-25/`, `raw/wikipedia/2026-10-25/`. About 615 Orakel requests in 26 min; 290k raw stat rows (240 MB JSONL, 5.8 MB as Delta).
 
 1.5 [x] **Bronze tables** (`src/notebooks/01_bronze.py`): `read_files` over the Volume with `_run_date`, `_source_file` and `_ingested_at`. Tables: `orakel_rankings`, `orakel_events`, `orakel_matches`, `wiki_tournament_pages`, `wiki_player_background`.
 
@@ -107,7 +107,11 @@ An end-to-end data app about PDC darts with two core features:
 
 1.7 [x] **Data quality checks** (`src/notebooks/03_quality.py`): 7 hard checks that fail the job (duplicates, winner ≠ loser, averages in range, checkouts ≤ attempts…) + soft metrics (missing stats, Wikidata match rate, date range).
 
-1.8 [ ] Full run of `darts_refresh` (bronze → silver → quality) on the backfill.
+1.8 [x] Full run of `darts_refresh` (bronze → silver → quality) on the backfill, all hard checks green, ~1.5 min:
+   - `player_matches` 72,861 · `matches` 54,146 · `players` 5,106 (150 tracked + opponents) · `events` 3,908 · range 2023-01-01 .. 2026-10-24
+   - The source contains ~0.01 % impossible values (checkouts hit > attempts, a 14.3 average in an exhibition). Silver nulls the broken stat and keeps the match.
+   - Sanity check, last 180 days: Littler 100.55, Humphries 99.29, Price 97.37 ✔
+   - Follow-up: only 76 % of tracked players matched to Wikidata. Improve the name search on Day 3 (needed for player backgrounds).
 
 ## Day 2: Analytics, Performance Index and predictions
 
