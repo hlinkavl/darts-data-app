@@ -64,14 +64,15 @@ Catalog `workspace` (the Free Edition default), three schemas:
 
 | Layer | Table | Contents |
 |---|---|---|
-| bronze | `darts_bronze.raw` (Volume) | raw JSON/CSV files by source and download date |
-| bronze | `orakel_matches`, `oom_rankings`, `wiki_players`, `wiki_brackets`, `news_articles`, `odds_outrights` | sources loaded 1:1, plus `_ingested_at` and `_source_file` |
-| silver | `players` | `player_id`, name, nickname, country, date of birth, aliases per source |
-| silver | `tournaments` | `tournament_id`, name, year, category (major / European Tour / Players Championship…), format, `is_big_stage` |
-| silver | `matches` | `match_id`, date, event, round, players, score, average, 180s, checkout %, format |
-| silver | `rankings` | Order of Merit snapshots |
-| silver | `news` | article, players mentioned, date |
-| silver | `odds` | outright odds, implied probability with the margin removed |
+| bronze | `darts_bronze.raw` (Volume) | raw JSONL files: `raw/<source>/<run_date>/<dataset>.jsonl` |
+| bronze | `orakel_rankings`, `orakel_events`, `orakel_matches`, `wiki_tournament_pages`, `wiki_player_background` | files loaded 1:1, plus `_run_date`, `_source_file`, `_ingested_at` |
+| silver | `players` | `player_key` (Orakel ID, canonical), name, country, date of birth, 2-year prize money + rank, `is_tracked`, Wikidata nickname / image / intro |
+| silver | `events` | `event_key`, tournament, dates, Orakel category, prize fund, event average, winner, `is_big_stage` |
+| silver | `matches` | one row per match: date, event, round, category, winner/loser, score |
+| silver | `player_matches` (+ view `player_matches_v`) | one row per player per match: opponent, won, score, points/darts, first-9 points/darts, checkouts hit/attempts, 180s; the view adds average, first-9 average, checkout % |
+| silver | `rankings` | prize-money ranking snapshots, one per ingestion run |
+| silver | `tournament_pages` | Wikipedia wikitext of WC pages (draws are parsed on Day 2) |
+| silver | `news`, `odds` | *(planned, Day 2–3)* |
 | gold | `player_form` | last 5/10 matches, trend |
 | gold | `performance_index` | PI + components, `as_of_date` (history for backtests) |
 | gold | `player_ai_summary` | AI narratives (form, interviews) |
@@ -101,7 +102,7 @@ Catalog `workspace` (the Free Edition default), three schemas:
 3. `PI = 10 × Σ(wᵢ · p_adjᵢ)`, rounded to one decimal place.
 4. Keep the history (`as_of_date`) so we can chart the trend and run backtests.
 
-**Big-stage events (proposal):** World Championship, World Matchplay, World Grand Prix, Grand Slam, Players Championship Finals, UK Open, Masters, Premier League, European Championship, World Series Finals.
+**Big-stage events:** Orakel categories `WC` (World Championship), `MJ` (majors: World Matchplay, UK Open, Masters, European Championship, World Series Finals, …), `WGP` (World Grand Prix) and `U` (Premier League). Set in `02_silver.py` (`BIG_STAGE`).
 
 **Validation:** (a) sanity check: the current world elite should score PI 8.5+; (b) backtest: does a higher pre-tournament PI predict a better finish (Spearman correlation on WC 2024–2026)?
 
@@ -116,6 +117,12 @@ Catalog `workspace` (the Free Edition default), three schemas:
 5. **Backtest** on WC 2025/2026: Brier score and log loss against the odds.
 
 ---
+
+## Data sources and attribution
+
+- **Darts Orakel** (dartsorakel.com): free public API only, never paywalled pages. Polite use: top 150 players, 1 request / 2 s, a cache, an identifying User-Agent. Credited as "Data: Darts Orakel" in the app.
+- **Wikipedia / Wikidata**: CC BY-SA, credited in the app.
+- Not used: DartsDatabase (its robots.txt disallows AI agents), pdc.tv (client-side rendered).
 
 ## Infrastructure and refresh
 

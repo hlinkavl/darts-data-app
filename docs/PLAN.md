@@ -28,10 +28,10 @@ An end-to-end data app about PDC darts with two core features:
 ## Architecture at a glance
 
 ```
- Sources (PDC, Darts Orakel, DartsDatabase, Wikipedia, news/RSS, odds)
-        │  Python scrapers (ingestion/)
+ Sources (Darts Orakel free API, Wikipedia/Wikidata, news/RSS, odds)
+        │  Python scrapers (ingestion/), run outside Databricks
         ▼
- UC Volume  /Volumes/workspace/darts_bronze/raw/<source>/<date>/*.json|csv
+ UC Volume  /Volumes/workspace/darts_bronze/raw/<source>/<date>/*.jsonl
         │  Databricks Job "darts_refresh" (serverless)
         ▼
  bronze (raw Delta)  →  silver (clean, unified player IDs)  →  gold (PI, form, predictions)
@@ -43,14 +43,14 @@ An end-to-end data app about PDC darts with two core features:
 
 **Why not Airflow:** Databricks handles the refresh on its own. A Job supports a cron schedule (monthly) and a "Run now" trigger from the UI, the CLI or the app. Airflow would need an always-on server, which costs money. Free Edition has no managed orchestrator besides Jobs.
 
-**The one real risk:** serverless compute on Free Edition has **restricted outbound internet**. Only a whitelist of "trusted domains" is reachable, and that list is not published and differs by region. If the darts sites aren't reachable from Databricks, scraping moves to **GitHub Actions** (free, cron + `workflow_dispatch`, so monthly *and* on demand). The workflow uploads the files to the Volume and then triggers the Databricks Job for the transformations. Step 1.2 decides which way we go.
+**Where scraping runs (decided in step 1.2):** Databricks serverless *can* reach the internet (PDC, Wikipedia and PyPI returned 200), but **Darts Orakel's Cloudflare returns 403 to Databricks IPs**, while the same request from a home connection works. We don't work around that block. So scraping runs **outside Databricks** (`python -m ingestion.run --upload`: locally today, GitHub Actions for the monthly schedule if Orakel doesn't block GitHub runners, otherwise a local scheduled task). The Databricks Job then does all transformations.
 
 ## Databricks Free Edition limits that shape the design
 
 - **Serverless** compute only, and a single **2X-Small SQL warehouse**.
 - **Up to 3 Databricks Apps**. An app **stops automatically after 24 h** and has to be restarted. That's fine for a demo, and GitHub Actions can restart it if needed.
 - **Max 5 concurrent job tasks** and 1 active pipeline per type, so one Job with a few tasks is enough.
-- **Restricted outbound internet** (see above).
+- **Restricted outbound internet**: a non-public whitelist. In practice our blocker was the source site, not Databricks (see above).
 - Fair-use quotas. Going over shuts compute off for the rest of the day (in extreme cases, the rest of the month). Data is kept.
 - No SLA, non-commercial use only, and inactive accounts may be deleted.
 - LinkedIn identity verification ("Verify identity") raises some limits. Recommended.
@@ -62,7 +62,7 @@ An end-to-end data app about PDC darts with two core features:
 | Day | Focus | Status |
 |---|---|---|
 | Day 0 | Admin and setup | ✅ done (2026-10-24) |
-| Day 1 | Data foundation: sources, ingestion, bronze → silver | ⏳ next |
+| Day 1 | Data foundation: sources, ingestion, bronze → silver | ⏳ in progress |
 | Day 2 | Analytics: Performance Index, prediction model, backtests | ⬜ |
 | Day 3 | AI layer, Genie, Streamlit app, deploy, automation | ⬜ |
 
@@ -85,25 +85,27 @@ An end-to-end data app about PDC darts with two core features:
 
 **Goal by end of day:** real data in `silver.players`, `silver.matches`, `silver.tournaments` and `silver.rankings`, plus the decision on where scraping runs.
 
-1.1 [ ] **Source inventory.** For each source check availability, structure, ToS and robots.txt:
-   - PDC Order of Merit (ranking, prize money): pdc.tv
-   - Match results + stats (average, 180s, checkout %): Darts Orakel, DartsDatabase
-   - Player background (age, nationality, nickname, titles): Wikipedia
-   - Tournament draw and bracket: Wikipedia tournament page / PDC
-   - Interviews and news: PDC news / RSS
-   - Long-term (outright) odds: check for an API (e.g. The Odds API, if it covers darts). Otherwise a manual CSV.
+1.1 [x] **Source inventory.** Decisions:
+   - ✅ **Darts Orakel, free public API only** (primary source). Endpoints: `/api/rankings` (2-year prize money = Order of Merit equivalent, DOB, country), `/api/events` (every event with category, prize fund, event average), `/api/player/matches/{player_key}` (every match with one stat per call: average, first-9 average, checkout %, 180s, each with numerator/denominator). Event results pages are **behind a subscription paywall, so we don't use them**. Their robots.txt allows everything, but Orakel sells data commercially, so we run it **gently**: top 150 players, 1 request / 2 s, a disk cache, an identifying User-Agent, and a "Data: Darts Orakel" credit in the app. Non-commercial use.
+   - ✅ **Wikipedia / Wikidata** via the official APIs: WC pages 2024–2027 (draws for backtests and the 2027 bracket) and player background (DOB, citizenship, nickname, image, intro). CC BY-SA, credited in the app.
+   - ❌ **DartsDatabase**: its robots.txt explicitly disallows AI agents (`anthropic-ai`, `ClaudeBot`, `GPTBot`…). Excluded.
+   - ❌ **pdc.tv Order of Merit**: rendered client-side. Not needed, because Orakel rankings cover it.
+   - ⏸ **Mastercaller**: blocks scripted clients (418/403). Not needed.
+   - ⏸ **News/interviews and outright odds**: postponed to Day 2/3 (the AI layer and the odds comparison).
 
-1.2 [ ] **Egress test from Databricks.** Deploy the bundle and run the `egress_check` task (`src/notebooks/00_egress_check.py`). The result decides whether scraping runs in the Databricks Job or in GitHub Actions.
+1.2 [x] **Egress test from Databricks** (job `darts_egress_check`): PDC 200, Wikipedia 200, PyPI 200, DartsDatabase 200, **Darts Orakel 403**, Mastercaller 418. Orakel works locally with the same honest User-Agent, so it's an IP block on its side. **Decision: ingestion runs outside Databricks, transformations inside.**
 
-1.3 [ ] **Scrapers** in `ingestion/<source>.py`. Same interface for all (`fetch() -> list[dict]`), JSON output to `data/raw/` (local, gitignored), polite rate limits, caching.
+1.3 [x] **Scrapers** in `ingestion/`: `http.py` (polite client: rate limit, retries, disk cache in `data/cache/`), `orakel.py`, `wikipedia.py`, `run.py` (CLI that writes `data/raw/<source>/<run_date>/*.jsonl` and uploads them to the Volume with `--upload`).
 
-1.4 [ ] **Backfill:** history from at least 2023 to today (needed for form and big-stage history). Upload to the Volume via `databricks fs cp` / the SDK.
+1.4 [ ] **Backfill:** top 150 players, matches since 2023-01-01 → Volume `raw/orakel/2026-10-25/`, `raw/wikipedia/2026-10-25/`.
 
-1.5 [ ] **Bronze tables** loaded from the Volume (`read_files`), with `_ingested_at` and `_source_file`.
+1.5 [x] **Bronze tables** (`src/notebooks/01_bronze.py`): `read_files` over the Volume with `_run_date`, `_source_file` and `_ingested_at`. Tables: `orakel_rankings`, `orakel_events`, `orakel_matches`, `wiki_tournament_pages`, `wiki_player_background`.
 
-1.6 [ ] **Bronze → silver:** SQL/PySpark transforms in `src/transform/`. The key step is **unifying player IDs** across sources (fuzzy name matching, with `ai_query` for ambiguous cases).
+1.6 [x] **Bronze → silver** (`src/notebooks/02_silver.py`): `events`, `player_matches` (one row per player per match, stats pivoted, plus view `player_matches_v` with average / first-9 / checkout %), `matches`, `players` (tracked players + every opponent, with Wikidata background), `rankings` (snapshot history), `tournament_pages`. **Player ID = Orakel `player_key`**. Wikipedia is matched to it at ingestion, so no fuzzy matching is needed.
 
-1.7 [ ] Data quality checks: row counts, duplicate matches, players without an ID match.
+1.7 [x] **Data quality checks** (`src/notebooks/03_quality.py`): 7 hard checks that fail the job (duplicates, winner ≠ loser, averages in range, checkouts ≤ attempts…) + soft metrics (missing stats, Wikidata match rate, date range).
+
+1.8 [ ] Full run of `darts_refresh` (bronze → silver → quality) on the backfill.
 
 ## Day 2: Analytics, Performance Index and predictions
 
@@ -128,8 +130,8 @@ An end-to-end data app about PDC darts with two core features:
 3.3 [ ] **Genie space** over the gold tables, with instructions and sample questions ("Who has the best TV average over the last 6 months?").
 3.4 [ ] **Streamlit app**: pages as described in [DESIGN.md](DESIGN.md#app-design), developed locally (`streamlit run app/app.py`) against the SQL warehouse.
 3.5 [ ] **Refresh data** button → `jobs.run_now` (the app's service principal gets CAN_MANAGE_RUN on the job).
-3.6 [ ] Job `darts_refresh` with the full task chain `ingest → silver → gold → predict → ai_summaries`. The schedule is the **1st of each month at 06:00 Europe/Prague** (already in the bundle).
-3.7 [ ] (if egress is blocked) GitHub Actions `refresh.yml`: monthly cron + `workflow_dispatch`, with secrets `DATABRICKS_HOST` / `DATABRICKS_TOKEN`.
+3.6 [ ] Job `darts_refresh` with the full task chain `bronze → silver → quality → gold → predict → ai_summaries`. The schedule is the **1st of each month at 06:00 Europe/Prague** (already in the bundle).
+3.7 [ ] Scheduled ingestion outside Databricks: test whether Orakel allows GitHub Actions runners. If yes, `refresh.yml` (monthly cron + `workflow_dispatch`, secrets `DATABRICKS_HOST` / `DATABRICKS_TOKEN`) runs `ingestion.run --upload`, then triggers `darts_refresh`. If not, a local scheduled task (launchd) on the Mac + a `make refresh` command for on-demand runs.
 3.8 [ ] Deploy: `databricks bundle deploy -t dev` + `databricks bundle run darts_app`.
 3.9 [ ] README: link to the video, infrastructure overview, explanation of the Databricks limits, screenshots.
 
@@ -143,4 +145,4 @@ An end-to-end data app about PDC darts with two core features:
 - App language: English only, or with a Czech toggle?
 - Which events count as "big stage" (proposal in DESIGN.md)?
 - Odds source: an API or a manual CSV?
-- Where the scraping runs (Databricks Job vs. GitHub Actions) gets decided in step 1.2.
+- News/interviews source for the AI narratives (PDC news RSS?).
