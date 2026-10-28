@@ -189,7 +189,8 @@ spark.createDataFrame(
     "tournament_key BIGINT, tournament_name STRING, wiki_title_pattern STRING",
 ).write.mode("overwrite").option("overwriteSchema", "true").saveAsTable("darts_silver.majors")
 
-# Upcoming matches: a snapshot, so only the latest run counts.
+# Upcoming matches: a snapshot of the latest ingestion run (taken from the rankings, which every run writes).
+# An empty feed in the latest run must give an empty table, never the matches of an older run.
 if spark.catalog.tableExists("darts_bronze.orakel_upcoming"):
     spark.sql(f"""
     CREATE OR REPLACE TABLE darts_silver.upcoming_matches AS
@@ -204,7 +205,8 @@ if spark.catalog.tableExists("darts_bronze.orakel_upcoming"):
       second_player_key AS player_b_key, {unescape('second_player_name')} AS player_b_name,
       legs_format, venue,
       to_timestamp(left(_run_date, 10)) AS fetched_on
-    FROM {latest("orakel_upcoming")}
+    FROM darts_bronze.orakel_upcoming
+    WHERE _run_date = (SELECT max(_run_date) FROM darts_bronze.orakel_rankings)
     """)
 
 # COMMAND ----------

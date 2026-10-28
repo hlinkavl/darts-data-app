@@ -63,8 +63,8 @@ An end-to-end data app about PDC darts with two core features:
 |---|---|---|
 | Day 0 | Admin and setup | ✅ done (2026-10-24) |
 | Day 1 | Data foundation: sources, ingestion, bronze → silver | ✅ done (2026-10-25) |
-| Day 2 | Analytics: Performance Index, prediction model, backtests | ⏳ in progress (PI done) |
-| Day 3 | AI layer, Genie, Streamlit app, deploy, automation | ⬜ |
+| Day 2 | Analytics: Performance Index, prediction model, backtests | ✅ done (2026-10-28) |
+| Day 3 | AI layer, Genie, Streamlit app, deploy, automation | ⏳ next |
 
 ---
 
@@ -113,7 +113,7 @@ An end-to-end data app about PDC darts with two core features:
    - Sanity check, last 180 days: Littler 100.55, Humphries 99.29, Price 97.37 ✔
    - Follow-up: only 76 % of tracked players matched to Wikidata. Improve the name search on Day 3 (needed for player backgrounds).
 
-## Day 2: Analytics, Performance Index and predictions
+## Day 2: Analytics, Performance Index and predictions ✅
 
 **Goal by end of day:** `gold.performance_index` and the Tournament Overview data (`gold.tournament_predictions`, upcoming matches) populated and backtested.
 
@@ -129,13 +129,13 @@ An end-to-end data app about PDC darts with two core features:
    - Selected (v2026-10-28): 3-Dart Average (L30) 58 %, Opponent-Weighted Elo 21 %, Form 18 %, Experience 3 % (borderline: exactly 80 % in the bootstrap). Dropped: First-9 (r = 0.94 with average), Win Rate and Checkout % (negative coefficients), 180s (p = 0.69).
    - **Big-Stage Delta** (majors only, decided 2026-10-28: keep the 80 % rule): 73 % of bootstrap samples with data since 2023, **61 %** with data since 2021, so the longer history weakened the evidence. Out of the index, re-tested on every refit, shown descriptively in profiles.
    - Test 2026: AUC 0.684 (0.707 on majors), well calibrated. Top 3: Littler 7.15, Humphries 6.36, Price 5.88.
-2.3 [ ] PI backtest on the World Championships 2025 and 2026 (pre-tournament PI vs. how far players got).
-2.4 [ ] Match format conversion: "typical match" probability → leg probability → P(win) for best-of-N legs / sets (dynamic programming).
-2.5 [ ] **Monte Carlo bracket simulation** (10,000 runs) → `gold.tournament_predictions` (P(reach round), P(title)); parse the draws from the Wikipedia WC pages.
-2.6 [ ] **Upcoming matches + live bracket**: ingest Orakel's upcoming-matches feed; match cards (PI vs. PI, win probability, H2H); played matches fixed in the bracket, the rest re-simulated.
-2.7 [ ] Season view: majors with dates, winners and the next upcoming major.
-2.8 [ ] Odds comparison (if a source exists) → `gold.players_to_watch`.
-2.9 [ ] `gold.player_form` (last 5 matches) for player profiles, and **saved queries** in Databricks (`sql/queries/`).
+2.3 [x] **Backtests** of the PI on 10 majors (2025–2026, 388 matches): favourite won 69.1 %, log loss 0.582, calibrated (slight overconfidence above ~85 %). Details in [TOURNAMENT_PREDICTIONS.md](TOURNAMENT_PREDICTIONS.md#5-backtests).
+2.4 [x] **Format conversion** (`analytics.formats`): typical match → leg probability → first to N legs / sets. It improves log loss (0.588 → 0.582).
+2.5 [x] **Monte Carlo** of the draw (10,000 runs) from Wikipedia brackets (`analytics.bracket`: sections + finals, byes, walkovers, round formats) → `gold.tournament_predictions`, `gold.tournament_draw_matches`.
+2.6 [x] **Upcoming matches + live bracket**: Orakel upcoming feed → `gold.upcoming_matches` (PI vs PI, P(win), H2H); live mode fixes played matches and re-simulates the rest. The feed is empty today; the empty case is handled (never shows stale matches). Tested in `tests/test_tournament.py`.
+2.7 [x] **Season calendar** `gold.majors_calendar`: Wikipedia infobox dates + Orakel winners, status, placeholder for majors without data yet (e.g. Players Championship Finals 2026).
+2.8 [ ] Odds comparison → `gold.players_to_watch`: **no odds source yet** (moved to open questions).
+2.9 [x] `gold.player_recent_matches` (last N matches per player) and **8 saved queries** in Databricks (`sql/queries/*.sql`, synced by `scripts/sync_queries.py` into the workspace folder `darts-data-app/queries`).
 
 ## Day 3: AI layer, app, deploy and automation
 
@@ -159,5 +159,7 @@ An end-to-end data app about PDC darts with two core features:
 ## Open questions
 
 - App language: English only, or with a Czech toggle?
-- Odds source: an API or a manual CSV?
+- Odds source for "players to watch" (model vs. market): an API or a manual CSV?
+- Day-form spread in the simulation to correct overconfidence for heavy favourites in long formats.
+- Parsers for the 96-player WC format (2024, 2025), the Grand Slam groups and the PC Finals sections.
 - News/interviews source for the AI narratives (PDC news RSS?).

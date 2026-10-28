@@ -25,9 +25,11 @@ TABLES = {
 
 for table, (pattern, hints) in TABLES.items():
     try:
-        spark.read.format("json").load(f"{raw}/{pattern}").limit(1).count()
+        has_rows = bool(spark.read.format("json").load(f"{raw}/{pattern}").columns)
     except Exception:  # no file for this dataset yet (e.g. a dataset added after earlier runs)
-        print(f"{table}: no files yet, skipped")
+        has_rows = False
+    if not has_rows:  # missing or only empty files (e.g. no upcoming matches scheduled)
+        print(f"{table}: no data yet, skipped")
         continue
     spark.sql(f"""
         CREATE OR REPLACE TABLE {catalog}.darts_bronze.{table} AS

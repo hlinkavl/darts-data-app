@@ -14,6 +14,7 @@ from .formats import TYPICAL_FIRST_TO, match_probability
 N_SIMS = 10_000
 SEED = 42
 FALLBACK_QUANTILE = 0.05  # strength for players with no data at all: 5th percentile of tracked players
+EMPTY_SLOT = -50.0        # a bye: the opponent always goes through
 
 _GRID = np.linspace(0.0005, 0.9995, 1999)
 
@@ -49,7 +50,9 @@ def draw_strengths(draw: Draw, players: pd.DataFrame, strengths: pd.DataFrame, e
     rows = []
     for slot, name in enumerate(draw.players):
         key = by_name.get(normalize_name(name)) if name else None
-        if key in s_map:
+        if name is None:
+            strength, source = EMPTY_SLOT, "bye"
+        elif key in s_map:
             strength, source = s_map[key], "pi_model"
         elif key in e_map:
             strength, source = intercept + slope * e_map[key], "elo_estimate"
@@ -87,6 +90,8 @@ def simulate(draw: Draw, slot_strengths: pd.DataFrame, fix_played: bool, n_sims:
 
     rows = []
     for i, name in enumerate(names):
+        if name is None:
+            continue
         for r, rnd in enumerate(draw.rounds):
             rows.append({"slot": i, "player_name": name, "round_order": r + 1, "round_name": rnd.name,
                          "p_reach": reach[r][i]})

@@ -99,6 +99,13 @@ for ev in events[events["event_date"] >= pd.Timestamp(today.year - 1, 1, 1)].ite
                       "winner_name": ev.winner_name or None, "winner_avg": ev.winner_avg})
 cal = pd.concat([cal, pd.DataFrame(extra)], ignore_index=True)
 
+# Majors of the current season with no data yet (no Wikipedia page, not in Orakel's calendar) still get a row.
+for key, m in MAJORS.items():
+    if not ((cal.tournament_key == key) & (cal.edition == today.year)).any():
+        cal.loc[len(cal)] = {"tournament_key": key, "tournament_name": m["name"], "edition": today.year,
+                             "wiki_title": m["wiki"].format(year=today.year), "start_date": pd.NaT, "end_date": pd.NaT,
+                             "has_draw": False, "winner_name": None, "winner_avg": np.nan}
+
 today_ts = pd.Timestamp(today)
 cal["status"] = np.select(
     [cal.end_date.isna(), cal.end_date < today_ts, cal.start_date <= today_ts],
@@ -211,5 +218,16 @@ if spark.catalog.tableExists("darts_silver.upcoming_matches"):
     if len(cards):
         save(cards, "upcoming_matches")
         display(cards)
-    else:
-        print("no upcoming matches in the feed")
+        UPCOMING_DONE = True
+
+if not globals().get("UPCOMING_DONE"):
+    # Nothing scheduled: replace the table with an empty one, so old cards never linger.
+    spark.sql("""
+        CREATE OR REPLACE TABLE darts_gold.upcoming_matches (
+          start_time TIMESTAMP, event_title STRING, round_name STRING, is_major BOOLEAN,
+          player_a_key BIGINT, player_a_name STRING, player_b_key BIGINT, player_b_name STRING,
+          pi_a DOUBLE, pi_b DOUBLE, pi_major_a DOUBLE, pi_major_b DOUBLE,
+          effective_average_a DOUBLE, effective_average_b DOUBLE, avg_l30_a DOUBLE, avg_l30_b DOUBLE,
+          form_a DOUBLE, form_b DOUBLE, p_a DOUBLE, h2h_wins_a BIGINT, h2h_wins_b BIGINT,
+          computed_at TIMESTAMP, model_version STRING)""")
+    print("no upcoming matches in the feed: darts_gold.upcoming_matches is empty")

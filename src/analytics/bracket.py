@@ -9,6 +9,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
+MIN_DRAW_SIZE = 16  # smaller brackets (e.g. only semi-finals and final) are not a tournament draw
 BLOCK_START = re.compile(r"\{\{\s*(?:#invoke:\s*[Bb]racket\s*\|\s*)?(\d+)TeamBracket(-Byes)?\s*\|")
 FORMAT = re.compile(r"best of (\d+) (sets|legs)", re.I)
 
@@ -121,7 +122,8 @@ def parse_team(value: str) -> tuple[str | None, float | None]:
     """Player name and (if present) 3-dart average from a bracket team cell."""
     if not value or value.strip() in ("", "&nbsp;"):
         return None, None
-    m = re.search(r"DartsRankings\s*\|\s*\w+\s*\|\s*([^|}]+)(?:\|\s*avg\s*=\s*([\d.]*))?", value)
+    # {{#invoke:DartsRankings|PDCFlag|Name|avg=..}} or {{PDCFlag|Name|avg=..}}
+    m = re.search(r"PDCFlag\s*\|\s*([^|}]+)(?:\|\s*avg\s*=\s*([\d.]*))?", value)
     if m:
         return m.group(1).strip(), float(m.group(2)) if m.group(2) else None
     avg = re.search(r"\(?\s*(\d{2,3}\.\d{1,2})\s*\)?", re.sub(r"\[\[[^\]]*\]\]", "", value))
@@ -146,7 +148,9 @@ def parse_blocks(wikitext: str) -> list[dict]:
         text = _block_text(wikitext, m.start())
         params = _params(text)
         size = int(m.group(1))
-        n_rounds = size.bit_length() - 1
+        # Rounds actually filled in: a section bracket may stop early (e.g. 16 players -> 2 qualifiers).
+        n_rounds = max([r for r in range(1, size.bit_length())
+                        if any(k.startswith(f"RD{r}-team") and v.strip() for k, v in params.items())] or [0])
         headings = re.findall(r"\n(={2,4})\s*([^=\n]+?)\s*\1", wikitext[:m.start()])
         rounds = []
         for r in range(1, n_rounds + 1):
@@ -178,16 +182,21 @@ def parse_blocks(wikitext: str) -> list[dict]:
 
 
 def build_draw(title: str, wikitext: str) -> Draw | None:
-    """Combine section brackets and the finals bracket into one draw, or None if no supported draw exists."""
-    blocks = parse_blocks(wikitext)
+    """Combine section brackets and the finals bracket into one draw, or None if no supported draw exists.
+    Empty first-round slots (byes) are kept as None; the other player goes through."""
+    blocks = [b for b in parse_blocks(wikitext) if b["byes"] or b["rounds"]]
     if not blocks or any(b["byes"] for b in blocks):
         return None
+    if len(blocks) == 1:
+        draw = Draw(title, blocks[0]["rounds"])
+        return draw if len(draw.players) >= MIN_DRAW_SIZE else None
     finals = [b for b in blocks if b["heading"].lower().startswith("final")]
     sections = [b for b in blocks if b not in finals]
-    if not sections:
-        return Draw(title, blocks[0]["rounds"])
-    if len(finals) != 1 or len(sections) != finals[0]["size"] or len({s["size"] for s in sections}) != 1:
-        return None  # unexpected layout; better no draw than a wrong one
+    if len(finals) != 1 or not sections or len({(s["size"], len(s["rounds"])) for s in sections}) != 1:
+        return None  # unexpected layout (e.g. a league); better no draw than a wrong one
+    qualifiers = len(sections) * (sections[0]["size"] >> len(sections[0]["rounds"]))
+    if qualifiers != finals[0]["size"]:
+        return None
     rounds = []
     for r in range(len(sections[0]["rounds"])):
         first = sections[0]["rounds"][r]

@@ -71,7 +71,7 @@ The draw comes from the event's Wikipedia page (parsed from the bracket template
 
 Counting how often each player reaches each round gives **P(reach round)** and **P(title)**. A walkover counts as a win in the draw but is left out of backtests, because no match was played.
 
-**Supported draws:** knockout draws of 2^n players without byes. That covers the World Championship from 2026 (128 players), the World Matchplay, the World Grand Prix, the European Championship and the Players Championship Finals. Not supported yet: the 96-player World Championships up to 2025 (seeds start in round 2), the Grand Slam group stage, the Premier League (a league) and the UK Open (staggered entry).
+**Supported draws:** knockout draws of 2^n players without byes. That covers the World Championship from 2026 (128 players), the World Matchplay, the World Grand Prix, the European Championship, the World Series Finals and the Grand Slam knockout stage. A draw needs at least 16 players. Byes (empty first-round slots) are supported. Not supported yet: the 96-player World Championships up to 2025 (seeds start in round 2), the Grand Slam group stage, the Premier League (a league), the UK Open (Wikipedia only has the semi-finals as a bracket) and the Players Championship Finals sections layout (to be verified once the 2026 draw is out).
 
 ---
 
@@ -89,27 +89,49 @@ During majors the data is refreshed daily ("tournament mode"); otherwise on dema
 
 ## 5. Backtests
 
-*Results are filled in from `darts_gold.tournament_backtest_summary` after each refresh.*
+Every finished major with a supported draw is backtested automatically: strengths as of the event's first day, weights refitted on earlier matches only, and the full draw simulated *before* any match was played. Results are stored in `darts_gold.tournament_backtest_summary` and `darts_gold.tournament_backtest_matches` (model v2026-10-28).
 
-Pilot, World Championship 2026 (128 players, strengths as of 11 Dec 2025):
+**Ten majors, 388 matches (2025–2026):**
 
-| Metric | Result |
-|---|---|
-| Matches played (walkover excluded) | 126 |
-| Pre-match favourite won | 70.6 % |
-| Log loss, in each round's format | 0.552 |
-| Log loss, as typical matches | 0.557 |
-| Pre-tournament favourite | Luke Littler, P(title) 63.6 %, won the event |
-| Rank correlation, expected vs actual rounds reached (Spearman) | 0.57 |
+| Event | Matches | Favourite won | Log loss | Champion | Champion's pre-event title chance (rank) | Model's favourite |
+|---|---|---|---|---|---|---|
+| World Championship 2026 | 126 | 71 % | 0.552 | Luke Littler | 63.6 % (1) | Littler 63.6 % |
+| European Championship 2026 | 31 | 58 % | 0.647 | Ross Smith | 7.5 % (3) | Littler 14.6 % |
+| World Grand Prix 2026 | 31 | 71 % | 0.585 | Luke Humphries | 11.0 % (3) | Littler 26.2 % |
+| World Series Finals 2026 | 31 | 71 % | 0.580 | Ross Smith | 3.2 % (7) | Littler 34.9 % |
+| World Matchplay 2026 | 30 | 63 % | 0.607 | Luke Littler | 30.0 % (2) | Humphries 30.3 % |
+| Grand Slam 2025 (knockout stage) | 15 | 73 % | 0.603 | Luke Littler | 25.7 % (1) | Littler 25.7 % |
+| European Championship 2025 | 31 | 65 % | 0.664 | Gian van Veen | 9.1 % (3) | Littler 31.7 % |
+| World Series Finals 2025 | 31 | 68 % | 0.577 | Michael van Gerwen | 1.3 % (14) | Littler 24.1 % |
+| World Grand Prix 2025 | 31 | 71 % | 0.576 | Luke Littler | 19.7 % (1) | Littler 19.7 % |
+| World Matchplay 2025 | 31 | 77 % | 0.537 | Luke Littler | 23.9 % (1) | Littler 23.9 % |
 
-Converting to each round's format improves the log loss, so it helps for single matches. The title probability of 63.6 % for the favourite is probably too high, for the reason explained under Limitations. It has not yet been compared with bookmaker odds.
+**All 388 matches together:**
+
+| | Round format | As typical matches |
+|---|---|---|
+| Pre-match favourite won | 69.1 % | 69.1 % |
+| Log loss | **0.582** | 0.588 |
+| Brier score | **0.199** | 0.202 |
+
+Converting each match to its round's format improves both scores, so the format step earns its place.
+
+**Calibration (388 matches, 5 groups by the favourite's predicted chance):**
+
+| Predicted | 54 % | 61 % | 66 % | 74 % | 87 % |
+|---|---|---|---|---|---|
+| Favourite actually won | 50 % | 67 % | 68 % | 78 % | 83 % |
+
+Each group has about 78 matches, so differences of ±5 points are within chance. The top group (87 % predicted, 83 % observed) hints that very strong favourites are rated slightly too high, which fits the limitation below.
+
+**Titles:** the model's favourite won 4 of the 10 events, while its title probabilities summed to 2.9 expected wins. So there is no sign of overconfidence at the title level yet. Ten events are too few to judge, though, and the World Championship 2026 figure (63.6 %) is still a strong claim.
 
 ---
 
 ## Limitations
 
-- **Title probabilities of strong favourites are probably too high.** Treating legs as independent assumes a player's level is the same in every leg. In reality players have good and bad days, so legs within a match are correlated and long matches favour the stronger player less than the formula says. For one match the effect is small (the backtest confirms the format conversion helps), but over 7 rounds it compounds. Planned fix: estimate a "day form" spread from the data and add it to the simulation, then compare title probabilities with bookmaker odds.
-- **One pilot tournament** is not enough to judge title probabilities. Each finished major with a supported draw adds a backtest automatically.
+- **Strong favourites may be rated slightly too high in long formats.** Treating legs as independent assumes a player's level is the same in every leg. In reality players have good and bad days, so legs within a match are correlated and long matches favour the stronger player less than the formula says. For one match the effect is small (the backtest confirms the format conversion helps), but over 7 rounds it compounds. Planned fix: estimate a "day form" spread from the data and add it to the simulation, then compare title probabilities with bookmaker odds.
+- **Ten backtested events** are not enough to judge title probabilities. Each finished major with a supported draw adds a backtest automatically.
 - **Throw advantage and "two clear legs"** are ignored.
 - **Unsupported formats** (see section 3) have no simulation yet; their matches still get head-to-head cards.
 

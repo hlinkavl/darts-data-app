@@ -54,3 +54,25 @@ index = index[lead + [c for c in index.columns if c not in lead]]
 spark.createDataFrame(index).write.mode("overwrite").option("overwriteSchema", "true").saveAsTable("darts_gold.performance_index")
 
 display(index[index["is_current"]].sort_values("rank").head(20))
+
+# COMMAND ----------
+
+# MAGIC %md ## Recent matches (player profiles: last 5 / last 10)
+
+# COMMAND ----------
+
+spark.sql("""
+CREATE OR REPLACE VIEW darts_gold.player_recent_matches AS
+SELECT
+  m.player_key,
+  p.player_name,
+  row_number() OVER (PARTITION BY m.player_key ORDER BY m.match_date DESC, m.match_key DESC) AS recency,
+  m.match_date, m.tournament_name, m.round, m.is_major,
+  m.opponent_key, m.opponent_name,
+  IF(m.won, 'W', 'L') AS result,
+  concat(m.score_for, '-', m.score_against) AS score,
+  m.average, m.first9_average, m.checkout_pct, m.one_eighties
+FROM darts_silver.player_matches_v m
+JOIN darts_silver.players p ON p.player_key = m.player_key AND p.is_tracked
+""")
+display(spark.sql("SELECT * FROM darts_gold.player_recent_matches WHERE player_name = 'Luke Littler' AND recency <= 5"))
