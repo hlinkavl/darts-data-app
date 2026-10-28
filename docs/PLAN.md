@@ -141,6 +141,14 @@ An end-to-end data app about PDC darts with two core features:
 
 **Goal by end of day:** a live Databricks App URL with all pages, Genie Q&A and a working monthly + on-demand refresh.
 
+**Operational robustness first (agreed 2026-10-28):** unattended refreshes must fail loudly, keep the last good data and say what to do.
+
+3.0a [ ] **Health report** `gold.health_report` (🟢/🟡/🔴 + recommended action per check): data freshness, empty or changed source datasets, draw parsed for every running major, name-matching rate in draws, possible new major in Orakel data ("add to config/majors.yml: …").
+3.0b [ ] **Model promotion policy**: each refit creates a candidate version; it replaces the active version only if the predictor set is unchanged and test metrics are not worse. Otherwise the active version stays and the health report flags it.
+3.0c [ ] **Failure notifications**: Databricks Job e-mail on failure, GitHub Actions failure e-mails.
+3.0d [ ] **In the app**: health badge next to the Refresh button + list of warnings.
+How fixes happen: config-only issues (e.g. a new major) can be fixed by editing `config/majors.yml` on GitHub. Code issues (parser, source changes) are fixed in the repo with Claude Code and deployed with the bundle. Never edit code in the Databricks workspace, because `bundle deploy` overwrites it. Genie helps to diagnose (questions over the health report and gold tables), not to fix.
+
 3.1 [ ] `ai_query` over form + stats → a short narrative per player in `gold.player_ai_summary`. Try 2–3 foundation models on a sample of 20 players first and pick the best (as in the video).
 3.2 [ ] Interview and news summaries (sentiment, how the player feels, injuries, equipment changes…) and an AI tournament preview.
 3.3 [ ] **Genie space** over the gold tables, with instructions and sample questions ("Who has the best TV average over the last 6 months?").
