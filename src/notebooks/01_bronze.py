@@ -16,6 +16,7 @@ TABLES = {
     "orakel_rankings": ("orakel/*/rankings.jsonl", "sum_prize_money STRING, dob STRING"),
     "orakel_events": ("orakel/*/events.jsonl", "prize_fund STRING, organisation STRING, category STRING"),
     "orakel_matches": ("orakel/*/matches_*.jsonl", "stat STRING, stat1 DOUBLE, stat2 DOUBLE, organisation STRING"),
+    "orakel_upcoming": ("orakel/*/upcoming_matches.jsonl", "venue STRING, legs_format STRING, match_date STRING"),
     "wiki_tournament_pages": ("wikipedia/*/tournament_pages.jsonl", "revid BIGINT, error STRING"),
     "wiki_player_background": ("wikipedia/*/player_background.jsonl", "player_key BIGINT"),
 }
@@ -23,6 +24,11 @@ TABLES = {
 # COMMAND ----------
 
 for table, (pattern, hints) in TABLES.items():
+    try:
+        spark.read.format("json").load(f"{raw}/{pattern}").limit(1).count()
+    except Exception:  # no file for this dataset yet (e.g. a dataset added after earlier runs)
+        print(f"{table}: no files yet, skipped")
+        continue
     spark.sql(f"""
         CREATE OR REPLACE TABLE {catalog}.darts_bronze.{table} AS
         SELECT

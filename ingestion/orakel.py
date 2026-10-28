@@ -51,6 +51,11 @@ def fetch_events(client: PoliteClient, year: int) -> list[dict]:
     return _datatable(client, f"{BASE}/events", {"year": year, "organCal": "All"})
 
 
+def fetch_upcoming(client: PoliteClient) -> list[dict]:
+    """Scheduled matches Orakel already knows (draw / order of play published): players, round, start time."""
+    return _datatable(client, f"{BASE}/match/upcoming-matches-datatable", {})
+
+
 def fetch_player_matches(client: PoliteClient, player_key: int, stat: str, date_from: str, date_to: str) -> list[dict]:
     """Every match of a player in a date range, with one stat (see MATCH_STATS) per row."""
     rows = _datatable(

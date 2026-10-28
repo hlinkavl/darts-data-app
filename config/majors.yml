@@ -1,14 +1,35 @@
-# PDC majors: the televised events used for "Big-Stage Delta" and the tournament overviews.
+# PDC majors: the televised events used for the tournament overviews (and tested as "Big-Stage Delta").
 # Keyed by Darts Orakel tournament_key, because Orakel's event categories change between years
 # (e.g. Masters is "U" in some years and "MJ" in others, the World Cup shares "WC").
+# wiki: English Wikipedia title per edition; {year} is the year the event ends (WC 2026/27 -> 2027).
 majors:
-  1: World Championship
-  1068: Masters
-  9: UK Open
-  1070: Premier League
-  29: World Matchplay
-  1072: World Series of Darts Finals
-  36: World Grand Prix
-  40: European Championship
-  41: Grand Slam
-  42: Players Championship Finals
+  1:
+    name: World Championship
+    wiki: "{year} PDC World Darts Championship"
+  1068:
+    name: Masters
+    wiki: "{year} Masters (darts)"
+  9:
+    name: UK Open
+    wiki: "{year} UK Open"
+  1070:
+    name: Premier League
+    wiki: "{year} Premier League Darts"
+  29:
+    name: World Matchplay
+    wiki: "{year} World Matchplay"
+  1072:
+    name: World Series of Darts Finals
+    wiki: "{year} World Series of Darts Finals"
+  36:
+    name: World Grand Prix
+    wiki: "{year} World Grand Prix (darts)"
+  40:
+    name: European Championship
+    wiki: "{year} European Championship (darts)"
+  41:
+    name: Grand Slam
+    wiki: "{year} Grand Slam of Darts"
+  42:
+    name: Players Championship Finals
+    wiki: "{year} Players Championship Finals"

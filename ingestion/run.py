@@ -16,6 +16,8 @@ import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+import yaml
+
 from . import orakel, wikipedia
 from .http import PoliteClient
 
@@ -25,8 +27,16 @@ FULL_SINCE = "2023-01-01"
 # Re-fetch recent matches so late stat corrections and multi-day events are picked up.
 LOOKBACK_DAYS = 14
 
-# Tournament pages used for draws and backtests. The 2027 draw appears on Wikipedia in late November.
-WC_PAGES = [f"{year} PDC World Darts Championship" for year in (2024, 2025, 2026, 2027)]
+MAJORS_CONFIG = Path(__file__).resolve().parent.parent / "config" / "majors.yml"
+
+
+def major_pages(today: date) -> list[str]:
+    """Wikipedia pages of every major from last year to next year (calendar, draws, backtests), plus the
+    World Championships since 2024. Pages that don't exist yet are stored with an error and retried next run."""
+    majors = yaml.safe_load(MAJORS_CONFIG.read_text())["majors"]
+    titles = [m["wiki"].format(year=y) for y in range(today.year - 1, today.year + 2) for m in majors.values()]
+    titles += [majors[1]["wiki"].format(year=y) for y in range(2024, today.year - 1)]
+    return sorted(set(titles))
 
 log = logging.getLogger("ingestion")
 
@@ -56,7 +66,8 @@ def previous_run(w, catalog: str) -> tuple[str, set[int]] | None:
 
 def run_orakel(client: PoliteClient, rankings: list[dict], since_known: str, full_since: str, until: str,
                known: set[int], run_id: str) -> list[Path]:
-    paths = [write_jsonl("orakel", "rankings", rankings, run_id)]
+    paths = [write_jsonl("orakel", "rankings", rankings, run_id),
+             write_jsonl("orakel", "upcoming_matches", orakel.fetch_upcoming(client), run_id)]
 
     events = []
     for year in range(int(since_known[:4]), int(until[:4]) + 1):
@@ -76,7 +87,7 @@ def run_orakel(client: PoliteClient, rankings: list[dict], since_known: str, ful
 
 def run_wikipedia(players: list[dict], run_id: str) -> list[Path]:
     client = PoliteClient(min_interval=1.0, cache_ttl=7 * 24 * 3600)
-    pages = [wikipedia.fetch_page_wikitext(client, title) for title in WC_PAGES]
+    pages = [wikipedia.fetch_page_wikitext(client, title) for title in major_pages(date.today())]
     background = [wikipedia.fetch_player_background(client, p["player_name"]) | {"player_key": p["player_key"]}
                   for p in players]
     return [

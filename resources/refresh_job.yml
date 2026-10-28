@@ -14,7 +14,7 @@ resources:
           default: ${var.catalog}
       # Serverless compute: notebook tasks need no cluster definition.
       # Raw files are uploaded to the Volume by `python -m ingestion.run --upload` (Darts Orakel blocks
-      # Databricks IPs, see docs/PLAN.md step 1.2). Tournament predictions and AI tasks follow on Day 2-3.
+      # Databricks IPs, see docs/PLAN.md step 1.2). AI tasks follow on Day 3.
       tasks:
         - task_key: bronze
           notebook_task:
@@ -39,6 +39,11 @@ resources:
             - task_key: pi_model
           notebook_task:
             notebook_path: ../src/notebooks/05_performance_index.py
+        - task_key: tournaments
+          depends_on:
+            - task_key: performance_index
+          notebook_task:
+            notebook_path: ../src/notebooks/06_tournaments.py
 
     darts_egress_check:
       name: darts_egress_check

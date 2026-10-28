@@ -15,7 +15,7 @@ import yaml
 
 # PDC majors by Orakel tournament_key (config/majors.yml). Orakel categories are not stable across years.
 with open("../../config/majors.yml") as f:
-    MAJORS = yaml.safe_load(f)["majors"]
+    MAJORS = yaml.safe_load(f)["majors"]  # {tournament_key: {name, wiki}}
 MAJOR_KEYS = "(" + ", ".join(str(k) for k in MAJORS) + ")"
 
 def latest(table: str) -> str:
@@ -185,8 +185,27 @@ LEFT JOIN wiki w ON w.player_key = coalesce(t.player_key, o.player_key)
 # COMMAND ----------
 
 spark.createDataFrame(
-    [(int(k), name) for k, name in MAJORS.items()], "tournament_key BIGINT, tournament_name STRING"
-).write.mode("overwrite").saveAsTable("darts_silver.majors")
+    [(int(k), m["name"], m["wiki"]) for k, m in MAJORS.items()],
+    "tournament_key BIGINT, tournament_name STRING, wiki_title_pattern STRING",
+).write.mode("overwrite").option("overwriteSchema", "true").saveAsTable("darts_silver.majors")
+
+# Upcoming matches: a snapshot, so only the latest run counts.
+if spark.catalog.tableExists("darts_bronze.orakel_upcoming"):
+    spark.sql(f"""
+    CREATE OR REPLACE TABLE darts_silver.upcoming_matches AS
+    SELECT DISTINCT
+      id AS upcoming_id,
+      {unescape('event_title')} AS event_title,
+      tournament_key,
+      tournament_key IN {MAJOR_KEYS} AS is_major,
+      {unescape('round_name')} AS round_name,
+      to_timestamp(match_date) AS start_time,
+      first_player_key AS player_a_key, {unescape('first_player_name')} AS player_a_name,
+      second_player_key AS player_b_key, {unescape('second_player_name')} AS player_b_name,
+      legs_format, venue,
+      to_timestamp(left(_run_date, 10)) AS fetched_on
+    FROM {latest("orakel_upcoming")}
+    """)
 
 # COMMAND ----------
 
@@ -207,5 +226,6 @@ SELECT title, revid, wikitext, error, to_date(left(_run_date, 10)) AS fetched_on
 FROM {dedup("wiki_tournament_pages", "title")}
 """)
 
-for t in ["events", "player_matches", "matches", "players", "majors", "rankings", "tournament_pages"]:
+for t in ["events", "player_matches", "matches", "players", "majors", "rankings", "tournament_pages"] + (
+        ["upcoming_matches"] if spark.catalog.tableExists("darts_silver.upcoming_matches") else []):
     print(t, spark.table(f"darts_silver.{t}").count())
