@@ -6,6 +6,40 @@ The Performance Index rates every tracked PDC player on a **0–10 scale**:
 
 A PI of 7.0 means a 70 % chance against a typical top-32 opponent. A PI of 5.0 means the player *is* a typical top-32 player. A PI of 2.0 means a 20 % chance. Because the scale is a probability, any two PIs can be turned into a head-to-head prediction (see [Step 3](#step-3-the-0-10-scale)).
 
+## How to read the PI
+
+**1. The PI is measured against one benchmark: the average top-32 player.** The benchmark is the average profile of the 32 strongest players, roughly the level of the 14th-best player. Luke Littler's PI of 7.04 means he beats *that* player in 70 % of typical matches. It does **not** mean he beats every top-32 player 70 % of the time.
+
+**2. Any specific match-up comes from the two PIs.** Each PI encodes a strength. The chance of A beating B depends on the difference between the two strengths:
+
+```
+strength from PI:   s = ln( PI / (10 − PI) )            (the log-odds of beating the benchmark)
+P(A beats B)      = 1 / (1 + e^−(s_A − s_B))
+```
+
+Example, Littler (PI 7.04) vs Ryan Searle (PI 4.28): s = ln(7.04 / 2.96) = 0.87 and ln(4.28 / 5.72) = −0.29, so P = 1 / (1 + e^−1.16) = **76 %**. The PIs are not subtracted directly: 7.04 − 4.28 = 2.76 has no meaning as a probability.
+
+Littler against different opponents (model v2026-10-28):
+
+| Opponent (PI rank) | Opponent's PI | Littler wins |
+|---|---|---|
+| #2 Luke Humphries | 6.28 | 58 % |
+| #3 Gerwyn Price | 5.83 | 63 % |
+| #10 Luke Woodhouse | 5.24 | 68 % |
+| *average top-32 player* | *5.00* | *70 %* |
+| #16 Chris Dobey | 4.80 | 72 % |
+| #32 Ryan Searle | 4.28 | 76 % |
+| #64 Gabriel Clemens | 3.29 | 83 % |
+| #100 Adam Sevada | 2.55 | 87 % |
+
+Two players with the same PI have a 50 % chance against each other, whatever their PI is.
+
+**3. "Typical match" means a typical format.** Most matches in the data are first to 6 legs. In longer formats luck evens out more and the favourite's chance rises, so Littler vs Searle in World Championship sets would be above 76 %. The tournament simulations convert every probability to the format of the round (see [DESIGN.md](DESIGN.md#tournament-overview)).
+
+**4. The probabilities are calibrated.** Each match gets its own probability, from about 50 % for close match-ups to about 90 % for heavy favourites. On the 2026 test data (never used for fitting), matches were sorted by predicted probability into 10 groups. In each group the favourites won about as often as predicted. For example, in the group where the model predicted 77.9 % on average, the favourites won 77.8 %. So a probability of X % can be read literally. See [Validation](#validation-test-period-2026-never-used-for-fitting-or-selection).
+
+---
+
 The index is built in three transparent steps:
 
 1. **Select predictors**: keep only the statistics that predict match results, tested on data the model has not seen.
