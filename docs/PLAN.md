@@ -64,7 +64,8 @@ An end-to-end data app about PDC darts with two core features:
 | Day 0 | Admin and setup | ✅ done (2026-10-24) |
 | Day 1 | Data foundation: sources, ingestion, bronze → silver | ✅ done (2026-10-25) |
 | Day 2 | Analytics: Performance Index, prediction model, backtests | ✅ done (2026-10-28) |
-| Day 3 | AI layer, Genie, Streamlit app, deploy, automation | ⏳ next |
+| Day 3 | Backend robustness (health report, model promotion), GitHub Actions automation, AI layer | ⏳ next |
+| Day 4 | Streamlit app, Genie, deploy (ready for the Grand Slam, 14 Nov) | ⬜ |
 
 ---
 
@@ -137,29 +138,33 @@ An end-to-end data app about PDC darts with two core features:
 2.8 [ ] Odds comparison → `gold.players_to_watch`: **no odds source yet** (moved to open questions).
 2.9 [x] `gold.player_recent_matches` (last N matches per player) and **8 saved queries** in Databricks (`sql/queries/*.sql`, synced by `scripts/sync_queries.py` into the workspace folder `darts-data-app/queries`).
 
-## Day 3: AI layer, app, deploy and automation
+## Day 3: Backend robustness, automation and AI layer
 
-**Goal by end of day:** a live Databricks App URL with all pages, Genie Q&A and a working monthly + on-demand refresh.
+**Goal by end of day:** a fully automatic refresh that runs without the Mac (GitHub Actions + Databricks Job), a green health report, and AI narratives in gold tables.
 
 **Operational robustness first (agreed 2026-10-28):** unattended refreshes must fail loudly, keep the last good data and say what to do.
 
-3.0a [ ] **Health report** `gold.health_report` (🟢/🟡/🔴 + recommended action per check): data freshness, empty or changed source datasets, draw parsed for every running major, name-matching rate in draws, possible new major in Orakel data ("add to config/majors.yml: …").
-3.0b [ ] **Model promotion policy**: each refit creates a candidate version; it replaces the active version only if the predictor set is unchanged and test metrics are not worse. Otherwise the active version stays and the health report flags it.
-3.0c [ ] **Failure notifications**: Databricks Job e-mail on failure, GitHub Actions failure e-mails.
-3.0d [ ] **In the app**: health badge next to the Refresh button + list of warnings.
+3.1 [ ] **Health report** `gold.health_report` (🟢/🟡/🔴 + recommended action per check): data freshness, empty or changed source datasets, draw parsed for every running major, name-matching rate in draws, possible new major in Orakel data ("add to config/majors.yml: …").
+3.2 [ ] **Model promotion policy**: each refit creates a candidate version; it replaces the active version only if the predictor set is unchanged and test metrics are not worse. Otherwise the active version stays and the health report flags it.
+3.3 [ ] **Failure notifications**: Databricks Job e-mail on failure, GitHub Actions failure e-mails.
+3.4 [ ] **GitHub Actions `refresh.yml`**: `python -m ingestion.run --upload` (incremental) → `databricks jobs run-now darts_refresh`. Daily during majors (dates from `gold.majors_calendar`), otherwise on demand (`workflow_dispatch`, later the app button). Secrets `DATABRICKS_HOST` + `DATABRICKS_TOKEN`. Verified egress: GitHub runners reach Orakel and Wikipedia.
+3.5 [ ] **AI narratives** with `ai_query`: short player assessments from form + stats → `gold.player_ai_summary`. Compare 2–3 foundation models on 20 players first (as in the video).
+3.6 [ ] **News and interviews** (source to be decided, e.g. PDC news RSS) → AI summaries (how the player feels, injuries, equipment changes).
+3.7 [ ] Improve Wikidata matching (76 % of tracked players) for player backgrounds.
+
 How fixes happen: config-only issues (e.g. a new major) can be fixed by editing `config/majors.yml` on GitHub. Code issues (parser, source changes) are fixed in the repo with Claude Code and deployed with the bundle. Never edit code in the Databricks workspace, because `bundle deploy` overwrites it. Genie helps to diagnose (questions over the health report and gold tables), not to fix.
 
-3.1 [ ] `ai_query` over form + stats → a short narrative per player in `gold.player_ai_summary`. Try 2–3 foundation models on a sample of 20 players first and pick the best (as in the video).
-3.2 [ ] Interview and news summaries (sentiment, how the player feels, injuries, equipment changes…) and an AI tournament preview.
-3.3 [ ] **Genie space** over the gold tables, with instructions and sample questions ("Who has the best TV average over the last 6 months?").
-3.4 [ ] **Streamlit app**: pages as described in [DESIGN.md](DESIGN.md#app-design), developed locally (`streamlit run app/app.py`) against the SQL warehouse.
-3.5 [ ] **Refresh data** button → `jobs.run_now` (the app's service principal gets CAN_MANAGE_RUN on the job).
-3.6 [ ] Job `darts_refresh` with the full task chain `bronze → silver → quality → pi_model → performance_index → predict → ai_summaries`. Schedule: **daily during majors**, otherwise on demand (replaces the monthly cron).
-3.7 [ ] Scheduled ingestion in **GitHub Actions**. Workflow `egress-check` (run 2026-10-25) proved that GitHub-hosted runners get 200 from Orakel (site + API), Wikipedia and Wikidata. `refresh.yml`: monthly cron + `workflow_dispatch` → `python -m ingestion.run --upload` (incremental) → `databricks jobs run-now darts_refresh`. Secrets: `DATABRICKS_HOST` + `DATABRICKS_TOKEN` (PAT or service principal). The "Refresh data" button in the app can dispatch this workflow.
-3.8 [ ] Deploy: `databricks bundle deploy -t dev` + `databricks bundle run darts_app`.
-3.9 [ ] README: link to the video, infrastructure overview, explanation of the Databricks limits, screenshots.
+## Day 4: Streamlit app, Genie and deploy
 
-## After Day 3
+**Goal by end of day:** a live Databricks App URL with all pages, Genie Q&A, the Refresh button and the health badge, ready for the **Grand Slam (14–22 Nov 2026)** as the first live event.
+
+4.1 [ ] **Streamlit app** developed locally (`streamlit run app/app.py`) against the SQL warehouse; pages as in [DESIGN.md](DESIGN.md#app-design): Tournament Overview (calendar, predictions, live bracket, upcoming matches), Player Profile (PI, Effective Average, contributions, last 5, background, AI narrative, Big-Stage Delta as info), PI Leaderboard + head to head, Ask the data (Genie), Methodology (live from `pi_*` tables), Admin.
+4.2 [ ] **Refresh button + health badge**: dispatches the GitHub Actions refresh, shows the last refresh time and the health status with warnings.
+4.3 [ ] **Genie space** over the gold tables with instructions and sample questions, embedded via the Conversation API.
+4.4 [ ] **Deploy** as a Databricks App via the bundle (the app's service principal gets the permissions it needs), end-to-end test.
+4.5 [ ] **README**: link to the video, infrastructure overview, Free Edition limits, screenshots.
+
+## After Day 4
 
 - Live run for the **PDC World Championship 2027** once the draw is out (usually late November).
 - Re-test Big-Stage Delta as more major matches accumulate (automatic on every refit).
@@ -170,4 +175,4 @@ How fixes happen: config-only issues (e.g. a new major) can be fixed by editing 
 - Odds source for "players to watch" (model vs. market): an API or a manual CSV?
 - Day-form spread in the simulation to correct overconfidence for heavy favourites in long formats.
 - Parsers for the 96-player WC format (2024, 2025), the Grand Slam groups and the PC Finals sections.
-- News/interviews source for the AI narratives (PDC news RSS?).
+- News/interviews source for the AI narratives (PDC news RSS?), needed for Day 3.
