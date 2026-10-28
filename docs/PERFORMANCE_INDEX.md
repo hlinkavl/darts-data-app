@@ -34,7 +34,17 @@ Littler against different opponents (model v2026-10-28):
 
 Two players with the same PI have a 50 % chance against each other, whatever their PI is.
 
-**3. "Typical match" means a typical format.** Most matches in the data are first to 6 legs. In longer formats luck evens out more and the favourite's chance rises, so Littler vs Searle in World Championship sets would be above 76 %. The tournament simulations convert every probability to the format of the round (see [DESIGN.md](DESIGN.md#tournament-overview)).
+**3. "Typical match" means first to 6 legs (best of 11 legs).** This is the standard format of the Players Championship and European Tour, and the format of 77 % of the matches the model learned from (matches between two tracked players since 2023):
+
+| Format | Share of matches |
+|---|---|
+| **First to 6 legs (best of 11)** | **77 %** |
+| First to 4–5 legs (best of 7–9) | 13 % |
+| First to 7–11 legs (best of 13–21), e.g. Grand Slam, Masters, European Championship knockouts | 6 % |
+| Sets (World Championship, World Grand Prix) | 2 % |
+| Other short formats (first to 2–3 legs) | 1 % |
+
+So PI 7.04 means: Littler wins 70 % of best-of-11-legs matches against the average top-32 player. In longer formats luck evens out more and the favourite's chance rises. Littler vs Searle at the World Championship (first to 3 sets in round 1, up to first to 7 sets in the final, each set first to 3 legs) would be above 76 %. Shorter formats work the other way. The tournament simulations convert every probability to the format of the round (see [DESIGN.md](DESIGN.md#tournament-overview)).
 
 **4. The probabilities are calibrated.** Each match gets its own probability, from about 50 % for close match-ups to about 90 % for heavy favourites. On the 2026 test data (never used for fitting), matches were sorted by predicted probability into 10 groups. In each group the favourites won about as often as predicted. For example, in the group where the model predicted 77.9 % on average, the favourites won 77.8 %. So a probability of X % can be read literally. See [Validation](#validation-test-period-2026-never-used-for-fitting-or-selection).
 
