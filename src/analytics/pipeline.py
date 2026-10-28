@@ -77,3 +77,25 @@ def score(player_matches: pd.DataFrame, elo_history: pd.DataFrame, coefficients:
         snap = features.features_as_of(player_matches, elo_history, as_of, player_keys)
         snapshots.append(model.score_players(snap, coefficients))
     return pd.concat(snapshots, ignore_index=True)
+
+
+def strengths_as_of(player_matches: pd.DataFrame, matches: pd.DataFrame, as_of: pd.Timestamp, predictors: list[str],
+                    elo_params: elo.EloParams) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Strengths of tracked players and Elo of all players as of a date, with weights refitted only on matches
+    before that date (no look-ahead, used for backtests). Strength includes majors-only terms (major context)."""
+    as_of = pd.Timestamp(as_of)
+    matches = matches.assign(match_date=pd.to_datetime(matches["match_date"]))
+    history = elo.run_elo(matches, elo_params)
+    feats = features.point_in_time_features(player_matches, history)
+    pairs = model.build_pairs(feats, predictors)
+    train = pairs[pd.to_datetime(pairs["match_date"]) < as_of]
+    scale = train[predictors].std()
+    result = model.fit_logit(train, predictors, scale)
+    per_unit = result.params[predictors] / scale[predictors]
+
+    tracked = sorted(player_matches["player_key"].unique())
+    snap = features.features_as_of(player_matches, history, as_of, tracked).dropna(subset=predictors)
+    strengths = pd.DataFrame({"player_key": snap["player_key"], "strength": (snap[predictors] * per_unit).sum(axis=1)})
+    before = history[pd.to_datetime(history["match_date"]) < as_of].sort_values(["match_date", "match_key"])
+    elo_now = before.groupby("player_key")["elo_post"].last().rename("elo").reset_index()
+    return strengths, elo_now
