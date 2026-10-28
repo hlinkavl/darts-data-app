@@ -130,7 +130,7 @@ Each group has about 78 matches, so differences of ±5 points are within chance.
 
 ## Limitations
 
-- **Strong favourites may be rated slightly too high in long formats.** Treating legs as independent assumes a player's level is the same in every leg. In reality players have good and bad days, so legs within a match are correlated and long matches favour the stronger player less than the formula says. For one match the effect is small (the backtest confirms the format conversion helps), but over 7 rounds it compounds. Planned fix: estimate a "day form" spread from the data and add it to the simulation, then compare title probabilities with bookmaker odds.
+- **Strong favourites may be rated slightly too high in long formats.** Treating legs as independent assumes a player's level is the same in every leg. In reality players have good and bad days, so legs within a match are correlated and long matches favour the stronger player less than the formula says. For one match the effect is small (the backtest confirms the format conversion helps), but over 7 rounds it compounds. Planned fix: estimate a "day form" spread from the data and add it to the simulation. Bookmaker odds are not available as a benchmark (no free, legal source reachable from the Czech Republic), so validation uses baselines such as seeding.
 - **Ten backtested events** are not enough to judge title probabilities. Each finished major with a supported draw adds a backtest automatically.
 - **Throw advantage and "two clear legs"** are ignored.
 - **Unsupported formats** (see section 3) have no simulation yet; their matches still get head-to-head cards.
