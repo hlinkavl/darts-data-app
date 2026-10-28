@@ -175,21 +175,37 @@ A candidate must pass **all three** filters.
 
 Every decision and its reason is stored in `darts_gold.pi_selection_log`.
 
-### Result of the current model (v2026-10-28)
+### Result: all tested predictors (model v2026-10-28)
 
-| Predictor | Decision | Reason |
+**In the index (4):**
+
+| Predictor | Why it is in |
+|---|---|
+| **3-Dart Average (L30)** | The strongest single predictor of who wins. Significant in 100 % of bootstrap samples. |
+| **Opponent-Weighted Elo** | Adds what the average doesn't know: how strong the beaten opponents were. 100 % of samples. |
+| **Form (L10 vs L30)** | A player on an upswing wins more than their L30 average suggests. 100 % of samples. |
+| **Experience (log matches)** | Small extra edge for experienced players. Borderline: exactly 80 % of samples, weight only 3 %. |
+
+**Tested and left out (5):**
+
+| Predictor | Out at | Why it is not in |
 |---|---|---|
-| First-9 Average (L30) | ❌ 1a | r = 0.94 with 3-Dart Average, which predicts better alone |
-| Win Rate (L30) | ❌ 1b | negative coefficient once average and Elo are in the model |
-| Checkout % (L30) | ❌ 1b | negative coefficient once the average is in the model |
-| 180s per 100 Darts (L30) | ❌ 1b | p = 0.69 |
-| Big-Stage Delta (majors only) | ❌ 1c | significant in 1b, but only in 61 % of bootstrap samples (< 80 %) |
-| **3-Dart Average (L30)** | ✅ | significant in 100 % of bootstrap samples |
-| **Form (L10 vs L30)** | ✅ | significant in 100 % of bootstrap samples |
-| **Opponent-Weighted Elo** | ✅ | significant in 100 % of bootstrap samples |
-| **Experience (log matches)** | ✅ (borderline) | significant in exactly 80 % of bootstrap samples |
+| First-9 Average (L30) | 1a | Measures almost the same as the 3-dart average (r = 0.94), and the 3-dart average predicts slightly better on its own. |
+| Win Rate (L30) | 1b | Once average and Elo are in the model it adds nothing and its coefficient turns negative. Elo already captures results, and better. |
+| Checkout % (L30) | 1b | Coefficient turns negative once the average is in. Finishing is already part of the 3-dart average (fewer darts per leg). |
+| 180s per 100 Darts (L30) | 1b | Not significant (p = 0.69). Heavy scoring is already part of the 3-dart average. |
+| Big-Stage Delta (majors only) | 1c | Significant in a single fit, but **not stable**: significant in only 61 % of bootstrap samples (threshold 80 %). See below. |
 
-Checkout % and 180s are not useless. They are part of what the 3-dart average already measures, so they add nothing on top of it. Experience passed the stability rule exactly at the threshold, and its weight is small (Step 2).
+**Big-Stage Delta, tested on majors only.** The hypothesis is that some players raise their level on the big stage, so the delta only enters matches played on a major. On the 2,680 matches between tracked players on majors (2021–2026):
+
+| Test | Result |
+|---|---|
+| Single regression (average, form, Elo, delta) on all majors | p = 0.028, significant at 5 % |
+| Bootstrap, 500 resamples of the majors | significant in only 62 % |
+| Full 3-step selection on majors only | out at step 1b (p = 0.23) |
+| With data since 2023 instead of 2021 | 73 % of bootstrap samples, so the longer history made it weaker |
+
+The effect may exist, but it is small, close to the 5 % threshold (with 9 candidates tested, one borderline result can be luck) and it depends on which matches happen to be in the sample. Putting it into the PI would make PI Major move with noise. It is therefore **shown as an information-only indicator** in player profiles and on major match cards ("plays +1.2 above his average on majors"), with no effect on the PI. It is re-tested automatically on every refit and enters PI Major on its own once it passes the stability rule.
 
 ---
 
