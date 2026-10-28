@@ -1,0 +1,14 @@
+# PDC majors: the televised events used for "Big-Stage Delta" and the tournament overviews.
+# Keyed by Darts Orakel tournament_key, because Orakel's event categories change between years
+# (e.g. Masters is "U" in some years and "MJ" in others, the World Cup shares "WC").
+majors:
+  1: World Championship
+  1068: Masters
+  9: UK Open
+  1070: Premier League
+  29: World Matchplay
+  1072: World Series of Darts Finals
+  36: World Grand Prix
+  40: European Championship
+  41: Grand Slam
+  42: Players Championship Finals

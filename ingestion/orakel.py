@@ -3,6 +3,8 @@
 Data: Darts Orakel. Used for a non-commercial project with rate limiting and caching.
 """
 
+import html
+
 from .http import PoliteClient
 
 BASE = "https://dartsorakel.com/api"
@@ -24,10 +26,15 @@ def _datatable(client: PoliteClient, url: str, params: dict) -> list[dict]:
     rows, start = [], 0
     while True:
         page = client.get_json(url, {**params, "draw": 1, "start": start, "length": PAGE_SIZE})
-        rows.extend(page["data"])
+        rows.extend(_unescape(r) for r in page["data"])
         start += PAGE_SIZE
         if start >= page.get("recordsFiltered", 0) or not page["data"]:
             return rows
+
+
+def _unescape(row: dict) -> dict:
+    """Orakel returns names HTML-escaped (e.g. O&#039;Connor)."""
+    return {k: html.unescape(v) if isinstance(v, str) else v for k, v in row.items()}
 
 
 def fetch_rankings(client: PoliteClient, top_n: int) -> list[dict]:
@@ -36,7 +43,7 @@ def fetch_rankings(client: PoliteClient, top_n: int) -> list[dict]:
         f"{BASE}/rankings",
         {"rankKey": 0, "isCurrent": 1, "isWomanOnly": 0, "draw": 1, "start": 0, "length": top_n},
     )
-    return page["data"]
+    return [_unescape(r) for r in page["data"]]
 
 
 def fetch_events(client: PoliteClient, year: int) -> list[dict]:

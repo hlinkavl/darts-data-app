@@ -63,7 +63,7 @@ An end-to-end data app about PDC darts with two core features:
 |---|---|---|
 | Day 0 | Admin and setup | ✅ done (2026-10-24) |
 | Day 1 | Data foundation: sources, ingestion, bronze → silver | ✅ done (2026-10-25) |
-| Day 2 | Analytics: Performance Index, prediction model, backtests | ⏳ next |
+| Day 2 | Analytics: Performance Index, prediction model, backtests | ⏳ in progress (PI done) |
 | Day 3 | AI layer, Genie, Streamlit app, deploy, automation | ⬜ |
 
 ---
@@ -115,17 +115,26 @@ An end-to-end data app about PDC darts with two core features:
 
 ## Day 2: Analytics, Performance Index and predictions
 
-**Goal by end of day:** `gold.performance_index` and `gold.tournament_predictions` populated and backtested.
+**Goal by end of day:** `gold.performance_index` and the Tournament Overview data (`gold.tournament_predictions`, upcoming matches) populated and backtested.
 
-2.1 [ ] Gold tables `gold.player_form` (last 5/10 matches, W/L, average, trend) and `gold.player_stats_rolling` (3/6/12-month windows).
-2.2 [ ] **Performance Index v1** following [DESIGN.md](DESIGN.md#performance-index-pi-0100). We tune the weights together and sanity-check on well-known players (the OoM top 10 should land at PI 8+).
-2.3 [ ] PI backtest: does pre-tournament PI correlate with how players actually finished? (WC 2024, 2025, 2026)
-2.4 [ ] **Player rating:** leg-level Elo (weighted by recency and event type), or derived from PI.
-2.5 [ ] Leg win probability → match win probability for the given format (best-of legs / sets) via dynamic programming.
-2.6 [ ] **Monte Carlo bracket simulation** (10,000 runs) → `gold.tournament_predictions` (P(reach round), P(title)).
-2.7 [ ] Comparison with odds: implied probability with the margin removed, value = model − market → `gold.players_to_watch`.
-2.8 [ ] Model backtest on WC 2025 and 2026 (Brier score and log loss vs. the odds).
-2.9 [ ] Store key SQL as **saved queries** in Databricks (`sql/queries/`).
+**Decisions (2026-10-28):**
+- Tournament Overview for **all majors**; the World Championship 2027 is the first live test (Grand Slam 14–22 Nov and Players Championship Finals 27–29 Nov serve as a dress rehearsal).
+- Refresh: **daily during majors**, otherwise **on demand** via a button in the app showing the time of the last refresh.
+- PI scale: **10 × P(beat an average top-32 player)**.
+- PI method: **variant A**, a transparent 3-step regression (select predictors → weights → scale), plus Effective Average. Rating named **Opponent-Weighted Elo**; it stays only if it passes the same selection rule.
+
+2.1 [x] **Majors definition** fixed: Orakel categories are not stable (the World Cup shares `WC`, Masters switches between `U` and `MJ`, PC Finals has its own `PCF`). Now an explicit list of 10 `tournament_key`s in `config/majors.yml` → `is_major` in silver + `silver.majors`.
+2.2 [x] **Performance Index**: [PERFORMANCE_INDEX.md](PERFORMANCE_INDEX.md). Shared package `src/analytics/` (features, Elo, model, pipeline) + notebooks `04_pi_model`, `05_performance_index` in the job; unit tests in `tests/`. Result of v2026-10-28:
+   - Selected: 3-Dart Average (L30) 63 %, Form 18 %, Opponent-Weighted Elo 19 %. Dropped: First-9 (r = 0.94 with average), Win Rate (r = 0.81 with Elo), Checkout %, 180s, Experience.
+   - **Big-Stage Delta**: related to results *on majors* (p = 0.004) but not elsewhere (p = 0.95), so it is modelled as a majors-only predictor. It passes 1a and 1b but is significant in only 73 % of bootstrap samples, so it is **out for now** (decision pending, see open questions).
+   - Test 2026: AUC 0.686 (vs 0.679 average only, 0.659 Elo only), well calibrated. Top 3: Littler 7.04, Humphries 6.28, Price 5.83.
+2.3 [ ] PI backtest on the World Championships 2025 and 2026 (pre-tournament PI vs. how far players got).
+2.4 [ ] Match format conversion: "typical match" probability → leg probability → P(win) for best-of-N legs / sets (dynamic programming).
+2.5 [ ] **Monte Carlo bracket simulation** (10,000 runs) → `gold.tournament_predictions` (P(reach round), P(title)); parse the draws from the Wikipedia WC pages.
+2.6 [ ] **Upcoming matches + live bracket**: ingest Orakel's upcoming-matches feed; match cards (PI vs. PI, win probability, H2H); played matches fixed in the bracket, the rest re-simulated.
+2.7 [ ] Season view: majors with dates, winners and the next upcoming major.
+2.8 [ ] Odds comparison (if a source exists) → `gold.players_to_watch`.
+2.9 [ ] `gold.player_form` (last 5 matches) for player profiles, and **saved queries** in Databricks (`sql/queries/`).
 
 ## Day 3: AI layer, app, deploy and automation
 
@@ -136,7 +145,7 @@ An end-to-end data app about PDC darts with two core features:
 3.3 [ ] **Genie space** over the gold tables, with instructions and sample questions ("Who has the best TV average over the last 6 months?").
 3.4 [ ] **Streamlit app**: pages as described in [DESIGN.md](DESIGN.md#app-design), developed locally (`streamlit run app/app.py`) against the SQL warehouse.
 3.5 [ ] **Refresh data** button → `jobs.run_now` (the app's service principal gets CAN_MANAGE_RUN on the job).
-3.6 [ ] Job `darts_refresh` with the full task chain `bronze → silver → quality → gold → predict → ai_summaries`. The schedule is the **1st of each month at 06:00 Europe/Prague** (already in the bundle).
+3.6 [ ] Job `darts_refresh` with the full task chain `bronze → silver → quality → pi_model → performance_index → predict → ai_summaries`. Schedule: **daily during majors**, otherwise on demand (replaces the monthly cron).
 3.7 [ ] Scheduled ingestion in **GitHub Actions**. Workflow `egress-check` (run 2026-10-25) proved that GitHub-hosted runners get 200 from Orakel (site + API), Wikipedia and Wikidata. `refresh.yml`: monthly cron + `workflow_dispatch` → `python -m ingestion.run --upload` (incremental) → `databricks jobs run-now darts_refresh`. Secrets: `DATABRICKS_HOST` + `DATABRICKS_TOKEN` (PAT or service principal). The "Refresh data" button in the app can dispatch this workflow.
 3.8 [ ] Deploy: `databricks bundle deploy -t dev` + `databricks bundle run darts_app`.
 3.9 [ ] README: link to the video, infrastructure overview, explanation of the Databricks limits, screenshots.
@@ -144,11 +153,11 @@ An end-to-end data app about PDC darts with two core features:
 ## After Day 3
 
 - Live run for the **PDC World Championship 2027** once the draw is out (usually late November).
-- Tune the PI weights and the model based on the backtests.
+- Re-test Big-Stage Delta as more major matches accumulate (or with a longer backfill).
 
 ## Open questions
 
 - App language: English only, or with a Czech toggle?
-- Which events count as "big stage" (proposal in DESIGN.md)?
+- Big-Stage Delta: keep the 80 % bootstrap rule (currently out at 73 %), or extend the backfill to 2021 to give it more data?
 - Odds source: an API or a manual CSV?
 - News/interviews source for the AI narratives (PDC news RSS?).

@@ -11,13 +11,20 @@ dbutils.widgets.text("catalog", "workspace")
 catalog = dbutils.widgets.get("catalog")
 spark.sql(f"USE CATALOG {catalog}")
 
-# Event categories (Orakel codes) treated as "big stage": World Championship, majors, World Grand Prix,
-# Premier League. See docs/DESIGN.md.
-BIG_STAGE = "('WC', 'MJ', 'WGP', 'U')"
+import yaml
+
+# PDC majors by Orakel tournament_key (config/majors.yml). Orakel categories are not stable across years.
+with open("../../config/majors.yml") as f:
+    MAJORS = yaml.safe_load(f)["majors"]
+MAJOR_KEYS = "(" + ", ".join(str(k) for k in MAJORS) + ")"
 
 def latest(table: str) -> str:
     """Rows of the most recent run only (full snapshots such as the ranking)."""
     return f"(SELECT * FROM darts_bronze.{table} WHERE _run_date = (SELECT max(_run_date) FROM darts_bronze.{table}))"
+
+def unescape(col: str) -> str:
+    """Orakel names are HTML-escaped in older runs (e.g. O&#039;Connor)."""
+    return f"replace(replace(replace({col}, '&#039;', \"'\"), '&quot;', '\"'), '&amp;', '&')"
 
 def dedup(table: str, key: str) -> str:
     """Newest version of each key across all runs (incremental datasets)."""
@@ -34,7 +41,7 @@ CREATE OR REPLACE TABLE darts_silver.events AS
 SELECT DISTINCT
   event_key,
   tournament_key,
-  tournament_name,
+  {unescape('tournament_name')} AS tournament_name,
   to_date(event_date) AS event_date,
   to_date(start_date) AS start_date,
   to_date(end_date) AS end_date,
@@ -44,8 +51,8 @@ SELECT DISTINCT
   event_avg,
   winner_avg,
   player_key AS winner_key,
-  winner_name,
-  category IN {BIG_STAGE} AS is_big_stage
+  {unescape('winner_name')} AS winner_name,
+  tournament_key IN {MAJOR_KEYS} AS is_major
 FROM {dedup("orakel_events", "event_key")}
 """)
 
@@ -63,14 +70,14 @@ SELECT
   match_key,
   player_key,
   any_value(IF(player_key = winner_key, loser_key, winner_key)) AS opponent_key,
-  any_value(IF(player_key = winner_key, loser_name, winner_name)) AS opponent_name,
+  any_value({unescape('IF(player_key = winner_key, loser_name, winner_name)')}) AS opponent_name,
   any_value(to_date(match_date)) AS match_date,
   any_value(event_key) AS event_key,
   any_value(tournament_key) AS tournament_key,
-  any_value(tournament_name) AS tournament_name,
+  any_value({unescape('tournament_name')}) AS tournament_name,
   any_value(round) AS round,
   any_value(category) AS category,
-  any_value(category IN {BIG_STAGE}) AS is_big_stage,
+  any_value(tournament_key IN {MAJOR_KEYS}) AS is_major,
   any_value(player_key = winner_key) AS won,
   any_value(IF(player_key = winner_key, winner_score, loser_score)) AS score_for,
   any_value(IF(player_key = winner_key, loser_score, winner_score)) AS score_against,
@@ -117,14 +124,15 @@ SELECT
   match_key,
   any_value(to_date(match_date)) AS match_date,
   any_value(event_key) AS event_key,
-  any_value(tournament_name) AS tournament_name,
+  any_value(tournament_key) AS tournament_key,
+  any_value({unescape('tournament_name')}) AS tournament_name,
   any_value(round) AS round,
   any_value(category) AS category,
-  any_value(category IN {BIG_STAGE}) AS is_big_stage,
+  any_value(tournament_key IN {MAJOR_KEYS}) AS is_major,
   any_value(winner_key) AS winner_key,
-  any_value(winner_name) AS winner_name,
+  any_value({unescape('winner_name')}) AS winner_name,
   any_value(loser_key) AS loser_key,
-  any_value(loser_name) AS loser_name,
+  any_value({unescape('loser_name')}) AS loser_name,
   any_value(winner_score) AS winner_score,
   any_value(loser_score) AS loser_score
 FROM {dedup("orakel_matches", "match_key, player_key, stat_name")}
@@ -142,7 +150,7 @@ spark.sql(f"""
 CREATE OR REPLACE TABLE darts_silver.players AS
 WITH tracked AS (
   SELECT
-    player_key, player_name, country, to_date(dob) AS date_of_birth,
+    player_key, {unescape('player_name')} AS player_name, country, to_date(dob) AS date_of_birth,
     try_cast(regexp_replace(sum_prize_money, ',', '') AS BIGINT) AS prize_money_2y,
     rank AS prize_money_rank, tot_events
   FROM {latest("orakel_rankings")}
@@ -172,17 +180,23 @@ LEFT JOIN wiki w ON w.player_key = coalesce(t.player_key, o.player_key)
 
 # COMMAND ----------
 
-# MAGIC %md ## rankings (snapshot history) and tournament pages
+# MAGIC %md ## majors, rankings (snapshot history) and tournament pages
 
 # COMMAND ----------
 
-spark.sql("""
+spark.createDataFrame(
+    [(int(k), name) for k, name in MAJORS.items()], "tournament_key BIGINT, tournament_name STRING"
+).write.mode("overwrite").saveAsTable("darts_silver.majors")
+
+# COMMAND ----------
+
+spark.sql(f"""
 CREATE OR REPLACE TABLE darts_silver.rankings AS
 SELECT DISTINCT
   to_date(left(_run_date, 10)) AS snapshot_date,
   rank,
   player_key,
-  player_name,
+  {unescape('player_name')} AS player_name,
   try_cast(regexp_replace(sum_prize_money, ',', '') AS BIGINT) AS prize_money_2y
 FROM darts_bronze.orakel_rankings
 """)
@@ -193,5 +207,5 @@ SELECT title, revid, wikitext, error, to_date(left(_run_date, 10)) AS fetched_on
 FROM {dedup("wiki_tournament_pages", "title")}
 """)
 
-for t in ["events", "player_matches", "matches", "players", "rankings", "tournament_pages"]:
+for t in ["events", "player_matches", "matches", "players", "majors", "rankings", "tournament_pages"]:
     print(t, spark.table(f"darts_silver.{t}").count())

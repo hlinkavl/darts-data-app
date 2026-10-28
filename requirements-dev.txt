@@ -7,5 +7,7 @@ requests
 beautifulsoup4
 python-dotenv
 pyyaml
+statsmodels
+scikit-learn
 pytest
 ruff
