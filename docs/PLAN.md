@@ -149,7 +149,8 @@ An end-to-end data app about PDC darts with two core features:
 3.3 [ ] **Failure notifications**: Databricks Job e-mail on failure, GitHub Actions failure e-mails.
 3.4 [ ] **GitHub Actions `refresh.yml`**: `python -m ingestion.run --upload` (incremental) → `databricks jobs run-now darts_refresh`. Daily during majors (dates from `gold.majors_calendar`), otherwise on demand (`workflow_dispatch`, later the app button). Secrets `DATABRICKS_HOST` + `DATABRICKS_TOKEN`. Verified egress: GitHub runners reach Orakel and Wikipedia.
 3.5 [ ] **AI narratives** with `ai_query`: short player assessments from form + stats → `gold.player_ai_summary`. Compare 2–3 foundation models on 20 players first (as in the video).
-3.6 [ ] **News and interviews** (source to be decided, e.g. PDC news RSS) → AI summaries (how the player feels, injuries, equipment changes).
+3.6 [ ] **News and interviews** from the official **PDC news RSS** (`pdc.tv/rss.xml`, decided 2026-10-28): 20 latest articles with full text, about 4–7 days of news. Ingest every article into bronze (deduplicated by link) so history builds up over time. AI summaries per player: how he feels, injuries, equipment changes, quotes. The app shows **only AI summaries with a link to the original article**, never the full text. Because the feed holds only the last 20 items, an on-demand refresh after a long pause can miss articles: the health report warns about such a gap ("news gap since …").
+3.8 [ ] **Odds source** (decide on Day 3): Livesport is not an option (commercial data, a large part of the site is disallowed in robots.txt, odds come from an internal JS API). Candidates: an official odds API with a free tier that covers PDC outrights (odds-api.io, OddsPapi; check terms and limits), or a **manual CSV** of outright odds for the big events (about 20 rows per tournament). If neither works, "players to watch" is based on the model only (form, soft section of the draw).
 3.7 [ ] Improve Wikidata matching (76 % of tracked players) for player backgrounds.
 
 How fixes happen: config-only issues (e.g. a new major) can be fixed by editing `config/majors.yml` on GitHub. Code issues (parser, source changes) are fixed in the repo with Claude Code and deployed with the bundle. Never edit code in the Databricks workspace, because `bundle deploy` overwrites it. Genie helps to diagnose (questions over the health report and gold tables), not to fix.
@@ -172,7 +173,5 @@ How fixes happen: config-only issues (e.g. a new major) can be fixed by editing 
 ## Open questions
 
 - App language: English only, or with a Czech toggle?
-- Odds source for "players to watch" (model vs. market): an API or a manual CSV?
 - Day-form spread in the simulation to correct overconfidence for heavy favourites in long formats.
 - Parsers for the 96-player WC format (2024, 2025), the Grand Slam groups and the PC Finals sections.
-- News/interviews source for the AI narratives (PDC news RSS?), needed for Day 3.
