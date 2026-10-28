@@ -28,7 +28,7 @@ version = f"v{date.today().isoformat()}"
 # COMMAND ----------
 
 player_matches = spark.sql("""
-    SELECT match_key, player_key, opponent_key, match_date, tournament_key, is_major, won,
+    SELECT match_key, player_key, opponent_key, match_date, tournament_key, is_major, won, category, tournament_name,
            points, darts, first9_points, first9_darts, checkouts_hit, checkout_attempts, one_eighties
     FROM darts_silver.player_matches
 """).toPandas()
@@ -38,6 +38,7 @@ run = pipeline.fit(player_matches, matches, version)
 print(f"model {version}: {run.n_pairs} matches between tracked players, Elo {run.elo_params}")
 display(run.selection_log)
 display(run.coefficients)
+display(run.data_summary)
 display(run.metrics)
 
 # COMMAND ----------
@@ -57,6 +58,7 @@ save_versioned(run.coefficients, "pi_coefficients")
 save_versioned(run.selection_log.reset_index(names="step_order"), "pi_selection_log")
 save_versioned(run.metrics, "pi_metrics")
 save_versioned(run.calibration, "pi_calibration")
+save_versioned(run.data_summary, "pi_training_data")
 save_versioned(run.elo_tuning, "pi_elo_tuning")
 save_versioned(corr, "pi_correlations")
 

@@ -124,10 +124,11 @@ An end-to-end data app about PDC darts with two core features:
 - PI method: **variant A**, a transparent 3-step regression (select predictors → weights → scale), plus Effective Average. Rating named **Opponent-Weighted Elo**; it stays only if it passes the same selection rule.
 
 2.1 [x] **Majors definition** fixed: Orakel categories are not stable (the World Cup shares `WC`, Masters switches between `U` and `MJ`, PC Finals has its own `PCF`). Now an explicit list of 10 `tournament_key`s in `config/majors.yml` → `is_major` in silver + `silver.majors`.
-2.2 [x] **Performance Index**: [PERFORMANCE_INDEX.md](PERFORMANCE_INDEX.md). Shared package `src/analytics/` (features, Elo, model, pipeline) + notebooks `04_pi_model`, `05_performance_index` in the job; unit tests in `tests/`. Result of v2026-10-28:
-   - Selected: 3-Dart Average (L30) 63 %, Form 18 %, Opponent-Weighted Elo 19 %. Dropped: First-9 (r = 0.94 with average), Win Rate (r = 0.81 with Elo), Checkout %, 180s, Experience.
-   - **Big-Stage Delta**: related to results *on majors* (p = 0.004) but not elsewhere (p = 0.95), so it is modelled as a majors-only predictor. It passes 1a and 1b but is significant in only 73 % of bootstrap samples, so it is **out for now** (decision pending, see open questions).
-   - Test 2026: AUC 0.686 (vs 0.679 average only, 0.659 Elo only), well calibrated. Top 3: Littler 7.04, Humphries 6.28, Price 5.83.
+2.2 [x] **Performance Index**: [PERFORMANCE_INDEX.md](PERFORMANCE_INDEX.md). Shared package `src/analytics/` (features, Elo, model, pipeline) + notebooks `04_pi_model`, `05_performance_index` in the job; unit tests in `tests/`. The training-data summary is stored per model version (`darts_gold.pi_training_data`).
+   - Backfill extended to **2021–2022** (separate run, 22.8k rows per stat): the model now learns from 22,456 matches between tracked players (Feb 2021 – Oct 2026).
+   - Selected (v2026-10-28): 3-Dart Average (L30) 58 %, Opponent-Weighted Elo 21 %, Form 18 %, Experience 3 % (borderline: exactly 80 % in the bootstrap). Dropped: First-9 (r = 0.94 with average), Win Rate and Checkout % (negative coefficients), 180s (p = 0.69).
+   - **Big-Stage Delta** (majors only, decided 2026-10-28: keep the 80 % rule): 73 % of bootstrap samples with data since 2023, **61 %** with data since 2021, so the longer history weakened the evidence. Out of the index, re-tested on every refit, shown descriptively in profiles.
+   - Test 2026: AUC 0.684 (0.707 on majors), well calibrated. Top 3: Littler 7.15, Humphries 6.36, Price 5.88.
 2.3 [ ] PI backtest on the World Championships 2025 and 2026 (pre-tournament PI vs. how far players got).
 2.4 [ ] Match format conversion: "typical match" probability → leg probability → P(win) for best-of-N legs / sets (dynamic programming).
 2.5 [ ] **Monte Carlo bracket simulation** (10,000 runs) → `gold.tournament_predictions` (P(reach round), P(title)); parse the draws from the Wikipedia WC pages.
@@ -153,11 +154,10 @@ An end-to-end data app about PDC darts with two core features:
 ## After Day 3
 
 - Live run for the **PDC World Championship 2027** once the draw is out (usually late November).
-- Re-test Big-Stage Delta as more major matches accumulate (or with a longer backfill).
+- Re-test Big-Stage Delta as more major matches accumulate (automatic on every refit).
 
 ## Open questions
 
 - App language: English only, or with a Czech toggle?
-- Big-Stage Delta: keep the 80 % bootstrap rule (currently out at 73 %), or extend the backfill to 2021 to give it more data?
 - Odds source: an API or a manual CSV?
 - News/interviews source for the AI narratives (PDC news RSS?).

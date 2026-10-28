@@ -88,7 +88,7 @@ Catalog `workspace` (the Free Edition default), three schemas:
 
 **PI = 10 × P(player beats an average top-32 player in a typical match).** Built in three steps (select predictors → regression weights → 0–10 scale). Full methodology: [PERFORMANCE_INDEX.md](PERFORMANCE_INDEX.md).
 
-- Current predictors: **3-Dart Average (L30)**, **Form (L10 vs L30)**, **Opponent-Weighted Elo**. Big-Stage Delta (majors only) is tested on every refit and currently fails the bootstrap stability rule (73 % < 80 %).
+- Current predictors: **3-Dart Average (L30)**, **Opponent-Weighted Elo**, **Form (L10 vs L30)**, **Experience**. Big-Stage Delta (majors only) is tested on every refit and currently fails the bootstrap stability rule (61 % < 80 %).
 - Per player: PI, PI Major (equal to PI while no majors-only predictor is selected), Effective Average, and the contribution of each predictor.
 - Head to head: `P(A beats B) = 1 / (1 + e^−(S_A − S_B))` from the two strengths.
 - **Majors** = the 10 televised events in [config/majors.yml](../config/majors.yml), keyed by Orakel `tournament_key` (Orakel's categories are not stable across years).

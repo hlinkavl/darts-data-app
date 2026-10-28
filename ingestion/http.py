@@ -38,7 +38,14 @@ class PoliteClient:
 
         for attempt in range(1, self.retries + 1):
             self._wait(urlparse(url).netloc)
-            resp = self.session.get(url, params=params, timeout=30)
+            try:
+                resp = self.session.get(url, params=params, timeout=30)
+            except (requests.ConnectionError, requests.Timeout):
+                # Dropped connections happen on long runs; back off and retry like a 5xx.
+                if attempt == self.retries:
+                    raise
+                time.sleep(10 * attempt)
+                continue
             if resp.status_code == 200:
                 break
             # Back off on rate limiting / transient errors, fail fast on anything else (403 = blocked).

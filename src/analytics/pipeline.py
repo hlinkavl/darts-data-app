@@ -23,6 +23,7 @@ class ModelRun:
     coefficients: pd.DataFrame
     metrics: pd.DataFrame
     calibration: pd.DataFrame
+    data_summary: pd.DataFrame
     n_pairs: int
 
 
@@ -63,7 +64,8 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str) -> Mo
     return ModelRun(
         version=version, elo_params=elo_params, elo_tuning=tuning, elo_history=elo_history,
         selection_log=pd.DataFrame(log.entries), correlations=corr, coefficients=coefficients,
-        metrics=pd.DataFrame(rows), calibration=calib, n_pairs=len(pairs),
+        metrics=pd.DataFrame(rows), calibration=calib, data_summary=model.data_summary(split),
+        n_pairs=len(pairs),
     )
 
 

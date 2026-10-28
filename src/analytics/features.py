@@ -75,7 +75,9 @@ def point_in_time_features(player_matches: pd.DataFrame, elo_history: pd.DataFra
     pm = player_matches.assign(match_date=pd.to_datetime(player_matches["match_date"]))
     pm = pm.sort_values(["player_key", "match_date", "match_key"]).reset_index(drop=True)
     feats = pd.concat([_player_features(g) for _, g in pm.groupby("player_key", sort=False)])
-    out = pm[["match_key", "player_key", "opponent_key", "match_date", "tournament_key", "is_major", "won"]].join(feats)
+    keep = ["match_key", "player_key", "opponent_key", "match_date", "tournament_key", "is_major", "won"]
+    keep += [c for c in ("category", "tournament_name") if c in pm.columns]  # descriptive, for the data summary
+    out = pm[keep].join(feats)
     elo = elo_history[["match_key", "player_key", "elo_pre", "elo_n"]].rename(columns={"elo_pre": "elo"})
     return out.merge(elo, on=["match_key", "player_key"], how="left")
 

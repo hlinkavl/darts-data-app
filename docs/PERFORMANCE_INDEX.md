@@ -8,7 +8,7 @@ A PI of 7.0 means a 70 % chance against a typical top-32 opponent. A PI of 5.0 m
 
 ## How to read the PI
 
-**1. The PI is measured against one benchmark: the average top-32 player.** The benchmark is the average profile of the 32 strongest players, roughly the level of the 14th-best player. Luke Littler's PI of 7.04 means he beats *that* player in 70 % of typical matches. It does **not** mean he beats every top-32 player 70 % of the time.
+**1. The PI is measured against one benchmark: the average top-32 player.** The benchmark is the average profile of the 32 strongest players, roughly the level of the 14th-best player. Luke Littler's PI of 7.15 means he beats *that* player in 71.5 % of typical matches. It does **not** mean he beats every top-32 player 71.5 % of the time.
 
 **2. Any specific match-up comes from the two PIs.** Each PI encodes a strength. The chance of A beating B depends on the difference between the two strengths:
 
@@ -17,36 +17,36 @@ strength from PI:   s = ln( PI / (10 − PI) )            (the log-odds of beati
 P(A beats B)      = 1 / (1 + e^−(s_A − s_B))
 ```
 
-Example, Littler (PI 7.04) vs Ryan Searle (PI 4.28): s = ln(7.04 / 2.96) = 0.87 and ln(4.28 / 5.72) = −0.29, so P = 1 / (1 + e^−1.16) = **76 %**. The PIs are not subtracted directly: 7.04 − 4.28 = 2.76 has no meaning as a probability.
+Example, Littler (PI 7.15) vs Cameron Menzies (PI 4.25): s = ln(7.15 / 2.85) = 0.92 and ln(4.25 / 5.75) = −0.30, so P = 1 / (1 + e^−1.22) = **77 %**. The PIs are not subtracted directly: 7.15 − 4.25 = 2.90 has no meaning as a probability.
 
 Littler against different opponents (model v2026-10-28):
 
 | Opponent (PI rank) | Opponent's PI | Littler wins |
 |---|---|---|
-| #2 Luke Humphries | 6.28 | 58 % |
-| #3 Gerwyn Price | 5.83 | 63 % |
-| #10 Luke Woodhouse | 5.24 | 68 % |
-| *average top-32 player* | *5.00* | *70 %* |
-| #16 Chris Dobey | 4.80 | 72 % |
-| #32 Ryan Searle | 4.28 | 76 % |
-| #64 Gabriel Clemens | 3.29 | 83 % |
-| #100 Adam Sevada | 2.55 | 87 % |
+| #2 Luke Humphries | 6.36 | 59 % |
+| #3 Gerwyn Price | 5.88 | 64 % |
+| #10 Nathan Aspinall | 5.23 | 70 % |
+| *average top-32 player* | *5.00* | *71.5 %* |
+| #16 Chris Dobey | 4.78 | 73 % |
+| #32 Cameron Menzies | 4.25 | 77 % |
+| #64 Ritchie Edhouse | 3.23 | 84 % |
+| #100 Adam Sevada | 2.49 | 88 % |
 
 Two players with the same PI have a 50 % chance against each other, whatever their PI is.
 
-**3. "Typical match" means first to 6 legs (best of 11 legs).** This is the standard format of the Players Championship and European Tour, and the format of 77 % of the matches the model learned from (matches between two tracked players since 2023):
+**3. "Typical match" means first to 6 legs (best of 11 legs).** This is the standard format of the Players Championship and European Tour, and the format of 76 % of the matches between tracked players since 2021, which is the data the model learned from (see [What the model learned from](#what-the-model-learned-from)):
 
 | Format | Share of matches |
 |---|---|
-| **First to 6 legs (best of 11)** | **77 %** |
-| First to 4–5 legs (best of 7–9) | 13 % |
-| First to 7–11 legs (best of 13–21), e.g. Grand Slam, Masters, European Championship knockouts | 6 % |
+| **First to 6 legs (best of 11)** | **76 %** |
+| First to 4–5 legs (best of 7–9) | 14 % |
+| First to 7–11 legs (best of 13–21), e.g. Grand Slam, Masters, European Championship knockouts | 7 % |
 | Sets (World Championship, World Grand Prix) | 2 % |
 | Other short formats (first to 2–3 legs) | 1 % |
 
-So PI 7.04 means: Littler wins 70 % of best-of-11-legs matches against the average top-32 player. In longer formats luck evens out more and the favourite's chance rises. Littler vs Searle at the World Championship (first to 3 sets in round 1, up to first to 7 sets in the final, each set first to 3 legs) would be above 76 %. Shorter formats work the other way. The tournament simulations convert every probability to the format of the round (see [DESIGN.md](DESIGN.md#tournament-overview)).
+So PI 7.15 means: Littler wins 71.5 % of best-of-11-legs matches against the average top-32 player. In longer formats luck evens out more and the favourite's chance rises. Littler vs Menzies at the World Championship (first to 3 sets in round 1, up to first to 7 sets in the final, each set first to 3 legs) would be above 77 %. Shorter formats work the other way. The tournament simulations convert every probability to the format of the round (see [DESIGN.md](DESIGN.md#tournament-overview)).
 
-**4. The probabilities are calibrated.** Each match gets its own probability, from about 50 % for close match-ups to about 90 % for heavy favourites. On the 2026 test data (never used for fitting), matches were sorted by predicted probability into 10 groups. In each group the favourites won about as often as predicted. For example, in the group where the model predicted 77.9 % on average, the favourites won 77.8 %. So a probability of X % can be read literally. See [Validation](#validation-test-period-2026-never-used-for-fitting-or-selection).
+**4. The probabilities are calibrated.** Each match gets its own probability, from about 50 % for close match-ups to about 90 % for heavy favourites. On the 2026 test data (never used for fitting), matches were sorted by predicted probability into 10 groups. In each group the favourites won about as often as predicted. For example, in the group where the model predicted 77.9 % on average, the favourites won 79.2 %. So a probability of X % can be read literally. See [Validation](#validation-test-period-2026-never-used-for-fitting-or-selection).
 
 ---
 
@@ -60,11 +60,35 @@ Every number in this document is recomputed on each refresh and stored in Databr
 
 ---
 
-## Data
+## What the model learned from
 
-- **Matches:** every match of the 150 players in the 2-year prize-money ranking (PDC Order of Merit equivalent) since 1 Jan 2023, from Darts Orakel. Each player's match row has points and darts thrown, first-9 points and darts, checkouts hit and attempted, and 180s.
-- **Majors:** the 10 televised PDC events in [config/majors.yml](../config/majors.yml): World Championship, Masters, UK Open, Premier League, World Matchplay, World Series Finals, World Grand Prix, European Championship, Grand Slam and Players Championship Finals.
-- **Observations for the model:** matches where **both** players are tracked and have enough history (at least 10 matches with stats and 30 matches for the Elo, see below). This is roughly 17,600 matches.
+**Source.** Darts Orakel's free match data: every match since **1 January 2021** of the **150 players** in the current 2-year prize-money ranking (the PDC Order of Merit equivalent). Each player's match row has points and darts thrown, first-9 points and darts, checkouts hit and attempted, and 180s. Orakel covers every event these players play, so besides the PDC Pro Tour and the majors the data also has qualifiers, Q-School, the Challenge and Development Tours, the Women's Series and other tours (Asian Tour, MODUS, Nordic & Baltic, …).
+
+**Which matches become observations.** A match is used only if:
+- **both** players are among the 150 tracked players (both need predictors), and
+- both have enough history: at least 10 earlier matches with stats (for the 3-dart average) and 30 earlier matches (for the Elo, see below).
+
+Matches from early 2021 serve only as history, so the first usable match is from 27 February 2021.
+
+**Majors** are the 10 televised PDC events in [config/majors.yml](../config/majors.yml): World Championship, Masters, UK Open, Premier League, World Matchplay, World Series Finals, World Grand Prix, European Championship, Grand Slam and Players Championship Finals.
+
+**The data, split by time** (model v2026-10-28, `darts_gold.pi_training_data`):
+
+| | Training | Validation | Test |
+|---|---|---|---|
+| Period | 27 Feb 2021 – 31 Mar 2025 | 1 Apr 2025 – 30 Dec 2025 | 1 Jan 2026 – 24 Oct 2026 |
+| Used for | Elo tuning, fitting, significance tests, bootstrap | out-of-sample check during selection | final evaluation only |
+| Matches | 13,330 | 4,171 | 4,955 |
+| Players | 141 | 143 | 144 |
+| Players Championship | 49 % | 53 % | 54 % |
+| Majors | 14 % | 10 % | 9 % |
+| Qualifiers & Q-School | 12 % | 13 % | 16 % |
+| European Tour | 10 % | 12 % | 12 % |
+| Challenge / Development Tour, Women's Series | 8 % | 5 % | 4 % |
+| Other tours (Asian Tour, MODUS, Nordic & Baltic, …) | 6 % | 7 % | 3 % |
+| Other PDC TV events (World Series, World Cup, …) | 2 % | 1 % | 2 % |
+
+In total **22,456 matches**. The final weights are refitted on all three parts together, after the evaluation.
 
 ### No look-ahead
 
@@ -102,7 +126,7 @@ The delta is a **majors-only** predictor. It enters the model only for matches p
 
 ### Opponent-Weighted Elo in detail
 
-A classic Elo rating, replayed over every match since 2023 in date order. Everyone starts at 1500.
+A classic Elo rating, replayed over every match since 2021 in date order. Everyone starts at 1500.
 
 ```
 expected win chance of A = 1 / (1 + 10^((Elo_B − Elo_A) / 400))
@@ -110,7 +134,7 @@ new Elo_A = Elo_A + K × m × (result − expected)        result = 1 for a win,
 ```
 
 - A win over a much stronger player (expected ≈ 0.2) earns 0.8 × K points. A win over a much weaker player (expected ≈ 0.9) earns only 0.1 × K. That is why it is called *opponent-weighted*.
-- `m` = 1.5 on majors if that improves predictions, otherwise 1.
+- `m` = 1.5 on majors if that improves predictions, otherwise 1. Current model: **K = 16, m = 1.5**.
 - **K and m are tuned**: the pipeline tries K ∈ {16, 24, 32, 40, 48} × m ∈ {1, 1.5} and keeps the pair whose own predictions have the lowest log loss in the training period.
 - **Burn-in:** a player's Elo is only used after 30 matches, because early ratings are still mostly the starting value.
 - Limitation: opponents outside the tracked 150 are rated only from their matches against tracked players.
@@ -156,16 +180,16 @@ Every decision and its reason is stored in `darts_gold.pi_selection_log`.
 | Predictor | Decision | Reason |
 |---|---|---|
 | First-9 Average (L30) | ❌ 1a | r = 0.94 with 3-Dart Average, which predicts better alone |
-| Win Rate (L30) | ❌ 1a | r = 0.81 with Opponent-Weighted Elo, which predicts better alone |
+| Win Rate (L30) | ❌ 1b | negative coefficient once average and Elo are in the model |
 | Checkout % (L30) | ❌ 1b | negative coefficient once the average is in the model |
-| 180s per 100 Darts (L30) | ❌ 1b | negative coefficient once the average is in the model |
-| Experience | ❌ 1b | p = 0.36 |
-| Big-Stage Delta (majors only) | ❌ 1c | significant in 1b, but only in 73 % of bootstrap samples (< 80 %) |
+| 180s per 100 Darts (L30) | ❌ 1b | p = 0.69 |
+| Big-Stage Delta (majors only) | ❌ 1c | significant in 1b, but only in 61 % of bootstrap samples (< 80 %) |
 | **3-Dart Average (L30)** | ✅ | significant in 100 % of bootstrap samples |
 | **Form (L10 vs L30)** | ✅ | significant in 100 % of bootstrap samples |
-| **Opponent-Weighted Elo** | ✅ | significant in 99.8 % of bootstrap samples |
+| **Opponent-Weighted Elo** | ✅ | significant in 100 % of bootstrap samples |
+| **Experience (log matches)** | ✅ (borderline) | significant in exactly 80 % of bootstrap samples |
 
-Checkout % and 180s are not useless. They are part of what the 3-dart average already measures, so they add nothing on top of it.
+Checkout % and 180s are not useless. They are part of what the 3-dart average already measures, so they add nothing on top of it. Experience passed the stability rule exactly at the threshold, and its weight is small (Step 2).
 
 ---
 
@@ -175,12 +199,14 @@ The final weights are the coefficients of the logistic regression with the selec
 
 | Predictor | β (per 1 sd) | p-value | Share of the index | In 3-dart-average points |
 |---|---|---|---|---|
-| 3-Dart Average (L30) | 0.543 | < 0.001 | 63 % | 1 point = 1 point |
-| Form (L10 vs L30) | 0.151 | < 0.001 | 18 % | 1 point of form = 0.48 average points |
-| Opponent-Weighted Elo | 0.163 | < 0.001 | 19 % | 100 Elo points = 1.2 average points |
+| 3-Dart Average (L30) | 0.506 | < 0.001 | 58 % | 1 point = 1 point |
+| Opponent-Weighted Elo | 0.186 | < 0.001 | 21 % | 100 Elo points = 1.44 average points |
+| Form (L10 vs L30) | 0.157 | < 0.001 | 18 % | 1 point of form = 0.53 average points |
+| Experience (log matches) | 0.024 | 0.09 | 3 % | doubling the number of matches played = 0.33 average points |
 
 - **Share of the index** = |β| ÷ sum of all |β|.
-- **In 3-dart-average points** converts each predictor into the unit everyone in darts understands. Example: a player whose last 10 matches are 2 points above their L30 average gets the same boost as +0.95 points of 3-dart average.
+- **In 3-dart-average points** converts each predictor into the unit everyone in darts understands. Example: a player whose last 10 matches are 2 points above their L30 average gets the same boost as +1.06 points of 3-dart average.
+- Experience has a p-value of 0.09 in the final fit on all data. It passed selection on the training data (exactly 80 % of bootstrap samples), so the rule keeps it. Its effect on any PI is small: a few hundredths in log-odds.
 
 Weights, standard errors, 95 % confidence intervals and bootstrap shares are stored in `darts_gold.pi_coefficients`.
 
@@ -196,7 +222,7 @@ Weights, standard errors, 95 % confidence intervals and bootstrap shares are sto
 PI = 10 × 1 / (1 + e^−(S − S_ref))
 ```
 
-`S − S_ref` splits exactly into one **contribution** per predictor, `β × (x − x_ref) / sd`. So every PI can be explained, e.g. "PI 7.0 = 3-dart average +0.37, form +0.10, Elo +0.40 (log-odds)".
+`S − S_ref` splits exactly into one **contribution** per predictor, `β × (x − x_ref) / sd`. So every PI can be explained, e.g. Littler's "PI 7.15 = 3-dart average +0.35, Elo +0.44, form +0.10, experience +0.02 (log-odds)".
 
 **Head to head.** For two players A and B: `P(A beats B) = 1 / (1 + e^−(S_A − S_B))`. The same formula drives the tournament simulations.
 
@@ -207,9 +233,9 @@ Effective Average = 3-dart average of the reference player + (S − S_ref) ÷ β
                   = the player's own 3-dart average (L30) + form and Elo converted into average points
 ```
 
-Example: Luke Littler, 3-Dart Average (L30) 98.0, Effective Average 102.1. His form and Elo are worth about 4 extra average points against a typical top-32 field.
+Example: Luke Littler, 3-Dart Average (L30) 98.0, Effective Average 103.1. His Elo, form and experience are worth about 5 extra average points against a typical top-32 field.
 
-**PI Major.** If a majors-only predictor is selected (today: none, see Step 1), each player also gets a *PI Major*: the same calculation including that predictor, used for matches on majors and in all major tournament predictions. While no majors-only predictor is selected, PI Major equals PI.
+**PI Major.** If a majors-only predictor is selected (today none: Big-Stage Delta fails the stability rule, see Step 1), each player also gets a *PI Major*: the same calculation including that predictor, used for matches on majors and in all major tournament predictions. While no majors-only predictor is selected, PI Major equals PI.
 
 **"Typical match"** means the mix of formats in the data, which is mostly Players Championship and European Tour matches (first to 6 legs). Tournament simulations translate match probabilities into the specific format of each round.
 
@@ -219,21 +245,21 @@ Example: Luke Littler, 3-Dart Average (L30) 98.0, Effective Average 102.1. His f
 
 | Model | Matches | AUC | Log loss | Brier |
 |---|---|---|---|---|
-| **PI model** (3-dart average, form, Elo) | 4,942 | **0.686** | **0.637** | **0.223** |
-| 3-dart average only | 4,942 | 0.679 | 0.641 | 0.225 |
-| Elo only | 4,942 | 0.659 | 0.654 | 0.231 |
-| PI model, majors only | 423 | 0.700 | 0.629 | 0.220 |
+| **PI model** (3-dart average, Elo, form, experience) | 4,955 | **0.684** | **0.638** | **0.224** |
+| 3-dart average only | 4,955 | 0.679 | 0.641 | 0.225 |
+| Elo only | 4,955 | 0.661 | 0.652 | 0.230 |
+| PI model, majors only | 424 | 0.707 | 0.626 | 0.219 |
 
 - **AUC** (0.5 = coin flip, 1 = perfect): darts has a lot of randomness, so ~0.69 is a strong result for pre-match information alone.
-- **Calibration:** when the model says 78 %, the favourite wins 78 % of the time. Every decile matches within a few percentage points (`darts_gold.pi_calibration`).
+- **Calibration:** when the model says 78 %, the favourite wins 79 % of the time. Every decile matches within a few percentage points (`darts_gold.pi_calibration`).
 
 ---
 
 ## Limitations
 
-- **Coverage:** only the top 150 of the prize-money ranking are tracked. Their opponents are rated from matches against tracked players only.
+- **Coverage:** only the current top 150 of the prize-money ranking are tracked. Everyone else, including players who were strong in 2021–2022 but have since dropped out, appears only as an opponent of a tracked player: their Elo comes from those matches alone, and matches between two untracked players are not in the data.
 - **All events count** in the averages: Pro Tour, European Tour, majors, and also lower-level events some players play (Challenge Tour, World Series exhibitions). The Elo partly corrects for opponent strength.
-- **Big-Stage Delta** has few observations per player (a top player plays roughly 30–60 major matches in 2 years). The current data is not enough for it to pass the stability rule. It is re-tested on every refit, and a longer history should give it a fairer test.
+- **Big-Stage Delta** is related to results on majors in a single fit (p = 0.004 in the first test), but it is not stable: significant in 73 % of bootstrap samples with data since 2023 and in only 61 % with data since 2021. A longer history made the evidence weaker, not stronger. It stays a candidate and is re-tested on every refit, and it can still be shown in player profiles as a descriptive number.
 - **Linear model:** effects add up. Interactions (e.g. form mattering more for young players) are not modelled.
 
 ---

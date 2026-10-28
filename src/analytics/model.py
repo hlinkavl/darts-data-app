@@ -40,6 +40,10 @@ def build_pairs(features: pd.DataFrame, candidates: list[str]) -> pd.DataFrame:
         "match_key": pairs["match_key"].to_numpy(),
         "match_date": pairs["match_date_a"].to_numpy(),
         "is_major": pairs["is_major_a"].to_numpy().astype(bool),
+        "event_group": [event_group(c, t, m) for c, t, m in zip(
+            pairs["category_a"] if "category_a" in pairs else [None] * len(pairs),
+            pairs["tournament_name_a"] if "tournament_name_a" in pairs else [None] * len(pairs),
+            pairs["is_major_a"])],
         "player_a": np.where(flip, pairs["player_key_b"], pairs["player_key_a"]),
         "player_b": np.where(flip, pairs["player_key_a"], pairs["player_key_b"]),
         "y": np.where(flip, pairs["won_b"], pairs["won_a"]).astype(int),
@@ -49,6 +53,43 @@ def build_pairs(features: pd.DataFrame, candidates: list[str]) -> pd.DataFrame:
         if c in MAJOR_ONLY:
             diff = diff * out["is_major"].to_numpy()
         out[c] = np.where(flip, -diff, diff)
+    return out
+
+
+PDC_DEVELOPMENT = {"Challenge Tour", "Development Tour", "Women's Series"}
+
+
+def event_group(category, tournament_name, is_major) -> str:
+    """Readable event type for the training-data summary (Orakel categories are too fine-grained)."""
+    if is_major:
+        return "Majors"
+    if category in ("PT", "PC"):
+        return "Players Championship"
+    if category == "ET":
+        return "European Tour"
+    if category == "Q":
+        return "Qualifiers & Q-School"
+    if tournament_name in PDC_DEVELOPMENT:
+        return "Challenge / Development Tour, Women's Series"
+    if category in ("WS", "WSD", "U", "WC", "MJ", "PCF", "WGP", "WYC"):
+        return "Other PDC TV events (World Series, World Cup, ...)"
+    if category is None:
+        return "Unknown"
+    return "Other tours (Asian Tour, MODUS, Nordic & Baltic, ...)"
+
+
+def data_summary(split) -> pd.DataFrame:
+    """What the model learned from: matches, players, period and event mix per part of the split."""
+    rows = []
+    for part, df in [("train", split.train), ("validation", split.validation), ("test", split.test)]:
+        dates = pd.to_datetime(df["match_date"])
+        base = {"part": part, "date_from": dates.min().date(), "date_to": dates.max().date(),
+                "players": len(pd.unique(pd.concat([df["player_a"], df["player_b"]])))}
+        rows.append({**base, "event_group": "All", "matches": len(df)})
+        for group, n in df["event_group"].value_counts().items():
+            rows.append({**base, "event_group": group, "matches": int(n)})
+    out = pd.DataFrame(rows)
+    out["pct_of_part"] = 100 * out["matches"] / out.groupby("part")["matches"].transform("max")
     return out
 
 
