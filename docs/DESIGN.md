@@ -102,7 +102,7 @@ For every major (first live test: World Championship 2027, 11 Dec 2026 – 3 Jan
 1. **Pre-tournament predictions:** Monte Carlo simulation (10,000 runs) of the bracket. Match probabilities come from the PI strengths (PI Major), converted from a "typical match" to each round's format (sets/legs). Output: P(reach each round), P(title).
 2. **Upcoming matches:** Orakel's free upcoming-matches feed (players, round, start time) plus the Wikipedia draw. Each match card shows PI vs. PI, win probability, Effective Average, form and the head-to-head record from `silver.matches`.
 3. **Live bracket:** results already flow in through the player-matches API. After each refresh, played matches are fixed in the bracket and the rest is re-simulated.
-4. **Players to watch:** model vs. bookmaker odds (if an odds source is found), rising form, soft section of the draw.
+4. **Players to watch:** from the model only: title chances, rising form, soft section of the draw. Bookmaker odds are not used, because there is no free darts odds API (checked 2026-10-28).
 5. **Season view:** list of all majors in the season with dates, winners and the next upcoming major.
 
 ---
