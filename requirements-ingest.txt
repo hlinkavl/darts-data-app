@@ -1,0 +1,4 @@
+# Minimal dependencies for the scheduled refresh (GitHub Actions): ingestion + triggering the Databricks job.
+databricks-sdk
+pyyaml
+requests

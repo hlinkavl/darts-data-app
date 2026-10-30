@@ -9,12 +9,15 @@ resources:
         timezone_id: Europe/Prague
         pause_status: PAUSED
       max_concurrent_runs: 1
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
       parameters:
         - name: catalog
           default: ${var.catalog}
       # Serverless compute: notebook tasks need no cluster definition.
       # Raw files are uploaded to the Volume by `python -m ingestion.run --upload` (Darts Orakel blocks
-      # Databricks IPs, see docs/PLAN.md step 1.2). AI tasks follow on Day 3.
+      # Databricks IPs; since 30 Oct 2026 Mastercaller + Wikipedia, see docs/PLAN.md). AI tasks follow on Day 3.
       tasks:
         - task_key: bronze
           notebook_task:
@@ -44,6 +47,12 @@ resources:
             - task_key: performance_index
           notebook_task:
             notebook_path: ../src/notebooks/06_tournaments.py
+        # Last step: a red health report fails the job, which sends the failure e-mail.
+        - task_key: health
+          depends_on:
+            - task_key: tournaments
+          notebook_task:
+            notebook_path: ../src/notebooks/07_health.py
 
     darts_egress_check:
       name: darts_egress_check

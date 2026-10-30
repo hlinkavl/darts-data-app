@@ -1,4 +1,4 @@
-# Checks whether data sources accept requests from GitHub-hosted runners (see docs/PLAN.md, step 3.7).
+# Checks whether data sources accept requests from GitHub-hosted runners (see docs/PLAN.md, step 3.4).
 # One job per source, so each result is visible as a job conclusion.
 name: egress-check
 
@@ -19,10 +19,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - source: orakel-site
-            url: https://dartsorakel.com/
-          - source: orakel-api
-            url: https://dartsorakel.com/api/rankings?rankKey=0&isCurrent=1&draw=1&start=0&length=1
+          - source: mastercaller-matchcenter
+            url: https://mastercaller.com/matchcenter/2026/10/25
+          - source: mastercaller-results
+            url: https://mastercaller.com/tournaments/players-championships/2026-pc-31-den-bosch/results
+          - source: pdc-news-rss
+            url: https://www.pdc.tv/rss.xml
           - source: wikipedia
             url: https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo&format=json
           - source: wikidata

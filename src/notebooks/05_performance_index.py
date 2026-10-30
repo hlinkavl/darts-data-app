@@ -1,7 +1,7 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # Gold: Performance Index (step 3)
-# MAGIC Scores every tracked player with the latest model version: PI (typical match), PI Major (match on a major),
+# MAGIC Scores every tracked player with the active model version: PI (typical match), PI Major (match on a major),
 # MAGIC Effective Average and the contribution of each predictor. Snapshots on the 1st of every month since 2024
 # MAGIC give the history; the snapshot after the latest match is flagged `is_current`.
 
@@ -25,9 +25,18 @@ spark.sql(f"USE CATALOG {catalog}")
 
 # COMMAND ----------
 
-version = spark.sql("SELECT max(version) FROM darts_gold.pi_coefficients").first()[0]
+def active_version() -> str:
+    """The active model (promotion policy); falls back to the latest fit before the registry existed."""
+    if spark.catalog.tableExists("darts_gold.pi_model_registry"):
+        rows = spark.sql("SELECT version FROM darts_gold.pi_model_registry WHERE status = 'active' "
+                         "ORDER BY decided_at DESC LIMIT 1").collect()
+        if rows:
+            return rows[0][0]
+    return spark.sql("SELECT max(version) FROM darts_gold.pi_coefficients").first()[0]
+
+version = active_version()
 coefficients = spark.sql(f"SELECT * FROM darts_gold.pi_coefficients WHERE version = '{version}'").toPandas()
-elo_history = spark.table("darts_gold.elo_history").toPandas()
+elo_history = spark.sql(f"SELECT * FROM darts_gold.elo_history WHERE version = '{version}'").toPandas()
 player_matches = spark.sql("""
     SELECT match_key, player_key, opponent_key, match_date, tournament_key, is_major, won,
            points, darts, first9_points, first9_darts, checkouts_hit, checkout_attempts, one_eighties

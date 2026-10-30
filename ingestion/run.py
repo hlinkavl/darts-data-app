@@ -179,9 +179,28 @@ def main() -> None:
         since = FIRST_SINCE
     log.info("results since %s (previous mastercaller run: %s)", since, previous[-1] if previous else None)
 
-    paths = run_mastercaller(since, today, run_id) + run_wikipedia(w, args.catalog, today, run_id)
+    # Each source runs on its own: one failing (e.g. blocked with 403) must not stop the others. The manifest
+    # records what every source returned; the health report reads it.
+    paths, manifest = [], []
+    for source, step in (("mastercaller", lambda: run_mastercaller(since, today, run_id)),
+                         ("wikipedia", lambda: run_wikipedia(w, args.catalog, today, run_id))):
+        try:
+            produced = step()
+            paths += produced
+            for path in produced:
+                rows = sum(1 for _ in path.open())
+                manifest.append({"run_id": run_id, "source": source, "dataset": path.stem, "rows": rows,
+                                 "status": "ok", "error": None})
+        except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            log.error("%s failed: %s", source, exc)
+            manifest.append({"run_id": run_id, "source": source, "dataset": None, "rows": 0, "status": "error",
+                             "error": f"HTTP {status}: {exc}" if status else str(exc)[:500]})
+    paths.append(write_jsonl("ingestion", "manifest", manifest, run_id))
     if args.upload:
         upload(w, paths, args.catalog)
+    if any(m["status"] == "error" for m in manifest):
+        raise SystemExit("ingestion finished with errors, see the manifest")  # non-zero exit: CI sends an e-mail
 
 
 if __name__ == "__main__":

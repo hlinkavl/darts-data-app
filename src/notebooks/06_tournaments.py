@@ -43,10 +43,19 @@ current = spark.sql("""
     SELECT player_key, strength_major AS strength, pi, pi_major, effective_average, avg_l30, form
     FROM darts_gold.performance_index WHERE is_current
 """).toPandas()
-elo_history = spark.table("darts_gold.elo_history").toPandas()
+def active_version() -> str:
+    """The active model (promotion policy); falls back to the latest fit before the registry existed."""
+    if spark.catalog.tableExists("darts_gold.pi_model_registry"):
+        rows = spark.sql("SELECT version FROM darts_gold.pi_model_registry WHERE status = 'active' "
+                         "ORDER BY decided_at DESC LIMIT 1").collect()
+        if rows:
+            return rows[0][0]
+    return spark.sql("SELECT max(version) FROM darts_gold.pi_coefficients").first()[0]
+
+version = active_version()
+elo_history = spark.sql(f"SELECT * FROM darts_gold.elo_history WHERE version = '{version}'").toPandas()
 elo_latest = (elo_history.sort_values(["match_date", "match_key"]).groupby("player_key")["elo_post"].last()
               .rename("elo").reset_index())
-version = spark.sql("SELECT max(version) FROM darts_gold.pi_coefficients").first()[0]
 predictors = spark.sql(f"SELECT predictor FROM darts_gold.pi_coefficients WHERE version = '{version}'").toPandas()["predictor"].tolist()
 elo_row = spark.sql(f"SELECT k, major_multiplier FROM darts_gold.pi_elo_tuning WHERE version = '{version}' AND selected").first()
 elo_params = elo.EloParams(float(elo_row.k), float(elo_row.major_multiplier))
