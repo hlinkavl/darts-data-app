@@ -12,6 +12,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from .rounds import order_key
+
 INITIAL_RATING = 1500.0
 
 
@@ -28,11 +30,12 @@ def expected_score(rating_a: float, rating_b: float) -> float:
 def run_elo(matches: pd.DataFrame, params: EloParams) -> pd.DataFrame:
     """Replay every match in chronological order.
 
-    matches: one row per match with match_key, match_date, winner_key, loser_key, is_major.
+    matches: one row per match with match_key, match_date, winner_key, loser_key, is_major (and round, used to
+    order matches within a day; ids alone are not chronological).
     Returns one row per (match_key, player_key) with the rating *before* and *after* the match and the
     number of matches the player had played before it (elo_n, used for burn-in).
     """
-    ordered = matches.sort_values(["match_date", "match_key"])
+    ordered = matches.assign(_round_order=order_key(matches)).sort_values(["match_date", "_round_order", "match_key"])
     ratings: dict[int, float] = {}
     played: dict[int, int] = {}
     rows = []

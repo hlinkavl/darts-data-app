@@ -18,6 +18,7 @@ class ModelRun:
     elo_params: elo.EloParams
     elo_tuning: pd.DataFrame
     elo_history: pd.DataFrame
+    major_elo_history: pd.DataFrame
     selection_log: pd.DataFrame
     correlations: pd.DataFrame
     coefficients: pd.DataFrame
@@ -35,9 +36,10 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str,
     matches = matches.assign(match_date=pd.to_datetime(matches["match_date"]))
     elo_params, elo_tuning = elo.tune(matches, ELO_GRID, model.ELO_BURN_IN, pd.Timestamp(VALIDATION_FROM))
     elo_history = elo.run_elo(matches, elo_params)
+    major_elo_history = elo.run_elo(matches[matches["is_major"].astype(bool)], elo_params)
 
-    candidates = list(features.CANDIDATES)
-    feats = features.point_in_time_features(player_matches, elo_history)
+    candidates = [c for c in features.CANDIDATES if rankings is not None or c != "oom_rank"]
+    feats = features.point_in_time_features(player_matches, elo_history, rankings, major_elo_history)
     pairs = model.build_pairs(feats, candidates)
     split = model.time_split(pairs, VALIDATION_FROM, TEST_FROM)
     scale = split.train[candidates].std()
@@ -68,6 +70,16 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str,
             if name == "selected" and rankings is not None:
                 bench.append(benchmark.compare(fit_data, df, p, rankings, label=subset))
 
+    # Walk-forward test against the PDC Order of Merit: quarterly refits, every predicted match out of sample.
+    # Many more major matches than the 2026 test period alone, so the comparison on majors has real power.
+    if rankings is not None:
+        for label, majors_only in (("walk-forward majors", True), ("walk-forward all", False)):
+            preds = benchmark.walk_forward(pairs, {"PI model": selected}, rankings, majors_only=majors_only)
+            summary = benchmark.summarize(preds, ["PI model"]).rename(columns={"gain_vs_ranking": "log_loss_gain"})
+            summary["dataset"] = label
+            summary["model_significantly_better"] = bool(summary.loc[summary.model == "PI model", "gain_ci_low"].iloc[0] > 0)
+            bench.append(summary)
+
     # Production weights: same predictors, refit on all matches.
     final = model.fit_logit(pairs, selected, scale)
     coefficients = model.coefficient_table(final, selected, scale, share)
@@ -76,6 +88,7 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str,
     tuning = elo_tuning.assign(selected=lambda t: (t.k == elo_params.k) & (t.major_multiplier == elo_params.major_multiplier))
     return ModelRun(
         version=version, elo_params=elo_params, elo_tuning=tuning, elo_history=elo_history,
+        major_elo_history=major_elo_history,
         selection_log=pd.DataFrame(log.entries), correlations=corr, coefficients=coefficients,
         metrics=pd.DataFrame(rows), calibration=calib, data_summary=model.data_summary(split),
         n_pairs=len(pairs), benchmark=pd.concat(bench, ignore_index=True) if bench else None,
@@ -83,11 +96,12 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str,
 
 
 def score(player_matches: pd.DataFrame, elo_history: pd.DataFrame, coefficients: pd.DataFrame,
-          player_keys: list[int], as_of_dates: list[pd.Timestamp]) -> pd.DataFrame:
+          player_keys: list[int], as_of_dates: list[pd.Timestamp], rankings: pd.DataFrame | None = None,
+          major_elo_history: pd.DataFrame | None = None) -> pd.DataFrame:
     """Step 3: PI, contributions and Effective Average for each player at each as-of date."""
     snapshots = []
     for as_of in as_of_dates:
-        snap = features.features_as_of(player_matches, elo_history, as_of, player_keys)
+        snap = features.features_as_of(player_matches, elo_history, as_of, player_keys, rankings, major_elo_history)
         snapshots.append(model.score_players(snap, coefficients))
     return pd.concat(snapshots, ignore_index=True)
 
@@ -99,11 +113,15 @@ class StrengthHistory:
     Strength includes majors-only terms, because it is used for majors."""
 
     def __init__(self, player_matches: pd.DataFrame, matches: pd.DataFrame, predictors: list[str],
-                 elo_params: elo.EloParams):
+                 elo_params: elo.EloParams, rankings: pd.DataFrame | None = None):
         self.player_matches = player_matches
         self.predictors = predictors
-        self.history = elo.run_elo(matches.assign(match_date=pd.to_datetime(matches["match_date"])), elo_params)
-        self.pairs = model.build_pairs(features.point_in_time_features(player_matches, self.history), predictors)
+        self.rankings = rankings
+        matches = matches.assign(match_date=pd.to_datetime(matches["match_date"]))
+        self.history = elo.run_elo(matches, elo_params)
+        self.major_history = elo.run_elo(matches[matches["is_major"].astype(bool)], elo_params)
+        feats = features.point_in_time_features(player_matches, self.history, rankings, self.major_history)
+        self.pairs = model.build_pairs(feats, predictors)
         self.tracked = sorted(player_matches["player_key"].unique())
 
     def at(self, as_of) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -111,8 +129,11 @@ class StrengthHistory:
         train = self.pairs[pd.to_datetime(self.pairs["match_date"]) < as_of]
         scale = train[self.predictors].std()
         per_unit = model.fit_logit(train, self.predictors, scale).params[self.predictors] / scale[self.predictors]
-        snap = features.features_as_of(self.player_matches, self.history, as_of, self.tracked).dropna(subset=self.predictors)
-        strengths = pd.DataFrame({"player_key": snap["player_key"], "strength": (snap[self.predictors] * per_unit).sum(axis=1)})
+        snap = features.features_as_of(self.player_matches, self.history, as_of, self.tracked, self.rankings,
+                                       self.major_history).dropna(subset=self.predictors)
+        player_preds = [c for c in self.predictors if c not in features.PAIR_ONLY]
+        strengths = pd.DataFrame({"player_key": snap["player_key"],
+                                  "strength": (snap[player_preds] * per_unit[player_preds]).sum(axis=1)})
         before = self.history[pd.to_datetime(self.history["match_date"]) < as_of].sort_values(["match_date", "match_key"])
         elo_now = before.groupby("player_key")["elo_post"].last().rename("elo").reset_index()
         return strengths, elo_now

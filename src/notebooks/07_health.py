@@ -80,7 +80,7 @@ checks = (
     + (health.draws(calendar, today) if calendar is not None else [])
     + [health.player_matching(tracked_without_history)]
     + health.new_series(recent_series, known)
-    + [health.model(registry_latest), health.benchmark(bench), health.upcoming(major_running, n_upcoming)]
+    + [health.model(registry_latest)] + health.benchmark(bench) + [health.upcoming(major_running, n_upcoming)]
 )
 report = health.report(checks).assign(checked_at=pd.Timestamp.now(tz="UTC"))
 overall = health.overall(report)

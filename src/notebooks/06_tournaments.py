@@ -131,11 +131,11 @@ display(cal)
 # COMMAND ----------
 
 player_matches = spark.sql("""
-    SELECT match_key, player_key, opponent_key, match_date, tournament_key, is_major, won,
+    SELECT match_key, player_key, opponent_key, match_date, round, tournament_key, is_major, won,
            points, darts, first9_points, first9_darts, checkouts_hit, checkout_attempts, one_eighties
     FROM darts_silver.player_matches
 """).toPandas()
-matches = spark.sql("SELECT match_key, match_date, winner_key, loser_key, is_major FROM darts_silver.matches").toPandas()
+matches = spark.sql("SELECT match_key, match_date, round, winner_key, loser_key, is_major FROM darts_silver.matches").toPandas()
 history = None  # built only if there is something to backtest
 
 draw_matches, predictions, bt_matches, bt_summary = [], [], [], []
@@ -148,7 +148,8 @@ for c in cal[cal.has_draw].itertuples():
         if pd.isna(c.start_date):
             continue
         if history is None:
-            history = pipeline.StrengthHistory(player_matches, matches, predictors, elo_params)
+            history = pipeline.StrengthHistory(player_matches, matches, predictors, elo_params,
+                                               rankings=spark.sql("SELECT snapshot_date, player_key, rank FROM darts_silver.rankings").toPandas())
         strengths, elo_now = history.at(c.start_date)
         mode, as_of = "backtest", c.start_date
     else:

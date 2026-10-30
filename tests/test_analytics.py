@@ -60,3 +60,22 @@ def test_reference_top32_player_scores_pi_5():
 
 def test_win_probability_is_symmetric():
     assert np.isclose(model.win_probability(1.2, 0.4) + model.win_probability(0.4, 1.2), 1.0)
+
+
+def test_no_leak_from_later_rounds_on_the_same_day():
+    # One-day event numbered backwards like Orakel's Players Championships: the final has the lowest id.
+    day = pd.Timestamp("2025-08-25")
+    rounds = [("Last 128", 300), ("Last 64", 200), ("Final", 100)]
+    pm = pd.DataFrame({
+        "match_key": [k for _, k in rounds], "player_key": 1, "opponent_key": [7, 8, 9], "match_date": day,
+        "round": [r for r, _ in rounds], "tournament_key": 0, "is_major": False, "won": True,
+        "points": 300.0, "darts": 9.0, "first9_points": 300.0, "first9_darts": 9.0,
+        "checkouts_hit": 1.0, "checkout_attempts": 2.0, "one_eighties": 1.0,
+    })
+    matches = pd.DataFrame({"match_key": [k for _, k in rounds], "match_date": day, "round": [r for r, _ in rounds],
+                            "winner_key": 1, "loser_key": [7, 8, 9], "is_major": False})
+    hist = elo.run_elo(matches, elo.EloParams(k=32))
+    f = features.point_in_time_features(pm, hist).set_index("match_key")
+    assert f.loc[300, "experience"] == 0.0          # first round: no earlier match that day
+    assert f.loc[100, "experience"] > f.loc[200, "experience"] > 0
+    assert f.loc[300, "elo"] == elo.INITIAL_RATING  # Elo before the first round is untouched by later rounds

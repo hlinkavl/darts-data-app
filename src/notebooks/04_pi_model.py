@@ -30,11 +30,11 @@ version = f"v{date.today().isoformat()}"
 # COMMAND ----------
 
 player_matches = spark.sql("""
-    SELECT match_key, player_key, opponent_key, match_date, tournament_key, is_major, won, category, tournament_name,
+    SELECT match_key, player_key, opponent_key, match_date, round, tournament_key, is_major, won, category, tournament_name,
            points, darts, first9_points, first9_darts, checkouts_hit, checkout_attempts, one_eighties
     FROM darts_silver.player_matches
 """).toPandas()
-matches = spark.sql("SELECT match_key, match_date, winner_key, loser_key, is_major FROM darts_silver.matches").toPandas()
+matches = spark.sql("SELECT match_key, match_date, round, winner_key, loser_key, is_major FROM darts_silver.matches").toPandas()
 rankings = spark.sql("SELECT snapshot_date, player_key, rank FROM darts_silver.rankings").toPandas()
 
 run = pipeline.fit(player_matches, matches, version, rankings=rankings)

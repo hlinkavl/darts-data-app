@@ -120,16 +120,23 @@ def model(registry_latest: dict | None) -> Check:
                  "Review the selection log (darts_gold.pi_selection_log). If the change is wanted, activate it on purpose.")
 
 
-def benchmark(bench: pd.DataFrame | None) -> Check:
+def benchmark(bench: pd.DataFrame | None) -> list[Check]:
+    """The key test: is the PI significantly better than the PDC Order of Merit (on majors and overall)?"""
     if bench is None or bench.empty:
-        return Check("model", "beats PDC ranking", YELLOW, "not computed", "The key test against the Order of Merit did not run.")
-    row = bench[(bench["dataset"] == "test") & (bench["model"] == "PI model")].iloc[0]
-    ok = bool(row["model_significantly_better"])
-    return Check("model", "beats PDC ranking", GREEN if ok else YELLOW,
-                 f"log-loss gain {row['log_loss_gain']:+.4f} [{row['gain_ci_low']:+.4f}, {row['gain_ci_high']:+.4f}]",
-                 "The model predicts winners significantly better than the PDC Order of Merit." if ok else
-                 "The model is NOT significantly better than the PDC Order of Merit on recent matches.",
-                 "" if ok else "Investigate before trusting the PI: compare predictors and data quality.")
+        return [Check("model", "beats PDC ranking", YELLOW, "not computed", "The key test against the Order of Merit did not run.")]
+    out = []
+    for dataset, label in (("walk-forward majors", "on majors"), ("walk-forward all", "on all matches")):
+        rows = bench[(bench["dataset"] == dataset) & (bench["model"] == "PI model")]
+        if rows.empty:
+            continue
+        row = rows.iloc[0]
+        ok = bool(row["model_significantly_better"])
+        out.append(Check("model", f"beats PDC ranking {label}", GREEN if ok else YELLOW,
+                         f"log-loss gain {row['log_loss_gain']:+.4f} [{row['gain_ci_low']:+.4f}, {row['gain_ci_high']:+.4f}]",
+                         f"The model predicts winners {label} significantly better than the PDC Order of Merit." if ok else
+                         f"The model is NOT significantly better than the PDC Order of Merit {label}.",
+                         "" if ok else "Investigate before trusting the PI: compare predictors and data quality."))
+    return out or [Check("model", "beats PDC ranking", YELLOW, "not computed", "No walk-forward result found.")]
 
 
 def upcoming(major_running: bool, n_upcoming: int) -> Check:

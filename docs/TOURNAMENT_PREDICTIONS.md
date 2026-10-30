@@ -89,42 +89,42 @@ During majors the data is refreshed daily ("tournament mode"); otherwise on dema
 
 ## 5. Backtests
 
-Every finished major with a supported draw is backtested automatically: strengths as of the event's first day, weights refitted on earlier matches only, and the full draw simulated *before* any match was played. Results are stored in `darts_gold.tournament_backtest_summary` and `darts_gold.tournament_backtest_matches` (model v2026-10-28).
+Every finished major with a supported draw is backtested automatically: strengths as of the event's first day, weights refitted on earlier matches only, and the full draw simulated *before* any match was played. Results are stored in `darts_gold.tournament_backtest_summary` and `darts_gold.tournament_backtest_matches` (run 2026-10-31, after the same-day ordering fix described in [PERFORMANCE_INDEX.md](PERFORMANCE_INDEX.md#no-look-ahead)).
 
 **Ten majors, 388 matches (2025–2026):**
 
 | Event | Matches | Favourite won | Log loss | Champion | Champion's pre-event title chance (rank) | Model's favourite |
 |---|---|---|---|---|---|---|
-| World Championship 2026 | 126 | 71 % | 0.552 | Luke Littler | 63.6 % (1) | Littler 63.6 % |
-| European Championship 2026 | 31 | 58 % | 0.647 | Ross Smith | 7.5 % (3) | Littler 14.6 % |
-| World Grand Prix 2026 | 31 | 71 % | 0.585 | Luke Humphries | 11.0 % (3) | Littler 26.2 % |
-| World Series Finals 2026 | 31 | 71 % | 0.580 | Ross Smith | 3.2 % (7) | Littler 34.9 % |
-| World Matchplay 2026 | 30 | 63 % | 0.607 | Luke Littler | 30.0 % (2) | Humphries 30.3 % |
-| Grand Slam 2025 (knockout stage) | 15 | 73 % | 0.603 | Luke Littler | 25.7 % (1) | Littler 25.7 % |
-| European Championship 2025 | 31 | 65 % | 0.664 | Gian van Veen | 9.1 % (3) | Littler 31.7 % |
-| World Series Finals 2025 | 31 | 68 % | 0.577 | Michael van Gerwen | 1.3 % (14) | Littler 24.1 % |
-| World Grand Prix 2025 | 31 | 71 % | 0.576 | Luke Littler | 19.7 % (1) | Littler 19.7 % |
-| World Matchplay 2025 | 31 | 77 % | 0.537 | Luke Littler | 23.9 % (1) | Littler 23.9 % |
+| World Championship 2026 | 126 | 71 % | 0.556 | Luke Littler | 67.7 % (1) | Littler 67.7 % |
+| European Championship 2026 | 31 | 58 % | 0.642 | Ross Smith | 6.7 % (4) | Littler 22.0 % |
+| World Grand Prix 2026 | 31 | 74 % | 0.579 | Luke Humphries | 12.8 % (3) | Littler 34.0 % |
+| World Series Finals 2026 | 31 | 71 % | 0.581 | Ross Smith | 2.8 % (8) | Littler 38.4 % |
+| World Matchplay 2026 | 30 | 70 % | 0.599 | Luke Littler | 35.1 % (1) | Littler 35.1 % |
+| Grand Slam 2025 (knockout stage) | 15 | 73 % | 0.565 | Luke Littler | 34.7 % (1) | Littler 34.7 % |
+| European Championship 2025 | 31 | 58 % | 0.668 | Gian van Veen | 6.6 % (3) | Littler 36.3 % |
+| World Series Finals 2025 | 31 | 68 % | 0.561 | Michael van Gerwen | 1.6 % (14) | Littler 26.9 % |
+| World Grand Prix 2025 | 31 | 68 % | 0.562 | Luke Littler | 22.8 % (1) | Littler 22.8 % |
+| World Matchplay 2025 | 31 | 74 % | 0.547 | Luke Littler | 27.5 % (1) | Littler 27.5 % |
 
 **All 388 matches together:**
 
 | | Round format | As typical matches |
 |---|---|---|
-| Pre-match favourite won | 69.1 % | 69.1 % |
-| Log loss | **0.582** | 0.588 |
-| Brier score | **0.199** | 0.202 |
+| Pre-match favourite won | 68.8 % | 68.8 % |
+| Log loss | **0.579** | 0.584 |
+| Brier score | **0.198** | 0.200 |
 
-Converting each match to its round's format improves both scores, so the format step earns its place.
+Converting each match to its round's format improves both scores.
 
 **Calibration (388 matches, 5 groups by the favourite's predicted chance):**
 
-| Predicted | 54 % | 61 % | 66 % | 74 % | 87 % |
+| Predicted | 55 % | 61 % | 67 % | 75 % | 88 % |
 |---|---|---|---|---|---|
-| Favourite actually won | 50 % | 67 % | 68 % | 78 % | 83 % |
+| Favourite actually won | 49 % | 61 % | 71 % | 81 % | 83 % |
 
-Each group has about 78 matches, so differences of ±5 points are within chance. The top group (87 % predicted, 83 % observed) hints that very strong favourites are rated slightly too high, which fits the limitation below.
+Each group has about 78 matches, so ±5 points are within chance. The top group (88 % predicted, 83 % observed) suggests that very strong favourites in long formats are rated slightly too high, which fits the limitation below.
 
-**Titles:** the model's favourite won 4 of the 10 events, while its title probabilities summed to 2.9 expected wins. So there is no sign of overconfidence at the title level yet. Ten events are too few to judge, though, and the World Championship 2026 figure (63.6 %) is still a strong claim.
+**Titles:** the model's favourite won 5 of the 10 events, against 3.45 expected wins from its title probabilities. So there is no sign of overconfidence at the title level yet, but ten events are too few to judge, and Littler's 67.7 % before the World Championship 2026 is a strong claim.
 
 ---
 

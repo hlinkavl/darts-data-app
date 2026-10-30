@@ -8,6 +8,8 @@ by scoring a virtual match on that date (see features_as_of).
 import numpy as np
 import pandas as pd
 
+from .rounds import order_key
+
 # Candidate predictors (step 1 of the methodology). Higher is better for all of them.
 # Big-Stage Delta only enters matches played on a major (see analytics.model.MAJOR_ONLY).
 CANDIDATES = {
@@ -20,13 +22,26 @@ CANDIDATES = {
     "t180_per100": "180s per 100 Darts (L30)",
     "winrate_l30": "Win Rate (L30)",
     "experience": "Experience (log matches)",
+    # Added 2026-10-31 (aimed at majors, decided before testing):
+    "oom_rank": "PDC Order of Merit (log rank)",
+    "major_elo": "Big-Stage Elo",
+    "major_experience": "Big-Stage Experience (log matches)",
+    "h2h": "Head-to-Head (shrunk)",
+    "consistency": "Consistency (L30)",
+    "activity": "Activity (matches in last 30 days)",
+    "sharpness": "Match Sharpness (days since last match)",
 }
+# Pair-specific predictors: they describe a match-up, not a player, so they never enter a player's PI; they
+# adjust the probability of that particular match (see analytics.model.PAIR_ONLY).
+PAIR_ONLY = {"h2h"}
 
 LONG_WINDOW, SHORT_WINDOW = 30, 10
 MIN_LONG, MIN_SHORT = 10, 5
 BIG_STAGE_WINDOW = "730D"
 # Big-Stage Delta is shrunk toward 0 by n / (n + BIG_STAGE_SHRINK): with 10 major matches only half counts.
 BIG_STAGE_SHRINK = 10.0
+H2H_PRIOR = 2.0            # head-to-head share shrunk toward 50 %: (wins + 2) / (matches + 4)
+UNRANKED = 500             # players outside the Order of Merit
 
 STAT_COLUMNS = ["points", "darts", "first9_points", "first9_darts", "checkouts_hit", "checkout_attempts", "one_eighties"]
 
@@ -49,6 +64,23 @@ def _player_features(g: pd.DataFrame) -> pd.DataFrame:
     out["winrate_l30"] = prev["won"].rolling(LONG_WINDOW, min_periods=MIN_LONG).mean()
     out["experience"] = np.log1p(np.arange(len(g)))
 
+    # Consistency: minus the spread of match averages over the last 30 matches (higher = steadier).
+    match_avg = 3 * prev["points"] / prev["darts"]
+    out["consistency"] = -match_avg.rolling(LONG_WINDOW, min_periods=MIN_LONG).std()
+
+    # Activity (matches in the 30 days before the match day) and sharpness (minus log days since the last match).
+    dates = g["match_date"]
+    ones = pd.Series(1.0, index=dates.to_numpy())
+    out["activity"] = np.log1p(ones.rolling("30D", closed="left").sum().to_numpy())
+    gap = (dates - dates.shift(1)).dt.days
+    out["sharpness"] = -np.log1p(gap.to_numpy(dtype=float))
+
+    # Head-to-head against this match's opponent, from earlier meetings only, shrunk toward 50 %.
+    pair = g.groupby("opponent_key", sort=False)["won"]
+    prior_wins = pair.transform(lambda s: s.astype(float).shift(1).fillna(0).cumsum())
+    prior_n = pair.cumcount()
+    out["h2h"] = (prior_wins + H2H_PRIOR) / (prior_n + 2 * H2H_PRIOR) - 0.5
+
     # Big-Stage Delta: average on majors minus overall average, last 24 months (strictly before the match date).
     t = g[["match_date", "points", "darts"]].astype({"points": float, "darts": float}).copy()
     has_stats = t["darts"].notna()
@@ -66,26 +98,63 @@ def _player_features(g: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def point_in_time_features(player_matches: pd.DataFrame, elo_history: pd.DataFrame) -> pd.DataFrame:
+def _as_of(rows: pd.DataFrame, history: pd.DataFrame, value: str, by: str = "player_key") -> pd.Series:
+    """Latest `value` per player from `history` (player_key, date, value) strictly before each row's match_date."""
+    left = rows[["match_date", by]].assign(_i=np.arange(len(rows)), match_date=lambda d: d["match_date"].astype("datetime64[ns]"),
+                                           **{by: lambda d: d[by].astype("int64")}).sort_values("match_date")
+    right = history.assign(date=lambda d: pd.to_datetime(d["date"]).astype("datetime64[ns]"),
+                           **{by: lambda d: d[by].astype("int64")}).sort_values("date")
+    merged = pd.merge_asof(left, right[["date", by, value]], left_on="match_date", right_on="date", by=by,
+                           allow_exact_matches=False)
+    return merged.sort_values("_i")[value].reset_index(drop=True)
+
+
+def point_in_time_features(player_matches: pd.DataFrame, elo_history: pd.DataFrame,
+                           rankings: pd.DataFrame | None = None, major_elo_history: pd.DataFrame | None = None) -> pd.DataFrame:
     """One row per (match_key, player_key) with all candidate predictors as of just before the match.
 
     player_matches: silver.player_matches (tracked players' perspective).
-    elo_history: output of analytics.elo.run_elo.
+    elo_history: output of analytics.elo.run_elo on all matches; major_elo_history: the same on majors only.
+    rankings: Order of Merit snapshots (snapshot_date, player_key, rank).
     """
     pm = player_matches.assign(match_date=pd.to_datetime(player_matches["match_date"]))
-    pm = pm.sort_values(["player_key", "match_date", "match_key"]).reset_index(drop=True)
+    pm = pm.assign(_round_order=order_key(pm))
+    pm = pm.sort_values(["player_key", "match_date", "_round_order", "match_key"]).reset_index(drop=True)
     feats = pd.concat([_player_features(g) for _, g in pm.groupby("player_key", sort=False)])
     keep = ["match_key", "player_key", "opponent_key", "match_date", "tournament_key", "is_major", "won"]
     keep += [c for c in ("category", "tournament_name") if c in pm.columns]  # descriptive, for the data summary
     out = pm[keep].join(feats)
     elo = elo_history[["match_key", "player_key", "elo_pre", "elo_n"]].rename(columns={"elo_pre": "elo"})
-    return out.merge(elo, on=["match_key", "player_key"], how="left")
+    out = out.merge(elo, on=["match_key", "player_key"], how="left")
+
+    if rankings is not None and len(rankings):
+        r = rankings.rename(columns={"snapshot_date": "date"})[["date", "player_key", "rank"]].dropna()
+        out["oom_rank"] = -np.log(_as_of(out, r, "rank").fillna(UNRANKED).to_numpy())
+    else:
+        out["oom_rank"] = np.nan
+    if major_elo_history is not None and len(major_elo_history):
+        h = major_elo_history.assign(major_n=1).sort_values(["match_date", "match_key"])
+        h["major_n"] = h.groupby("player_key").cumcount() + 1
+        h = h.rename(columns={"match_date": "date", "elo_post": "major_elo"})
+        out["major_elo"] = _as_of(out, h, "major_elo").fillna(elo_module_initial()).to_numpy()
+        out["major_experience"] = np.log1p(_as_of(out, h, "major_n").fillna(0).to_numpy())
+    else:
+        out["major_elo"] = np.nan
+        out["major_experience"] = np.nan
+    return out
+
+
+def elo_module_initial() -> float:
+    from .elo import INITIAL_RATING
+    return INITIAL_RATING
 
 
 def features_as_of(player_matches: pd.DataFrame, elo_history: pd.DataFrame, as_of: pd.Timestamp,
-                   player_keys: list[int]) -> pd.DataFrame:
+                   player_keys: list[int], rankings: pd.DataFrame | None = None,
+                   major_elo_history: pd.DataFrame | None = None) -> pd.DataFrame:
     """Predictors for each player as if they played a (virtual) match on `as_of`, using matches before it."""
     as_of = pd.Timestamp(as_of)
+    player_keys = sorted(set(player_keys))  # one virtual match per player, or the windows shift
     pm = player_matches[pd.to_datetime(player_matches["match_date"]) < as_of]
     virtual = pd.DataFrame({
         "match_key": -1, "player_key": player_keys, "opponent_key": -1, "match_date": as_of,
@@ -98,6 +167,6 @@ def features_as_of(player_matches: pd.DataFrame, elo_history: pd.DataFrame, as_o
     last = hist.groupby("player_key").agg(elo_pre=("elo_post", "last"), elo_n=("elo_post", "size")).reset_index()
     virtual_elo = virtual[["match_key", "player_key"]].merge(last, on="player_key", how="left")
 
-    feats = point_in_time_features(pd.concat([pm, virtual], ignore_index=True), virtual_elo)
+    feats = point_in_time_features(pd.concat([pm, virtual], ignore_index=True), virtual_elo, rankings, major_elo_history)
     out = feats[feats["match_key"] == -1].drop(columns=["match_key", "opponent_key", "tournament_key", "is_major", "won"])
     return out.assign(as_of_date=as_of.normalize()).reset_index(drop=True)

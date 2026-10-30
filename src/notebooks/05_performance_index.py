@@ -38,7 +38,7 @@ version = active_version()
 coefficients = spark.sql(f"SELECT * FROM darts_gold.pi_coefficients WHERE version = '{version}'").toPandas()
 elo_history = spark.sql(f"SELECT * FROM darts_gold.elo_history WHERE version = '{version}'").toPandas()
 player_matches = spark.sql("""
-    SELECT match_key, player_key, opponent_key, match_date, tournament_key, is_major, won,
+    SELECT match_key, player_key, opponent_key, match_date, round, tournament_key, is_major, won,
            points, darts, first9_points, first9_darts, checkouts_hit, checkout_attempts, one_eighties
     FROM darts_silver.player_matches
 """).toPandas()
@@ -51,7 +51,9 @@ print(f"model {version}, {len(players)} players, {len(as_of_dates)} snapshots, c
 
 # COMMAND ----------
 
-index = pipeline.score(player_matches, elo_history, coefficients, players["player_key"].tolist(), as_of_dates)
+rankings = spark.sql("SELECT snapshot_date, player_key, rank FROM darts_silver.rankings").toPandas()
+index = pipeline.score(player_matches, elo_history, coefficients, players["player_key"].tolist(), as_of_dates,
+                       rankings=rankings)
 index = index.merge(players, on="player_key", how="left")
 index["is_current"] = index["as_of_date"] == current.normalize()
 index["as_of_date"] = pd.to_datetime(index["as_of_date"]).dt.date

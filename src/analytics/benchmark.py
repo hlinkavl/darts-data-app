@@ -68,3 +68,54 @@ def compare(fit_pairs: pd.DataFrame, test_pairs: pd.DataFrame, p_model: np.ndarr
     out["model_significantly_better"] = bool(out["gain_ci_low"].iloc[0] > 0)
     out["ranking_coefficient"] = float(ranking_model.params.iloc[0])
     return out
+
+
+def walk_forward(pairs: pd.DataFrame, predictor_sets: dict[str, list[str]], rankings: pd.DataFrame,
+                 start: str = "2023-07-01", freq: str = "QS", majors_only: bool = True) -> pd.DataFrame:
+    """Out-of-sample predictions with quarterly refits: for each quarter, every predictor set and the ranking
+    baseline are fitted on matches before the quarter and predict the quarter's (major) matches.
+    Returns one row per predicted match with one probability column per model."""
+    from .model import fit_logit, predict
+
+    ranked = ranks_as_of(pairs, rankings)
+    ranked["log_rank_gap"] = _rank_feature(ranked)["log_rank_gap"].to_numpy()
+    dates = pd.to_datetime(ranked["match_date"])
+    edges = list(pd.date_range(start, dates.max() + pd.Timedelta(days=1), freq=freq)) + [dates.max() + pd.Timedelta(days=1)]
+    out = []
+    for q0, q1 in zip(edges[:-1], edges[1:]):
+        train = ranked[dates < q0]
+        test = ranked[(dates >= q0) & (dates < q1)]
+        if majors_only:
+            test = test[test["is_major"]]
+        if test.empty or len(train) < 1000:
+            continue
+        rows = test[["match_key", "match_date", "is_major", "y"]].copy()
+        for name, cols in predictor_sets.items():
+            scale = train[cols].std()
+            rows[name] = predict(fit_logit(train, cols, scale), test, cols, scale)
+        rank_model = sm.Logit(train["y"].to_numpy(), train[["log_rank_gap"]]).fit(disp=0)
+        rows["PDC Order of Merit"] = np.asarray(rank_model.predict(test[["log_rank_gap"]]))
+        out.append(rows.assign(quarter=q0.date()))
+    return pd.concat(out, ignore_index=True)
+
+
+def summarize(preds: pd.DataFrame, models: list[str], baseline: str = "PDC Order of Merit") -> pd.DataFrame:
+    """Metrics per model and the paired-bootstrap log-loss gain of each model over the baseline."""
+    y = preds["y"].to_numpy()
+    rng = np.random.default_rng(SEED)
+    idx = [rng.integers(0, len(y), len(y)) for _ in range(BOOTSTRAP)]
+
+    def ll(p):
+        p = np.clip(p, 1e-6, 1 - 1e-6)
+        return -(y * np.log(p) + (1 - y) * np.log(1 - p))
+
+    base = ll(preds[baseline].to_numpy())
+    rows = []
+    for name in models + [baseline]:
+        p = preds[name].to_numpy()
+        diff = base - ll(p)
+        boots = np.array([diff[i].mean() for i in idx])
+        rows.append({"model": name, **metrics(y, p), "favourite_won_pct": 100 * np.mean((p > 0.5) == (y == 1)),
+                     "gain_vs_ranking": diff.mean(), "gain_ci_low": np.quantile(boots, 0.025),
+                     "gain_ci_high": np.quantile(boots, 0.975), "p_value": float(np.mean(boots <= 0))})
+    return pd.DataFrame(rows)

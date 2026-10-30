@@ -262,7 +262,8 @@ def score_players(snapshot: pd.DataFrame, coefficients: pd.DataFrame, top_n: int
     contribution per predictor: beta_i * (x_i - mean_ref_i) / sd_i (in log-odds).
     Two versions: general (typical match, MAJOR_ONLY terms left out) and major (all terms).
     """
-    preds = coefficients["predictor"].tolist()
+    from .features import PAIR_ONLY
+    preds = [c for c in coefficients["predictor"].tolist() if c not in PAIR_ONLY]   # pair terms are not a player's PI
     general = [c for c in preds if c not in MAJOR_ONLY]
     per_unit = coefficients.set_index("predictor")["beta_per_unit"]
     s = snapshot.dropna(subset=preds).copy()
