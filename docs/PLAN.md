@@ -164,17 +164,25 @@ An end-to-end data app about PDC darts with two core features:
 3.2 [x] **Model promotion policy** (code): `analytics/registry.py`, registry `darts_gold.pi_model_registry`; PI and tournaments use the active version. Tests: `tests/test_registry.py`. Documented in PERFORMANCE_INDEX.md.
 3.3 [x] **Failure notifications**: the job e-mails the workspace user on failure (incl. a red health report). The GitHub workflow fails visibly (GitHub e-mails on failed workflow runs by default).
 3.4 [ ] **GitHub Actions `refresh.yml`**: written and pushed (daily 06:00 UTC, works only while a major is running or starts tomorrow; manual "Run workflow" otherwise; skips quietly until secrets exist). **Needs from you:** Databricks token + GitHub secrets (step 3 in "Next steps" below).
-3.9 [x] **Key test: the model beats the PDC ranking** (run locally on the same code and data; repeated in Databricks on every refit):
-   - all 2026 matches (4,986): log loss **0.639 vs 0.671**, favourite won **63.1 % vs 57.9 %**, gain +0.032 [+0.025, +0.038], **p < 0.001 → significantly better**
-   - majors only (431): 0.629 vs 0.636, p = 0.25 → no significant difference (established top players are well described by their ranking)
-   - follow-up idea: Order of Merit rank as an additional candidate predictor
+3.9 [x] **Key test: the model beats the PDC ranking, also on majors** (updated 2026-10-31 after 3.10):
+   - walk-forward majors 07/2023–10/2026 (1,825 matches, quarterly refits): log loss **0.628 vs 0.652**, gain +0.024 [+0.014, +0.034], **p < 0.001**
+   - walk-forward all matches (16,805): 0.643 vs 0.669, p < 0.001; 2026 test period: 0.639 vs 0.670, p < 0.001
+   - 2026 majors alone (431): 0.622 vs 0.636, p = 0.08 (same direction, too few matches for significance)
+   - computed on every refit (`pi_benchmark`), watched by the health report
+3.10 [x] **Model tuning (2026-10-31)**:
+   - **Look-ahead bug found and fixed**: Orakel numbers single-day Players Championships backwards, so ordering same-day matches by id let early rounds see later ones. Matches are now ordered by round (`analytics/rounds.py`) with a regression test. All numbers recomputed.
+   - **7 new candidates**, fixed before testing: PDC Order of Merit (log rank), Big-Stage Elo, Big-Stage Experience, Head-to-Head, Consistency, Activity, Match Sharpness.
+   - **New selection: 3-Dart Average 53 %, Elo 21 %, Form 15 %, PDC Order of Merit 12 %**. Experience is out (its earlier pass came from the bug). All other new candidates fail the rules; Big-Stage Delta is still unstable (71 % < 80 %).
+   - Current PI: Littler 7.35, Humphries 6.62, Price 6.02, Clayton 5.85, Ross Smith 5.84.
+   - Tournament backtests recomputed: 388 matches, favourite won 68.8 %, log loss 0.579.
+   - Docs: PERFORMANCE_INDEX.md rewritten (all 16 predictors with reasons, key test, correction note), TOURNAMENT_PREDICTIONS.md updated.
 3.5 [ ] **AI narratives** with `ai_query`: short player assessments from form + stats → `gold.player_ai_summary`. Compare 2–3 foundation models on 20 players first (as in the video). *Needs Databricks.*
 3.6 [ ] **News and interviews**: ingestion done (`pdc_news`, kept forever in bronze); still to do: silver (players mentioned per article), AI summaries per player, news-gap check in the health report. *AI part needs Databricks.*
 3.7 [ ] Improve Wikidata matching for player backgrounds.
 3.8 [x] **Odds: left out for good** (decided 2026-10-28). Nothing meets the conditions "free, legal from the Czech Republic, no manual work": Betfair and Smarkets are geo-blocked for CZ (403), odds-api.io is paid, The Odds API has no darts, Livesport/Tipsport/Betano forbid scraping (Livesport terms art. 2.9/2.10), and no free historical darts odds dataset exists. Re-check only if a free darts odds API reachable from CZ appears.
 
 ### Next steps (in this order)
-1. **When the Databricks quota resets** (job runs are paused today): `make deploy` + **one** full run of `darts_refresh`. Check: silver with both sources, crosswalk report, Orakel vs Mastercaller overlap, health report, key test in `pi_benchmark`, `pi_model_registry` has the first active version.
+1. **When the Databricks quota resets** (still paused on 2026-10-31): `make deploy` + **one** full run of `darts_refresh`. Check: silver with both sources, crosswalk report, Orakel vs Mastercaller overlap, health report, key test in `pi_benchmark`, `pi_model_registry` has the first active version.
 2. Fix whatever the verification run shows (expect a few small issues in the new silver).
 3. **You:** create a Databricks access token (User Settings → Developer → Access tokens → Generate, e.g. 90 days) and add two GitHub secrets (repo → Settings → Secrets and variables → Actions): `DATABRICKS_HOST` = `https://dbc-2318ef7e-ac1e.cloud.databricks.com`, `DATABRICKS_TOKEN` = the token. Then start "refresh" once by hand in the GitHub Actions tab. From then on no Mac is needed.
 4. 3.6 news → players + 3.5 AI narratives (Databricks `ai_query`, compare models on 20 players).
