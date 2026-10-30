@@ -23,6 +23,7 @@ TABLES = {
     "mastercaller_upcoming": ("mastercaller/*/upcoming_matches.jsonl", "start_time STRING, round STRING, tournament STRING"),
     "wiki_rankings": ("wikipedia/*/rankings.jsonl", "prize_money BIGINT, revision_id BIGINT"),
     "wiki_rankings_history": ("wikipedia/*/rankings_history.jsonl", "prize_money BIGINT, revision_id BIGINT"),
+    "pdc_news": ("pdc_news/*/articles.jsonl", "published STRING, text STRING"),
     "ingestion_manifest": ("ingestion/*/manifest.jsonl", "rows BIGINT, error STRING, dataset STRING"),
     "wiki_tournament_pages": ("wikipedia/*/tournament_pages.jsonl", "revid BIGINT, error STRING"),
     "wiki_player_background": ("wikipedia/*/player_background.jsonl", "player_key BIGINT"),

@@ -62,7 +62,9 @@ Every number in this document is recomputed on each refresh and stored in Databr
 
 ## What the model learned from
 
-**Source.** Darts Orakel's free match data: every match since **1 January 2021** of the **150 players** in the current 2-year prize-money ranking (the PDC Order of Merit equivalent). Each player's match row has points and darts thrown, first-9 points and darts, checkouts hit and attempted, and 180s. Orakel covers every event these players play, so besides the PDC Pro Tour and the majors the data also has qualifiers, Q-School, the Challenge and Development Tours, the Women's Series and other tours (Asian Tour, MODUS, Nordic & Baltic, …).
+**Sources.** Until 28 Oct 2026: Darts Orakel's free match data (exact points and darts, plus first-9, checkout and 180s). Orakel blocked our client on 30 Oct 2026, so new results come from **Mastercaller** (3-dart averages, stats by iDarts). Mastercaller has no dart counts, so darts are estimated as `legs × 1503 / average` (sets × 4 legs). Checked on Orakel data, where the exact numbers are known: the 3-Dart Average (L30) moves by −0.06 points on average, 95 % within ±0.24, which is negligible next to a spread of ~4.5 points between players. Matches present in both sources come from Orakel. The selected predictors need only results and averages, so the model keeps learning from new matches. First-9, checkout and 180s can only be tested as candidates on data until 28 Oct 2026. The Order of Merit (tracked players, key test) comes from the official PDC ranking on Wikipedia.
+
+**Orakel data, the basis of the current model.** Darts Orakel's free match data: every match since **1 January 2021** of the **150 players** in the current 2-year prize-money ranking (the PDC Order of Merit equivalent). Each player's match row has points and darts thrown, first-9 points and darts, checkouts hit and attempted, and 180s. Orakel covers every event these players play, so besides the PDC Pro Tour and the majors the data also has qualifiers, Q-School, the Challenge and Development Tours, the Women's Series and other tours (Asian Tour, MODUS, Nordic & Baltic, …).
 
 **Which matches become observations.** A match is used only if:
 - **both** players are among the 150 tracked players (both need predictors), and
@@ -268,6 +270,38 @@ Example: Luke Littler, 3-Dart Average (L30) 98.0, Effective Average 103.1. His E
 
 - **AUC** (0.5 = coin flip, 1 = perfect): darts has a lot of randomness, so ~0.69 is a strong result for pre-match information alone.
 - **Calibration:** when the model says 78 %, the favourite wins 79 % of the time. Every decile matches within a few percentage points (`darts_gold.pi_calibration`).
+
+---
+
+## Key test: does the PI beat the official PDC ranking?
+
+If the model didn't predict winners better than the PDC Order of Merit, it would add nothing. So it is tested against it on every refit:
+
+- **Baseline:** `P(A beats B) = 1 / (1 + e^−(b · (ln rank_B − ln rank_A)))`, with each player's Order of Merit rank **as of the match date** (the latest official snapshot before it, from the Wikipedia data module `Module:DartsRankings/data/PDC Rankings`). `b` is fitted on the same training matches as the PI model. Unranked players count as rank 500.
+- **Test:** the untouched 2026 matches, plus majors only. A **paired bootstrap** (1,000 resamples of the same matches for both models) gives a 95 % interval for the log-loss gain. The model counts as better only if the whole interval is above zero.
+
+**Result** (data until 28 Oct 2026, run 2026-10-30; stored per model version in `darts_gold.pi_benchmark`):
+
+| Test matches | Model | Favourite won | Log loss | Brier | AUC |
+|---|---|---|---|---|---|
+| **All 2026 (4,986)** | **PI model** | **63.1 %** | **0.639** | **0.224** | **0.683** |
+| | PDC Order of Merit | 57.9 % | 0.671 | 0.239 | 0.615 |
+| **Majors 2026 (431)** | PI model | 65.2 % | 0.629 | 0.219 | 0.702 |
+| | PDC Order of Merit | 67.1 % | 0.636 | 0.223 | 0.711 |
+
+- **All matches:** log-loss gain +0.032, 95 % interval [+0.025, +0.038], p < 0.001. **The PI predicts winners significantly better than the official ranking.**
+- **Majors only:** gain +0.008, interval [−0.014, +0.028], p = 0.25, so **no significant difference**. On majors, the field is mostly established top-32 players whose 2-year prize money already describes their strength well. The model's edge comes from the rest of the field: players in new form, newcomers, and players whose ranking lags behind their level.
+- Idea for the next refit: add the Order of Merit rank itself as a candidate predictor. It goes through the same selection rules.
+
+## Model versions (promotion policy)
+
+Every refresh refits the model, but a new fit is only a **candidate**. It replaces the active model only if ([src/analytics/registry.py](../src/analytics/registry.py)):
+
+1. the selected predictors are the same (a change in what the index is made of is a methodology change and needs a human decision),
+2. its test log loss is not worse than the active model's by more than 0.005,
+3. no predictor's share of the index moved by more than 15 percentage points.
+
+Otherwise the active model stays, the health report shows why, and the PI does not jump because of noise. The decisions are stored in `darts_gold.pi_model_registry`. The PI, the tournament predictions and the app always use the **active** version.
 
 ---
 

@@ -5,6 +5,7 @@
 Sources (since 30 Oct 2026, when Darts Orakel blocked our client; its earlier data stays in the Volume):
 - Mastercaller: results of every PDC tournament played since the last run (minus LOOKBACK_DAYS, to pick up
   multi-day events), and the scheduled matches of the next UPCOMING_DAYS days.
+- PDC news RSS: the latest official articles (kept forever in bronze, input for AI summaries).
 - Wikipedia: the official PDC Order of Merit (current snapshot every run, monthly history once), the pages of
   the majors (calendar, draws) and the background of tracked players not seen before.
 
@@ -21,7 +22,7 @@ from pathlib import Path
 
 import yaml
 
-from . import mastercaller, wikipedia
+from . import mastercaller, pdc_news, wikipedia
 from .http import PoliteClient
 
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
@@ -183,7 +184,8 @@ def main() -> None:
     # records what every source returned; the health report reads it.
     paths, manifest = [], []
     for source, step in (("mastercaller", lambda: run_mastercaller(since, today, run_id)),
-                         ("wikipedia", lambda: run_wikipedia(w, args.catalog, today, run_id))):
+                         ("wikipedia", lambda: run_wikipedia(w, args.catalog, today, run_id)),
+                         ("pdc_news", lambda: [write_jsonl("pdc_news", "articles", pdc_news.fetch(PoliteClient()), run_id)])):
         try:
             produced = step()
             paths += produced

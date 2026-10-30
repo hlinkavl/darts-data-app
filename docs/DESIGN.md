@@ -109,9 +109,16 @@ For every major (first live test: World Championship 2027, 11 Dec 2026 – 3 Jan
 
 ## Data sources and attribution
 
-- **Darts Orakel** (dartsorakel.com): free public API only, never paywalled pages. Polite use: top 150 players, 1 request / 2 s, a cache, an identifying User-Agent. Credited as "Data: Darts Orakel" in the app.
-- **Wikipedia / Wikidata**: CC BY-SA, credited in the app.
-- Not used: DartsDatabase (its robots.txt disallows AI agents), pdc.tv (client-side rendered).
+| Source | What | Since | Access |
+|---|---|---|---|
+| **Mastercaller** (mastercaller.com, stats by iDarts) | PDC results with 3-dart averages, scheduled matches | 30 Oct 2026 | robots.txt allows all; identified client, 3 s between requests, only new days and tournaments |
+| **Wikipedia** | official PDC Order of Merit (`Module:DartsRankings/data/PDC Rankings`, current + history), major pages (dates, draws), player background (Wikidata) | Day 1 | official APIs, CC BY-SA |
+| **PDC news RSS** (pdc.tv/rss.xml) | latest official articles: input for AI summaries only, the app shows summaries + links | 30 Oct 2026 | public feed |
+| Darts Orakel | results with exact points/darts and detailed stats, 2021 – 28 Oct 2026 | until 28 Oct 2026 | blocked our client on 30 Oct 2026; data kept (deleted on request) |
+
+- Not used: DartsDatabase (its robots.txt disallows AI agents), pdc.tv data API (requires authentication), bookmaker odds (no free legal source, see PLAN 3.8).
+- **One player identity across sources:** `darts_silver.player_crosswalk` maps Mastercaller slugs and Wikipedia names to the Orakel `player_key` by normalised name (accents and punctuation ignored). New players get a stable new key. Manual fixes go to `config/player_aliases.yml`. The health report lists tracked players without history (a likely spelling mismatch).
+- Credits in the app: "Data: Mastercaller / iDarts, Darts Orakel (until Oct 2026), Wikipedia (CC BY-SA), PDC".
 
 ## Infrastructure and refresh
 
@@ -119,5 +126,6 @@ For every major (first live test: World Championship 2027, 11 Dec 2026 – 3 Jan
 - **Job `darts_refresh`** (serverless): `bronze` → `silver` → `quality` → `pi_model` → `performance_index` (→ tournament predictions, AI summaries). Triggers:
   - **during majors: daily** ("tournament mode": upcoming-matches feed, the draw page and matches of players still in the event)
   - **otherwise on demand**: the **Refresh** button in the app (next to it: time of the last refresh), `make refresh`, or "Run now" in the UI
-- **Ingestion** runs outside Databricks (Orakel blocks Databricks IPs): GitHub Actions or locally, then uploads to the Volume and triggers the Job.
+- **Ingestion** runs outside Databricks: GitHub Actions (`.github/workflows/refresh.yml`, daily during majors, manual otherwise) or locally (`make ingest`), then uploads to the Volume and triggers the Job. Each run writes a manifest (rows and errors per source) that the health report reads.
+- **Health report** (`darts_gold.health_report`, task `health`): red fails the job → failure e-mail.
 - **Secrets**: locally the OAuth profile `darts` in `~/.databrickscfg` (outside the repo). GitHub secrets in Actions. The app uses its automatically created service principal.
