@@ -36,7 +36,10 @@ jobs:
       - name: Is a major running?
         id: gate
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ -z "$DATABRICKS_HOST" ] || [ -z "$DATABRICKS_TOKEN" ]; then
+            echo "::notice::DATABRICKS_HOST / DATABRICKS_TOKEN secrets are not set yet, skipping the refresh"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             python scripts/should_refresh.py
