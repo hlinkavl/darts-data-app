@@ -5,7 +5,7 @@ from itertools import product
 
 import pandas as pd
 
-from . import elo, features, model
+from . import benchmark, elo, features, model
 
 VALIDATION_FROM = "2025-04-01"
 TEST_FROM = "2026-01-01"
@@ -25,10 +25,13 @@ class ModelRun:
     calibration: pd.DataFrame
     data_summary: pd.DataFrame
     n_pairs: int
+    benchmark: pd.DataFrame | None = None
 
 
-def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str) -> ModelRun:
-    """Steps 1 and 2 of the methodology: tune Elo, select predictors, fit weights, evaluate."""
+def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str,
+        rankings: pd.DataFrame | None = None) -> ModelRun:
+    """Steps 1 and 2 of the methodology: tune Elo, select predictors, fit weights, evaluate. With `rankings`
+    (Order of Merit snapshots: snapshot_date, player_key, rank) also the key test against the PDC ranking."""
     matches = matches.assign(match_date=pd.to_datetime(matches["match_date"]))
     elo_params, elo_tuning = elo.tune(matches, ELO_GRID, model.ELO_BURN_IN, pd.Timestamp(VALIDATION_FROM))
     elo_history = elo.run_elo(matches, elo_params)
@@ -54,7 +57,7 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str) -> Mo
 
     # Honest evaluation: fit on train + validation, score the untouched test period (2026).
     fit_data = pd.concat([split.train, split.validation])
-    rows, calib = [], None
+    rows, calib, bench = [], None, []
     for name, cols in [("selected", selected), ("avg_l30 only", ["avg_l30"]), ("elo only", ["elo"])]:
         r = model.fit_logit(fit_data, cols, scale)
         for subset, df in [("test", split.test), ("test majors", split.test[split.test["is_major"]])]:
@@ -62,6 +65,8 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str) -> Mo
             rows.append({"model": name, "predictors": ", ".join(cols), "dataset": subset, **model.metrics(df["y"].to_numpy(), p)})
             if name == "selected" and subset == "test":
                 calib = model.calibration(df["y"].to_numpy(), p)
+            if name == "selected" and rankings is not None:
+                bench.append(benchmark.compare(fit_data, df, p, rankings, label=subset))
 
     # Production weights: same predictors, refit on all matches.
     final = model.fit_logit(pairs, selected, scale)
@@ -73,7 +78,7 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str) -> Mo
         version=version, elo_params=elo_params, elo_tuning=tuning, elo_history=elo_history,
         selection_log=pd.DataFrame(log.entries), correlations=corr, coefficients=coefficients,
         metrics=pd.DataFrame(rows), calibration=calib, data_summary=model.data_summary(split),
-        n_pairs=len(pairs),
+        n_pairs=len(pairs), benchmark=pd.concat(bench, ignore_index=True) if bench else None,
     )
 
 
