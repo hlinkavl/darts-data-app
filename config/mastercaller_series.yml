@@ -1,0 +1,52 @@
+# Mastercaller series slugs by event group (used for the training-data summary and event categories).
+# Majors are mapped in config/majors.yml. Any other series is grouped as "Other".
+players_championship:
+  - players-championships
+european_tour:
+  - austrian-darts-championship
+  - austrian-darts-open
+  - baltic-sea-darts-open
+  - belgian-darts-championship
+  - belgian-darts-open
+  - czech-darts-open
+  - danish-darts-open
+  - darts-grand-prix-de-france
+  - dutch-darts-championship
+  - dutch-darts-masters
+  - european-darts-grand-prix
+  - european-darts-matchplay
+  - european-darts-open
+  - european-darts-trophy
+  - flanders-darts-trophy
+  - german-darts-championship
+  - german-darts-grand-prix
+  - german-darts-masters-et
+  - german-darts-open
+  - gibraltar-darts-trophy
+  - hungarian-darts-trophy
+  - international-darts-open
+  - poland-darts-open
+  - slovak-darts-open
+  - swiss-darts-trophy
+  - uk-masters
+world_series:
+  - auckland-darts-masters
+  - australian-darts-masters
+  - bahrain-darts-masters
+  - brisbane-darts-masters
+  - dubai-darts-masters
+  - dutch-darts-masters-ws
+  - german-darts-masters-ws
+  - japan-darts-masters
+  - melbourne-darts-masters
+  - new-south-wales-darts-masters
+  - new-zealand-darts-masters
+  - nordic-darts-masters
+  - perth-darts-masters
+  - queensland-darts-masters
+  - saudi-arabia-darts-masters
+  - shanghai-darts-masters
+  - singapore-darts-masters
+  - sydney-darts-masters
+  - tokyo-darts-masters
+  - u-s-darts-masters

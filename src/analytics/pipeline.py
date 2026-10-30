@@ -44,6 +44,14 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str) -> Mo
     kept = model.step1b_significance(split, kept, scale, log)
     selected, share = model.step1c_bootstrap(split, kept, scale, log)
 
+    # From here on only the selected predictors are needed. Matches from sources without detailed stats
+    # (Mastercaller: no first-9, checkout, 180s) lack some candidates but have every selected predictor,
+    # so weights and evaluation use all matches that have the selected predictors.
+    baselines = sorted(set(selected) | {"avg_l30", "elo"})
+    pairs = model.build_pairs(feats, baselines)
+    split = model.time_split(pairs, VALIDATION_FROM, TEST_FROM)
+    scale = split.train[baselines].std()
+
     # Honest evaluation: fit on train + validation, score the untouched test period (2026).
     fit_data = pd.concat([split.train, split.validation])
     rows, calib = [], None

@@ -31,10 +31,10 @@ class PoliteClient:
             time.sleep(self.min_interval - elapsed)
         self._last_request[host] = time.monotonic()
 
-    def get_json(self, url: str, params: dict | None = None, use_cache: bool = True) -> dict:
+    def get_text(self, url: str, params: dict | None = None, use_cache: bool = True) -> str:
         path = self._cache_path(url, params)
         if use_cache and path.exists() and time.time() - path.stat().st_mtime < self.cache_ttl:
-            return json.loads(path.read_text())
+            return path.read_text()
 
         for attempt in range(1, self.retries + 1):
             self._wait(urlparse(url).netloc)
@@ -53,7 +53,14 @@ class PoliteClient:
                 resp.raise_for_status()
             time.sleep(10 * attempt)
 
-        data = resp.json()
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data))
-        return data
+        path.write_text(resp.text)
+        return resp.text
+
+    def get_json(self, url: str, params: dict | None = None, use_cache: bool = True) -> dict:
+        text = self.get_text(url, params, use_cache)
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            self._cache_path(url, params).unlink(missing_ok=True)  # never keep an invalid response in the cache
+            raise

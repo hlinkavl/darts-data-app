@@ -1,5 +1,7 @@
 """Wikipedia / Wikidata: tournament pages (draws, results) and player background. Content is CC BY-SA."""
 
+import re
+
 from .http import PoliteClient
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
@@ -66,3 +68,23 @@ def fetch_player_background(client: PoliteClient, name: str) -> dict:
         pages = extract.get("query", {}).get("pages", {})
         record["intro"] = next(iter(pages.values()), {}).get("extract")
     return record
+
+
+RANKINGS_MODULE = "Module:DartsRankings/data/PDC Rankings"
+RANKING_ROW = re.compile(r'\{\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*"£\s*([\d,]+)"\s*\}')
+
+
+def fetch_rankings_at(client: PoliteClient, as_of: str) -> list[dict]:
+    """Official PDC Order of Merit as it stood on a date (YYYY-MM-DD), from the Wikipedia data module that
+    darts articles use for rankings (source: PDC/PDPA). The module is updated after every ranking event."""
+    data = client.get_json(WIKI_API, {
+        "action": "query", "prop": "revisions", "titles": RANKINGS_MODULE, "rvlimit": 1, "rvdir": "older",
+        "rvstart": f"{as_of}T23:59:59Z", "rvprop": "ids|timestamp|content", "rvslots": "main", "format": "json",
+    })
+    page = next(iter(data["query"]["pages"].values()))
+    if not page.get("revisions"):
+        return []
+    rev = page["revisions"][0]
+    return [{"as_of": as_of, "revision_id": rev["revid"], "revision_time": rev["timestamp"], "player_name": name,
+             "rank": int(rank), "prize_money": int(money.replace(",", ""))}
+            for name, rank, money in RANKING_ROW.findall(rev["slots"]["main"]["*"])]
