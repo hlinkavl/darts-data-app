@@ -28,7 +28,8 @@ An end-to-end data app about PDC darts with two core features:
 ## Architecture at a glance
 
 ```
- Sources (Darts Orakel free API, Wikipedia/Wikidata, news/RSS, odds)
+ Sources (Mastercaller results, Wikipedia: PDC Order of Merit + draws + background, PDC news RSS;
+          Darts Orakel until 28 Oct 2026)
         │  Python scrapers (ingestion/), run outside Databricks
         ▼
  UC Volume  /Volumes/workspace/darts_bronze/raw/<source>/<date>/*.jsonl
@@ -64,7 +65,7 @@ An end-to-end data app about PDC darts with two core features:
 | Day 0 | Admin and setup | ✅ done (2026-10-24) |
 | Day 1 | Data foundation: sources, ingestion, bronze → silver | ✅ done (2026-10-25) |
 | Day 2 | Analytics: Performance Index, prediction model, backtests | ✅ done (2026-10-28) |
-| Day 3 | Backend robustness (health report, model promotion), GitHub Actions automation, AI layer | ⏳ next |
+| Day 3 | Source switch (Orakel blocked → Mastercaller + Wikipedia), health report, model promotion, GitHub Actions, key test vs PDC ranking, AI layer | ⏳ in progress |
 | Day 4 | Streamlit app, Genie, deploy (ready for the Grand Slam, 14 Nov) | ⬜ |
 
 ---
@@ -138,21 +139,41 @@ An end-to-end data app about PDC darts with two core features:
 2.8 [ ] Odds comparison → `gold.players_to_watch`: **no odds source yet** (moved to open questions).
 2.9 [x] `gold.player_recent_matches` (last N matches per player) and **8 saved queries** in Databricks (`sql/queries/*.sql`, synced by `scripts/sync_queries.py` into the workspace folder `darts-data-app/queries`).
 
-## Day 3: Backend robustness, automation and AI layer
+## Day 3: Backend robustness, automation and AI layer ⏳
 
-**Goal by end of day:** a fully automatic refresh that runs without the Mac (GitHub Actions + Databricks Job), a green health report, and AI narratives in gold tables.
+**Goal by end of day:** a fully automatic refresh that runs without the Mac (GitHub Actions + Databricks Job), a green health report, the key test "model vs PDC ranking", and AI narratives in gold tables.
 
-**Operational robustness first (agreed 2026-10-28):** unattended refreshes must fail loudly, keep the last good data and say what to do.
+### What happened on 2026-10-30
+- **Darts Orakel blocked our client** (403 on our identified User-Agent, even on robots.txt). We don't circumvent it and don't contact them; if they ask us to delete their data, we will. Their data until 28 Oct 2026 stays in the Volume and in the model.
+- **New sources** (all free and allowed):
+  - **Mastercaller** (`mastercaller.com`, robots.txt allows all, stats by iDarts) gives PDC results with 3-dart averages, incrementally through the daily match center + tournament results pages, ~5–20 requests per refresh. Scheduled matches in the match center replace Orakel's upcoming feed.
+  - **Wikipedia `Module:DartsRankings/data/PDC Rankings`** is the official PDC Order of Merit, current and **historical** (revision at any date since 2020) through the official API.
+  - **pdc.tv**: not usable, because its data API requires authentication (401).
+- **The model needs only results and 3-dart averages** (selected predictors: 3-dart average, form, Elo, experience), so Mastercaller covers it. Darts per match are estimated from legs (`legs × 1503 / average`). Validated on Orakel data: the 3-dart average (L30) moves by −0.06 points on average, 95 % within ±0.24.
+- **Databricks Free Edition fair-use quota** reached (too many job runs today): new job runs are paused until the quota resets. Code is tested locally meanwhile, and everything is deployed and verified in **one** run afterwards.
 
-3.1 [ ] **Health report** `gold.health_report` (🟢/🟡/🔴 + recommended action per check): data freshness, empty or changed source datasets, draw parsed for every running major, name-matching rate in draws, possible new major in Orakel data ("add to config/majors.yml: …").
-3.2 [ ] **Model promotion policy**: each refit creates a candidate version; it replaces the active version only if the predictor set is unchanged and test metrics are not worse. Otherwise the active version stays and the health report flags it.
-3.3 [ ] **Failure notifications**: Databricks Job e-mail on failure, GitHub Actions failure e-mails.
-3.4 [ ] **GitHub Actions `refresh.yml`**: `python -m ingestion.run --upload` (incremental) → `databricks jobs run-now darts_refresh`. Daily during majors (dates from `gold.majors_calendar`), otherwise on demand (`workflow_dispatch`, later the app button). Secrets `DATABRICKS_HOST` + `DATABRICKS_TOKEN`. Verified egress: GitHub runners reach Orakel and Wikipedia.
+### Steps
+
+3.0 [ ] **Source switch** (code done, pushed `c908370`; to verify in Databricks once the quota resets):
+   - [x] `ingestion/mastercaller.py` (results, upcoming), `wikipedia.fetch_rankings_at` (Order of Merit at any date), `run.py` rewritten, Orakel ingestion removed
+   - [x] ingest done: Oct 2026 complete (9 PDC tournaments, 605 matches), rankings history 2021–2026 (25,271 rows)
+   - [x] silver rewritten: Orakel + Mastercaller unified, `player_crosswalk` (one `player_key` across sources, manual fixes in `config/player_aliases.yml`), tracked players and rankings from the PDC Order of Merit
+   - [ ] **verify in Databricks**: full job run; Orakel vs Mastercaller averages on the overlap (Oct 2026); crosswalk report (matched by name vs new keys, ambiguous names)
+3.1 [ ] **Health report** `gold.health_report` (🟢/🟡/🔴 + recommended action per check): data freshness, source blocked or empty (e.g. 403 like Orakel), draw parsed for every running major, name-matching rate (crosswalk), new Mastercaller series not in config ("possible new major"), news gap, model promotion status. 🔴 fails the job, so the failure e-mail goes out.
+3.2 [ ] **Model promotion policy**: each refit creates a candidate version; it becomes active only if the predictor set is unchanged and its test log loss is not worse than the active model's on the same matches. PI and tournaments always use the **active** version.
+3.3 [ ] **Failure notifications**: Databricks Job e-mail on failure (also triggered by a 🔴 health report), GitHub Actions failure e-mails.
+3.4 [ ] **GitHub Actions `refresh.yml`**: `python -m ingestion.run --upload` → `databricks jobs run-now darts_refresh`. Daily during majors (dates from `gold.majors_calendar`), otherwise on demand (`workflow_dispatch`, later the app button). **Needs from you:** a Databricks personal access token stored as GitHub secrets `DATABRICKS_HOST` + `DATABRICKS_TOKEN`. I'll walk you through it.
+3.9 [ ] **Key test: does the model beat the PDC ranking?** (if not, the model adds no value over the Order of Merit). Baseline: probability from the ranking difference (logistic fit on log-rank gap, same training data), with the Order of Merit **as of each match date** (Wikipedia history, already ingested). For majors also the seeding from the Wikipedia draws. Compare on the untouched 2026 test period (~5,000 matches) and on the 10 backtested majors: accuracy, log loss, Brier, calibration. **Success = lower log loss and Brier than the ranking, with a paired-bootstrap test showing the difference is significant.** Report in PERFORMANCE_INDEX.md and in the app.
 3.5 [ ] **AI narratives** with `ai_query`: short player assessments from form + stats → `gold.player_ai_summary`. Compare 2–3 foundation models on 20 players first (as in the video).
-3.6 [ ] **News and interviews** from the official **PDC news RSS** (`pdc.tv/rss.xml`, decided 2026-10-28): 20 latest articles with full text, about 4–7 days of news. Ingest every article into bronze (deduplicated by link) so history builds up over time. AI summaries per player: how he feels, injuries, equipment changes, quotes. The app shows **only AI summaries with a link to the original article**, never the full text. Because the feed holds only the last 20 items, an on-demand refresh after a long pause can miss articles: the health report warns about such a gap ("news gap since …").
+3.6 [ ] **News and interviews** from the official **PDC news RSS** (`pdc.tv/rss.xml`): 20 latest articles with full text, about 4–7 days of news. Every article is kept in bronze (deduplicated by link) so history builds up. AI summaries per player: how he feels, injuries, equipment changes, quotes. The app shows **only AI summaries with a link to the original article**. The health report warns about a news gap after a long pause.
+3.7 [ ] Improve Wikidata matching for player backgrounds (now matched by name for new players).
 3.8 [x] **Odds: left out for good** (decided 2026-10-28). Nothing meets the conditions "free, legal from the Czech Republic, no manual work": Betfair and Smarkets are geo-blocked for CZ (403), odds-api.io is paid, The Odds API has no darts, Livesport/Tipsport/Betano forbid scraping (Livesport terms art. 2.9/2.10), and no free historical darts odds dataset exists. Re-check only if a free darts odds API reachable from CZ appears.
-3.9 [ ] **Key test: does the model beat the PDC ranking?** (agreed 2026-10-28; if not, the model adds no value over the Order of Merit). Baseline: probability from the ranking difference (logistic fit on log-rank gap, same training data as the PI model), with the ranking **as of each match date** (monthly 2-year prize-money rankings from Orakel's rankings API via dateFrom/dateTo, ~70 requests). For majors also the seeding from the Wikipedia draws. Compare on the untouched 2026 test period (~5,000 matches) and on the 10 backtested majors: accuracy, log loss, Brier, calibration. **Success = lower log loss and Brier than the ranking, with a paired-bootstrap test showing the difference is significant.** Report in PERFORMANCE_INDEX.md and in the app's Methodology page. Existing baselines ("3-dart average only", "Elo only") stay in the comparison.
-3.7 [ ] Improve Wikidata matching (76 % of tracked players) for player backgrounds.
+
+### Order of work
+1. **While Databricks is paused (now):** 3.1 health report, 3.2 promotion policy, 3.3 notifications, 3.4 the GitHub Actions workflow, 3.9 key test code, all tested locally.
+2. **Once the quota resets:** deploy and run **once**: verify 3.0, then 3.1–3.3 and 3.9 results in one go.
+3. **You:** create the Databricks token and GitHub secrets, then the first automatic refresh (3.4).
+4. 3.5–3.7: AI narratives, PDC news, backgrounds.
 
 How fixes happen: config-only issues (e.g. a new major) can be fixed by editing `config/majors.yml` on GitHub. Code issues (parser, source changes) are fixed in the repo with Claude Code and deployed with the bundle. Never edit code in the Databricks workspace, because `bundle deploy` overwrites it. Genie helps to diagnose (questions over the health report and gold tables), not to fix.
 
