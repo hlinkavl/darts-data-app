@@ -176,6 +176,7 @@ An end-to-end data app about PDC darts with two core features:
    - Current PI: Littler 7.35, Humphries 6.62, Price 6.02, Clayton 5.85, Ross Smith 5.84.
    - Tournament backtests recomputed: 388 matches, favourite won 68.8 %, log loss 0.579.
    - Docs: PERFORMANCE_INDEX.md rewritten (all 16 predictors with reasons, key test, correction note), TOURNAMENT_PREDICTIONS.md updated.
+   - **Big-stage ability, 3 more predictors** (Stage Delta, Long-Format Delta, Results over Expectation, all majors-only): none passes the rule. Stage Delta misses by 1 pp (79 % vs 80 % in the bootstrap; walk-forward gain on majors +0.0026, p = 0.055; majors-only regression p = 0.001). Decision: rule unchanged; **Stage Delta replaces Big-Stage Delta as the information-only indicator** in the app (Day 4), re-tested on every refit.
 3.5 [ ] **AI narratives** with `ai_query`: short player assessments from form + stats → `gold.player_ai_summary`. Compare 2–3 foundation models on 20 players first (as in the video). *Needs Databricks.*
 3.6 [ ] **News and interviews**: ingestion done (`pdc_news`, kept forever in bronze); still to do: silver (players mentioned per article), AI summaries per player, news-gap check in the health report. *AI part needs Databricks.*
 3.7 [ ] Improve Wikidata matching for player backgrounds.

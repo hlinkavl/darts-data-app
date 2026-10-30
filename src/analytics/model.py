@@ -23,7 +23,7 @@ ELO_BURN_IN = 30
 REFERENCE_TOP_N = 32
 SEED = 42
 # Predictors that only apply to matches on a major (tested as interaction with is_major).
-MAJOR_ONLY = {"big_stage_delta"}
+MAJOR_ONLY = {"big_stage_delta", "major_results_oe", "stage_delta", "long_format_delta"}
 
 
 # ---------------------------------------------------------------------------------------------- data

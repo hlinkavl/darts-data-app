@@ -101,7 +101,7 @@ Every predictor describes a player **before** the match, computed only from earl
 
 ## Candidate predictors
 
-"L30" means the player's last 30 matches before the one being predicted. Averages are pooled, as **total points ÷ total darts × 3**, so a long match counts more than a short one. Every candidate is defined so that **higher is better**. The last seven were added on 31 Oct 2026, aimed at majors, and fixed before testing.
+"L30" means the player's last 30 matches before the one being predicted. Averages are pooled, as **total points ÷ total darts × 3**, so a long match counts more than a short one. Every candidate is defined so that **higher is better**. Ten were added on 31 Oct 2026, aimed at majors, and fixed before testing.
 
 | Predictor | Name in the app | Definition |
 |---|---|---|
@@ -121,6 +121,9 @@ Every predictor describes a player **before** the match, computed only from earl
 | `consistency` | Consistency (L30) | − standard deviation of the match averages over the last 30 matches |
 | `activity` | Activity | log(1 + matches in the 30 days before the match day) |
 | `sharpness` | Match Sharpness | − log(1 + days since the previous match) |
+| `stage_delta` | **Stage Delta (majors only)** | 3-dart average on **stage** events (majors, European Tour, World Series, Premier League) − average on **floor** events (Players Championship, qualifiers, other tours), last 24 months, shrunk like Big-Stage Delta |
+| `long_format_delta` | Long-Format Delta (majors only) | 3-dart average in long matches (15+ legs, sets count as 4 legs) − overall average, last 24 months, shrunk |
+| `major_results_oe` | Big-Stage Results over Expectation (majors only) | On majors in the last 24 months: (wins − Elo-expected wins) ÷ (major matches + 10) |
 
 ### Opponent-Weighted Elo in detail
 
@@ -166,7 +169,7 @@ A candidate must pass **all three** filters.
 
 Every decision and its reason is stored in `darts_gold.pi_selection_log`.
 
-### Result: all 16 tested predictors
+### Result: all 19 tested predictors
 
 **In the index (4):**
 
@@ -177,7 +180,7 @@ Every decision and its reason is stored in `darts_gold.pi_selection_log`.
 | **Form (L10 vs L30)** | A player on an upswing wins more than their L30 average suggests. 100 % of samples. |
 | **PDC Order of Merit (log rank)** | Adds the long-term record on the stages with the most prize money (majors), which recent averages and Elo don't fully capture. 100 % of samples. |
 
-**Tested and left out (12):**
+**Tested and left out (15):**
 
 | Predictor | Out at | Why it is not in |
 |---|---|---|
@@ -192,9 +195,20 @@ Every decision and its reason is stored in `darts_gold.pi_selection_log`.
 | Consistency (L30) | 1b | Negative coefficient: steadier averages don't mean more wins once the level is known. |
 | Activity | 1b | Not significant (p = 0.66). |
 | Match Sharpness | 1b | Negative coefficient (and no effect without the look-ahead bug, see the correction above). |
-| Big-Stage Delta (majors only) | 1c | Significant in single fits, but not stable: significant in only 71 % of bootstrap samples (threshold 80 %). |
+| Big-Stage Delta (majors only) | 1a | Nearly the same as Stage Delta (r = 0.92), which predicts better. Alone it was significant in single fits but never stable (61–75 % of bootstrap samples). |
+| Long-Format Delta (majors only) | 1a | Nearly the same as Stage Delta (r = 0.81), which predicts better. |
+| Big-Stage Results over Expectation (majors only) | 1b | Not significant (p = 0.34): winning more on majors than the Elo expects does not repeat. |
+| **Stage Delta (majors only)** | 1c | **Closest miss:** significant and improves validation (1b), but significant in 79 % of bootstrap samples, just under the 80 % threshold. See below. |
 
-**Big-Stage Delta**, the hypothesis that some players raise their level on the big stage, has been tested several ways. It is significant in some single fits (p = 0.004 on majors in the first test, p = 0.03 in a majors-only model), but never stable: 73 % of bootstrap samples with data since 2023, 61–71 % with data since 2021. The effect may exist, but it is small and depends on which matches happen to be in the sample. It is therefore **shown as an information-only indicator** in player profiles and on major match cards, with no effect on the PI, and re-tested on every refit.
+**Big-stage ability**, the hypothesis that some players raise their level on the big stage, was tested with four predictors, all entering only matches on majors (31 Oct 2026):
+
+| Test | Stage Delta | Big-Stage Delta | Long-Format Delta | Results over Expectation |
+|---|---|---|---|---|
+| Selection rule | out at 1c (79 % < 80 %) | out at 1a | out at 1a | out at 1b |
+| Majors-only regression on 2,689 major matches: p, share of significant bootstrap samples | **p = 0.001, 91 %** | p = 0.010, 75 % | p = 0.12, 32 % | p = 0.28, 17 % |
+| Walk-forward on majors (1,825): log-loss gain when added to the model | **+0.0026 [−0.0004, +0.0058], p = 0.055** | +0.0014, p = 0.16 | +0.0005, p = 0.25 | +0.0006, p = 0.24 |
+
+**Stage Delta** (average on stage events minus average on floor events) is the strongest and most stable big-stage measure, because it uses far more matches than majors alone. The effect is real but small: +2 points of stage delta ≈ +1.5 percentage points of win chance on a major. It misses the selection rule by one percentage point, and the rule is not bent for it. It is therefore **shown as an information-only indicator** in player profiles and on major match cards ("averages +1.8 more on stage than on the floor"), with no effect on the PI, and re-tested automatically on every refit. With more major matches it may pass.
 
 ---
 

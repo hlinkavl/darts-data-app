@@ -30,6 +30,10 @@ CANDIDATES = {
     "consistency": "Consistency (L30)",
     "activity": "Activity (matches in last 30 days)",
     "sharpness": "Match Sharpness (days since last match)",
+    # Added 2026-10-31 (big-stage ability, majors only, decided before testing):
+    "major_results_oe": "Big-Stage Results over Expectation (majors only)",
+    "stage_delta": "Stage Delta (majors only)",
+    "long_format_delta": "Long-Format Delta (majors only)",
 }
 # Pair-specific predictors: they describe a match-up, not a player, so they never enter a player's PI; they
 # adjust the probability of that particular match (see analytics.model.PAIR_ONLY).
@@ -42,6 +46,9 @@ BIG_STAGE_WINDOW = "730D"
 BIG_STAGE_SHRINK = 10.0
 H2H_PRIOR = 2.0            # head-to-head share shrunk toward 50 %: (wins + 2) / (matches + 4)
 UNRANKED = 500             # players outside the Order of Merit
+# Stage events (played on a stage with a crowd) vs floor events, by event category.
+STAGE_CATEGORIES = {"MJ", "WC", "WGP", "U", "ET", "WS", "WSD", "PCF"}
+LONG_MATCH_LEGS = 15       # first to 8 legs or longer (sets count as 4 legs)
 
 STAT_COLUMNS = ["points", "darts", "first9_points", "first9_darts", "checkouts_hit", "checkout_attempts", "one_eighties"]
 
@@ -80,6 +87,31 @@ def _player_features(g: pd.DataFrame) -> pd.DataFrame:
     prior_wins = pair.transform(lambda s: s.astype(float).shift(1).fillna(0).cumsum())
     prior_n = pair.cumcount()
     out["h2h"] = (prior_wins + H2H_PRIOR) / (prior_n + 2 * H2H_PRIOR) - 0.5
+
+    # Big-stage variants (24 months, strictly before the match date, shrunk by n / (n + 10)):
+    def window_delta(mask: pd.Series, against: pd.Series | None = None) -> np.ndarray:
+        """Average in matches where `mask` minus average where `against` (default: all matches)."""
+        w = g[["match_date"]].copy()
+        pts, drt = g["points"].astype(float).fillna(0.0), g["darts"].astype(float).fillna(0.0)
+        base = against if against is not None else pd.Series(True, index=g.index)
+        w["p1"], w["d1"] = pts.where(mask, 0.0), drt.where(mask, 0.0)
+        w["p0"], w["d0"] = pts.where(base, 0.0), drt.where(base, 0.0)
+        w["n"] = (mask & g["darts"].notna()).astype(float)
+        r = w.set_index("match_date").rolling(BIG_STAGE_WINDOW, closed="left").sum()
+        n = r["n"].to_numpy()
+        d = (3 * r["p1"] / r["d1"].replace(0, np.nan) - 3 * r["p0"] / r["d0"].replace(0, np.nan)).to_numpy()
+        return np.where(n > 0, np.nan_to_num(d) * n / (n + BIG_STAGE_SHRINK), 0.0)
+
+    if "category" in g.columns:
+        stage = g["category"].isin(STAGE_CATEGORIES)
+        out["stage_delta"] = window_delta(stage, ~stage)
+    else:
+        out["stage_delta"] = np.nan
+    if {"score_for", "score_against"} <= set(g.columns):
+        legs = (g["score_for"] + g["score_against"]).astype(float) * np.where(g.get("unit", "legs") == "sets", 4, 1)
+        out["long_format_delta"] = window_delta(legs >= LONG_MATCH_LEGS)
+    else:
+        out["long_format_delta"] = np.nan
 
     # Big-Stage Delta: average on majors minus overall average, last 24 months (strictly before the match date).
     t = g[["match_date", "points", "darts"]].astype({"points": float, "darts": float}).copy()
@@ -126,6 +158,20 @@ def point_in_time_features(player_matches: pd.DataFrame, elo_history: pd.DataFra
     out = pm[keep].join(feats)
     elo = elo_history[["match_key", "player_key", "elo_pre", "elo_n"]].rename(columns={"elo_pre": "elo"})
     out = out.merge(elo, on=["match_key", "player_key"], how="left")
+
+    # Big-Stage Results over Expectation: on majors in the last 24 months, (wins - Elo-expected wins) / (n + 10).
+    opp = elo_history[["match_key", "player_key", "elo_pre"]].rename(columns={"player_key": "opponent_key", "elo_pre": "opp_elo"})
+    out = out.merge(opp, on=["match_key", "opponent_key"], how="left")
+    expected = 1 / (1 + 10 ** ((out["opp_elo"] - out["elo"]) / 400))
+    out["_res"] = np.where(out["is_major"].astype(bool), out["won"].astype(float) - expected, 0.0)
+    out["_n"] = (out["is_major"].astype(bool) & expected.notna()).astype(float)
+    out["_res"] = out["_res"].fillna(0.0)
+    oe = []
+    for _, g in out.sort_values(["player_key", "match_date"]).groupby("player_key", sort=False):
+        r = g.set_index("match_date")[["_res", "_n"]].rolling(BIG_STAGE_WINDOW, closed="left").sum()
+        oe.append(pd.Series((r["_res"] / (r["_n"] + BIG_STAGE_SHRINK)).to_numpy(), index=g.index))
+    out["major_results_oe"] = pd.concat(oe).reindex(out.index).fillna(0.0) if oe else np.nan
+    out = out.drop(columns=["_res", "_n", "opp_elo"])
 
     if rankings is not None and len(rankings):
         r = rankings.rename(columns={"snapshot_date": "date"})[["date", "player_key", "rank"]].dropna()
