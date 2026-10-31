@@ -40,7 +40,7 @@ def _history_chart(hist: pd.DataFrame) -> go.Figure:
 
 
 def _header(name: str, row: pd.Series, info: pd.Series) -> None:
-    """Round photo, name, and the two headline numbers: the official ranking and our Performance Index."""
+    """Round photo, '#<Order of Merit> Name', and our headline number, the Performance Index."""
     photo = ui.avatar(info.get("image_file"), 150, name=name, ring=ui.GRID)
     nickname = info.get("nickname")
     sub = [f"“{escape(nickname)}”" if isinstance(nickname, str) and nickname else None,
@@ -58,10 +58,11 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
 
     st.markdown(
         f"<div style='display:flex;align-items:center;gap:30px;flex-wrap:wrap;margin:8px 0 6px'>{photo}<div>"
-        f"<div style='font-size:2em;font-weight:700;color:{ui.TEXT}'>{escape(name)}</div>"
-        f"<div style='color:{ui.TEXT_2}'>{' · '.join(s for s in sub if s)}</div>"
+        f"<div style='font-size:2em;font-weight:700;color:{ui.TEXT}'>"
+        f"<span title='PDC Order of Merit: current position in the official ranking (2-year prize money)' "
+        f"style='color:{ui.TEXT_2};margin-right:12px'>{oom_txt}</span>{escape(name)}</div>"
+        f"<div style='color:{ui.TEXT_2}'>{' · '.join(s for s in [f'{oom_txt} PDC Order of Merit'] + sub if s)}</div>"
         f"<div style='display:flex;gap:44px;flex-wrap:wrap;margin-top:14px'>"
-        f"{number('PDC Order of Merit', oom_txt, '', 'Current position in the official PDC ranking (2-year prize money)')}"
         f"{number('Performance Index', ui.num(row['pi'], 2), f'#{int(row['rank'])} by PI', ui.PI_HELP)}"
         f"</div></div></div>", unsafe_allow_html=True)
     if isinstance(info.get("image_file"), str):

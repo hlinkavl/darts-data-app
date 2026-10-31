@@ -166,11 +166,13 @@ WIN, LOSS = STATUS["green"][2], STATUS["red"][2]
 
 
 def info_block(rows: list[tuple[str, str]], note: str | None = None) -> str:
-    """Key facts as a neat grid of label / value pairs (HTML)."""
-    cells = "".join(f"<div><div style='color:{TEXT_2};font-size:0.78em;text-transform:uppercase;letter-spacing:.04em'>"
-                    f"{label}</div><div style='color:{TEXT};font-size:1.05em;margin-top:2px'>{value}</div></div>"
+    """Key facts as tiles: the value on top, a short label under it (HTML); wraps to more rows on narrow screens."""
+    cells = "".join(f"<div style='padding:2px 0'><div style='color:{TEXT};font-size:1.15em;font-weight:600'>"
+                    f"{value}</div><div style='color:{TEXT_2};font-size:0.8em;line-height:1.3;"
+                    f"margin-top:2px'>{label}</div></div>"
                     for label, value in rows)
-    foot = f"<div style='color:{TEXT_2};font-size:0.85em;margin-top:12px'>{note}</div>" if note else ""
-    return (f"<div style='border:1px solid {GRID};border-radius:10px;padding:14px 18px;margin:4px 0 14px'>"
-            f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px 24px'>{cells}</div>"
-            f"{foot}</div>")
+    foot = (f"<div style='color:{TEXT_2};font-size:0.85em;margin-top:12px;padding-top:10px;border-top:1px solid {GRID}'>"
+            f"{note}</div>") if note else ""
+    return (f"<div style='border:1px solid {GRID};border-radius:10px;padding:14px 18px;margin:4px 0 16px'>"
+            f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px 22px;"
+            f"align-items:start'>{cells}</div>{foot}</div>")

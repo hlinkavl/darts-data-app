@@ -76,15 +76,16 @@ def _status_block(ev: dict, preds: pd.DataFrame, draw: pd.DataFrame, cal: pd.Dat
         if len(b):
             b = b.iloc[0]
             avg = cal_row["winner_avg"].iloc[0] if len(cal_row) else None
-            rows += [("Champion", f"🏆 {b.champion}" + (f" · avg {ui.num(avg, 2)}" if avg is not None and pd.notna(avg) else "")),
-                     ("Champion's chance before the event",
-                      f"{ui.pct(b.champion_p_title, 1)} · #{int(b.champion_rank_by_p_title)} in the model's ranking"),
-                     ("Pre-match favourite won", f"{ui.num(b.favourite_won_pct, 0)} % of {int(b.matches)} matches")]
+            rows += [("Champion", f"🏆 {b.champion}"),
+                     ("Average in the final", ui.num(avg, 2) if avg is not None and pd.notna(avg) else "–"),
+                     ("Champion's chance before the event (rank in the model)",
+                      f"{ui.pct(b.champion_p_title, 1)} (#{int(b.champion_rank_by_p_title)})"),
+                     ("Matches won by the pre-match favourite", f"{ui.num(b.favourite_won_pct, 0)} % of {int(b.matches)}")]
     elif mode == "live":
         known = draw[draw["player_a"].astype(bool) & draw["player_b"].astype(bool)]
         played = int(known["winner"].astype(bool).sum())
-        rows = [("Status", "🔴 In progress"), ("Dates", dates), ("Matches played", f"{played} of {len(known)} drawn"),
-                ("Title favourite now", favourite)]
+        rows = [("Status", "🔴 In progress"), ("Dates", dates), ("Matches played", f"{played} of {len(known)}"),
+                ("Title favourite", favourite)]
         note = "Played matches are fixed; the rest of the draw is simulated again after every refresh."
     else:
         rows = [("Status", "🗓️ Not started"), ("Dates", dates), ("Players", f"{preds['player_name'].nunique()}"),
@@ -101,7 +102,10 @@ def _title_chart(winners: pd.DataFrame) -> go.Figure:
         x=top["p_reach"], y=top["player_name"], orientation="h", marker=dict(color=ui.SERIES[0], line=dict(color=ui.SURFACE, width=2)),
         text=[ui.pct(v, 1) for v in top["p_reach"]], textposition="outside", textfont=dict(color=ui.TEXT_2),
         hovertemplate="%{y}: %{x:.1%} to win the title<extra></extra>", cliponaxis=False))
-    return ui.layout(fig, height=60 + 28 * len(top), xaxis=dict(tickformat=".0%", title="chance to win the title"))
+    fig = ui.layout(fig, height=60 + 28 * len(top), xaxis=dict(tickformat=".0%", title="chance to win the title",
+                                                                range=[0, top["p_reach"].max() * 1.22]))
+    fig.update_traces(cliponaxis=True)
+    return fig
 
 
 def _round_table(preds: pd.DataFrame) -> None:
@@ -143,8 +147,9 @@ def _format(m) -> str:
     return f"first to {int(m.first_to)} {m.unit}" if pd.notna(m.first_to) else ""
 
 
-def _bracket_box(m, short: dict) -> str:
-    """One match: surname, the model's pre-match chance (small) and the score; the winner's row in green."""
+def _bracket_box(m, short: dict, final: bool = False) -> str:
+    """One match: surname, the model's pre-match chance (small) and the score; the winner's row in green (with a
+    trophy in the final)."""
     if m is None:
         rows, tip = [("TBD", "", "", False, False)] * 2, "Not drawn yet"
     else:
@@ -154,7 +159,8 @@ def _bracket_box(m, short: dict) -> str:
             won = played and name == m.winner
             score_txt = ("w/o" if won else "") if m.walkover else (ui.num(score, 0) if played else "")
             p_txt = ui.pct(p) if name and pd.notna(p) else ""
-            rows.append((short.get(name, "TBD") if name else "TBD", p_txt, score_txt, won, played))
+            label = (short.get(name, name) + (" 🏆" if final and won else "")) if name else "TBD"
+            rows.append((label, p_txt, score_txt, won, played))
         tip = " · ".join(t for t in (
             f"{m.player_a or 'TBD'} {_seed(m.seed_a)} vs {m.player_b or 'TBD'} {_seed(m.seed_b)}",
             _format(m),
@@ -181,18 +187,13 @@ def _bracket(matches: pd.DataFrame) -> None:
     cols = []
     for k, order in enumerate(orders):
         rnd = matches[matches["round_order"] == order].drop_duplicates("slot").set_index("slot")
-        boxes = "".join(_bracket_box(rnd.loc[i] if i in rnd.index else None, short) for i in range(2 ** (len(orders) - 1 - k)))
+        final = k == len(orders) - 1
+        boxes = "".join(_bracket_box(rnd.loc[i] if i in rnd.index else None, short, final)
+                        for i in range(2 ** (len(orders) - 1 - k)))
         cols.append(f"<div style='flex:1;min-width:165px;display:flex;flex-direction:column'>"
                     f"<div style='text-align:center;color:{ui.TEXT_2};font-size:0.8em;margin-bottom:4px'>"
                     f"{escape(rnd['round_name'].iloc[0])}</div>"
                     f"<div style='height:{height}px;display:flex;flex-direction:column;justify-content:space-around'>{boxes}</div></div>")
-    final = matches[matches["round_order"] == orders[-1]]
-    champion = final["winner"].iloc[0] if len(final) and final["winner"].iloc[0] else None
-    if champion:
-        cols.append(f"<div style='min-width:110px;display:flex;flex-direction:column'>"
-                    f"<div style='text-align:center;color:{ui.TEXT_2};font-size:0.8em;margin-bottom:4px'>Champion</div>"
-                    f"<div style='height:{height}px;display:flex;align-items:center;justify-content:center;"
-                    f"font-weight:700;color:{ui.TEXT}'>🏆 {escape(short.get(champion, champion))}</div></div>")
     st.markdown(f"<div style='display:flex;gap:14px;overflow-x:auto;padding-bottom:6px'>{''.join(cols)}</div>",
                 unsafe_allow_html=True)
     st.caption("Green = winner. The small % is the model's chance before the match. Hover over a match for full names, "
@@ -314,7 +315,7 @@ def render() -> None:
             draw = dm[(dm["wiki_title"] == ev["title"]) & (dm["mode"] == ev["mode"])]
             _status_block(ev, pr, draw, cal)
             photos = _photos()
-            left, right = st.columns([3, 2])
+            left, right = st.columns([3, 2], gap="large")
             with left:
                 st.subheader("Chance to win the title")
                 st.plotly_chart(_title_chart(pr[pr["round_name"] == "Winner"]), width="stretch", config={"displayModeBar": False})
