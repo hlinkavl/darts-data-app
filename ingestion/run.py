@@ -7,7 +7,7 @@ Sources (since 30 Oct 2026, when Darts Orakel blocked our client; its earlier da
   multi-day events), and the scheduled matches of the next UPCOMING_DAYS days.
 - PDC news RSS: the latest official articles (kept forever in bronze, input for AI summaries).
 - Wikipedia: the official PDC Order of Merit (current snapshot every run, monthly history once), the pages of
-  the majors (calendar, draws) and the background of tracked players not seen before.
+  the majors (calendar, draws) and the background (incl. a free photo) of tracked and drawn players.
 
 Every run writes its own folder, so a run never overwrites an earlier one:
 raw/<source>/<run_id>/<dataset>.jsonl, run_id = YYYY-MM-DDTHHMMSS (sortable).
@@ -120,7 +120,10 @@ def run_wikipedia(w, catalog: str, today: date, run_id: str) -> list[Path]:
     current = wikipedia.fetch_rankings_at(PoliteClient(min_interval=1.0, cache_ttl=0), today.isoformat())
     paths = [write_jsonl("wikipedia", "rankings", current, run_id)]
 
-    if not _files(w, catalog, "wikipedia", "rankings_history"):
+    history_files = _files(w, catalog, "wikipedia", "rankings_history")
+    last = _read_jsonl(w, history_files[-1]) if history_files else []
+    stale = not last or last[0].get("parser", 1) < wikipedia.RANKINGS_PARSER
+    if stale:  # once, or again after a parser fix
         months, d = [], RANKINGS_HISTORY_FROM
         while d <= today:
             months.append(d)
@@ -131,18 +134,32 @@ def run_wikipedia(w, catalog: str, today: date, run_id: str) -> list[Path]:
     pages = [wikipedia.fetch_page_wikitext(client, title) for title in major_pages(today)]
     paths.append(write_jsonl("wikipedia", "tournament_pages", pages, run_id))
 
-    known = {r.get("name") for f in _files(w, catalog, "wikipedia", "player_background") for r in _read_jsonl(w, f)}
-    tracked = [r["player_name"] for r in current if r["rank"] <= TRACKED_PLAYERS]
-    background = []
-    for name in tracked:
-        if name in known:
-            continue
-        try:
-            background.append(wikipedia.fetch_player_background(client, name))
-        except Exception as exc:  # one missing background must not stop the refresh; retried next run
-            log.warning("no background for %s: %s", name, exc)
+    previous = [r for f in _files(w, catalog, "wikipedia", "player_background") for r in _read_jsonl(w, f)]
+    background = fetch_backgrounds(client, background_names(current, pages), previous, today)
     paths.append(write_jsonl("wikipedia", "player_background", background, run_id))
     return paths
+
+
+def background_names(current: list[dict], pages: list[dict]) -> list[str]:
+    """Tracked players (top of the Order of Merit) plus everyone in the majors' draws, e.g. World Championship
+    qualifiers, so the draw shows their photos too."""
+    names = [r["player_name"] for r in current if r["rank"] <= TRACKED_PLAYERS]
+    drawn = set().union(*(wikipedia.draw_players(p.get("wikitext")) for p in pages)) if pages else set()
+    return names + sorted(drawn - set(names))
+
+
+def fetch_backgrounds(client: PoliteClient, names: list[str], previous: list[dict], today: date) -> list[dict]:
+    latest = {r.get("name"): r for r in previous}  # files are read oldest first, so the last record wins
+    out = []
+    for name in names:
+        if not wikipedia.needs_background(latest.get(name), today):
+            continue
+        try:
+            out.append(wikipedia.fetch_player_background(client, name))
+        except Exception as exc:  # one missing background must not stop the refresh; retried next run
+            log.warning("no background for %s: %s", name, exc)
+    log.info("wikipedia: background for %s of %s players", len(out), len(names))
+    return out
 
 
 def upload(w, paths: list[Path], catalog: str) -> None:

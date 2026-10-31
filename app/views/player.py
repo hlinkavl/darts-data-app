@@ -1,7 +1,8 @@
-"""Player Profile: photo and key facts, PI over time, recent form, big-stage indicator, background, titles."""
+"""Player Profile: photo, Order of Merit and PI, the PI breakdown, PI over time, recent form, profile, titles."""
 
 import re
 from datetime import date
+from html import escape
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -17,6 +18,15 @@ COUNTRY = {"ENG": "England", "SCO": "Scotland", "WAL": "Wales", "NIR": "Northern
            "AUS": "Australia", "NZL": "New Zealand", "CAN": "Canada", "USA": "United States", "JPN": "Japan", "PHI": "Philippines",
            "RSA": "South Africa", "CRO": "Croatia", "GIB": "Gibraltar", "SVK": "Slovakia", "SLO": "Slovenia", "EST": "Estonia"}
 
+# How each PI input is shown in the breakdown: label, value format, one-line explanation.
+INPUTS = {
+    "avg_l30": ("3-Dart Average (L30)", lambda v: f"{v:.2f}", "Points per 3 darts over the last 30 matches"),
+    "form": ("Form (L10 vs L30)", lambda v: f"{v:+.2f}", "Average of the last 10 matches minus the last 30"),
+    "elo": ("Opponent-Weighted Elo", lambda v: f"{v:.0f}", "Rating from results: wins over strong players count more"),
+    "oom_rank": ("PDC Order of Merit", lambda v: ui.oom_rank(v), "Official ranking (2-year prize money)"),
+}
+LABEL = f"color:{ui.TEXT_2};font-size:0.78em;text-transform:uppercase;letter-spacing:.04em"
+
 
 def _history_chart(hist: pd.DataFrame) -> go.Figure:
     hist = hist.sort_values("as_of_date")
@@ -29,46 +39,149 @@ def _history_chart(hist: pd.DataFrame) -> go.Figure:
     return ui.layout(fig, height=300, yaxis=dict(title="PI", range=[0, 10]), hovermode="x")
 
 
-def _sentences(text: str, n: int) -> list[str]:
-    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z])", text.strip())
-    return [p for p in parts if p][:n]
-
-
-def _facts(row: pd.Series, info: pd.Series) -> pd.DataFrame:
-    facts = []
+def _header(name: str, row: pd.Series, info: pd.Series) -> None:
+    """Round photo, name, and the two headline numbers: the official ranking and our Performance Index."""
+    photo = ui.avatar(info.get("image_file"), 150, name=name, ring=ui.GRID)
+    nickname = info.get("nickname")
+    sub = [f"“{escape(nickname)}”" if isinstance(nickname, str) and nickname else None,
+           COUNTRY.get(info.get("country"), info.get("country")) if isinstance(info.get("country"), str) else None]
     dob = pd.to_datetime(info.get("date_of_birth"), errors="coerce")
     if pd.notna(dob):
-        facts.append(("Born", f"{dob:%d %B %Y} ({int((pd.Timestamp(date.today()) - dob).days // 365.25)} years)"))
-    country = info.get("country")
-    if isinstance(country, str):
-        facts.append(("Country", COUNTRY.get(country, country)))
-    if isinstance(info.get("nickname"), str):
-        facts.append(("Nickname", f"“{info['nickname']}”"))
+        sub.append(f"{int((pd.Timestamp(date.today()) - dob).days // 365.25)} years")
+    oom = info.get("prize_money_rank")
+    oom_txt = f"#{int(oom)}" if pd.notna(oom) else ui.oom_rank(row.get("oom_rank"))
+
+    def number(label, value, extra, tip):
+        return (f"<div title='{escape(tip)}'><div style='{LABEL}'>{label} ⓘ</div>"
+                f"<div style='font-size:2.4em;font-weight:700;color:{ui.TEXT};line-height:1.15'>{value}"
+                f"<span style='font-size:0.42em;font-weight:400;color:{ui.TEXT_2};margin-left:8px'>{extra}</span></div></div>")
+
+    st.markdown(
+        f"<div style='display:flex;align-items:center;gap:30px;flex-wrap:wrap;margin:8px 0 6px'>{photo}<div>"
+        f"<div style='font-size:2em;font-weight:700;color:{ui.TEXT}'>{escape(name)}</div>"
+        f"<div style='color:{ui.TEXT_2}'>{' · '.join(s for s in sub if s)}</div>"
+        f"<div style='display:flex;gap:44px;flex-wrap:wrap;margin-top:14px'>"
+        f"{number('PDC Order of Merit', oom_txt, '', 'Current position in the official PDC ranking (2-year prize money)')}"
+        f"{number('Performance Index', ui.num(row['pi'], 2), f'#{int(row['rank'])} by PI', ui.PI_HELP)}"
+        f"</div></div></div>", unsafe_allow_html=True)
+    if isinstance(info.get("image_file"), str):
+        st.caption(ui.photo_credit(info["image_file"]))
+
+
+def _breakdown(row: pd.Series) -> None:
+    """Each PI input next to the average top-32 player, converted into 3-dart-average points; they add up to the
+    Effective Average, which the PI scale turns into a 0-10 score."""
+    coef = data.versioned("pi_coefficients").set_index("predictor")
+    per_point = coef["beta_per_unit"].get("avg_l30")
+    st.subheader("PI breakdown")
+    st.caption("How the model gets to the PI: every input is compared with an average top-32 player and converted into "
+               "3-dart-average points. Together they give the Effective Average.")
+    tiles = []
+    for p in [p for p in INPUTS if p in coef.index]:
+        label, fmt, help_text = INPUTS[p]
+        value, ref, contrib = row.get(p), row.get(f"ref_{p}"), row.get(f"contrib_{p}")
+        if value is None or pd.isna(value):
+            continue
+        points = contrib / per_point if per_point and pd.notna(contrib) else None
+        ref_txt = (ui.oom_rank(ref) if p == "oom_rank" else fmt(ref)) if ref is not None and pd.notna(ref) else "–"
+        color = ui.POSITIVE if (points or 0) >= 0 else ui.NEGATIVE
+        effect = f"{points:+.1f} avg points" if points is not None else "–"
+        tiles.append(
+            f"<div title='{escape(help_text)}' style='border:1px solid {ui.GRID};border-top:3px solid {color};"
+            f"border-radius:10px;padding:12px 14px'><div style='{LABEL}'>{label}</div>"
+            f"<div style='font-size:1.6em;font-weight:700;color:{ui.TEXT};margin-top:2px'>{fmt(value)}</div>"
+            f"<div style='color:{ui.TEXT_2};font-size:0.85em'>top-32 average {ref_txt}</div>"
+            f"<div style='color:{ui.TEXT};font-weight:600;margin-top:6px'>{effect}</div></div>")
+    tiles.append(
+        f"<div title='{escape(ui.EFFECTIVE_AVERAGE_HELP)}' style='border:1px solid {ui.GRID};border-radius:10px;padding:12px 14px;"
+        f"background:#222220'><div style='{LABEL}'>= Effective Average ⓘ</div>"
+        f"<div style='font-size:1.6em;font-weight:700;color:{ui.TEXT};margin-top:2px'>{ui.num(row['effective_average'])}</div>"
+        f"<div style='color:{ui.TEXT_2};font-size:0.85em'>top-32 average {ui.num(row.get('ref_avg_l30'))}</div>"
+        f"<div style='color:{ui.TEXT};font-weight:600;margin-top:6px'>→ PI {ui.num(row['pi'], 2)}</div></div>")
+    st.markdown(f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px'>{''.join(tiles)}</div>",
+                unsafe_allow_html=True)
+    stage = row.get("stage_delta")
+    if stage is not None and pd.notna(stage):
+        st.caption(f"Stage Delta {stage:+.2f} (information only, not part of the PI): average on stage events (majors, "
+                   "European Tour, World Series, Premier League) minus on floor events, last 24 months.")
+
+
+def _recent_form(row: pd.Series, info_all: pd.DataFrame) -> None:
+    st.subheader("Recent form")
+    recent = data.table("player_recent_matches")
+    recent = recent[recent["player_key"] == row["player_key"]].sort_values("recency").head(5)
+    if recent.empty:
+        st.caption("No recent matches.")
+        return
+    photos = dict(zip(info_all["player_key"], info_all["image_file"])) if "image_file" in info_all.columns else {}
+    cards = []
+    for m in recent.itertuples():
+        won = m.result == "W"
+        score = str(m.score).replace("-", " – ") if isinstance(m.score, str) else ""
+        me = (f"<div style='flex:1;text-align:right;color:{ui.WIN if won else ui.TEXT_2};font-weight:{700 if won else 400}'>"
+              f"{escape(m.player_name)}{ui.avatar(photos.get(m.player_key), 36, name=m.player_name)}</div>")
+        opp = (f"<div style='flex:1;color:{ui.TEXT_2 if won else ui.WIN};font-weight:{400 if won else 700}'>"
+               f"{ui.avatar(photos.get(m.opponent_key), 36, name=m.opponent_name)}{escape(str(m.opponent_name))}</div>")
+        stats = " · ".join(s for s in (f"average {ui.num(m.average, 2)}" if pd.notna(m.average) else "",
+                                       f"checkout {ui.num(m.checkout_pct)} %" if pd.notna(m.checkout_pct) else "") if s)
+        cards.append(
+            f"<div style='border:2px solid {ui.WIN if won else ui.LOSS};border-radius:10px;padding:10px 14px;margin:8px 0'>"
+            f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-bottom:6px'>{'✓ Won' if won else '✗ Lost'} · "
+            f"{pd.Timestamp(m.match_date):%d %b %Y} · {escape(str(m.tournament_name))} · {escape(str(m.round))}</div>"
+            f"<div style='display:flex;align-items:center;gap:10px'>{me}"
+            f"<div style='min-width:80px;text-align:center;font-size:1.3em;font-weight:700;color:{ui.TEXT}'>{score}</div>{opp}</div>"
+            f"<div style='text-align:center;color:{ui.TEXT_2};font-size:0.8em;margin-top:6px'>{stats}</div></div>")
+    st.markdown("".join(cards), unsafe_allow_html=True)
+
+
+def _sentences(text: str, n: int) -> str:
+    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z])", " ".join(text.split()))
+    return " ".join(p for p in parts[:n] if p)
+
+
+def _profile(info: pd.Series) -> None:
+    """One paragraph: the Wikipedia intro plus the facts it does not mention."""
+    st.subheader("Profile")
+    intro = info.get("intro") if isinstance(info.get("intro"), str) else ""
+    text = _sentences(intro, 4) if intro else ""
+    extra = []
+    nickname = info.get("nickname")
+    if isinstance(nickname, str) and nickname and nickname not in text:
+        extra.append(f"Nickname: “{nickname}”.")
+    dob = pd.to_datetime(info.get("date_of_birth"), errors="coerce")
+    if pd.notna(dob) and str(dob.year) not in text:
+        extra.append(f"Born {dob:%d %B %Y}.")
+    if not text and isinstance(info.get("country"), str):
+        extra.append(f"Plays for {COUNTRY.get(info['country'], info['country'])}.")
     money = info.get("prize_money_2y")
     if pd.notna(money):
-        facts.append(("Prize money (2 years)", f"£{int(money):,}"))
-    return pd.DataFrame(facts, columns=["", " "])
+        extra.append(f"Prize money over the last two years: £{int(money):,}.")
+    paragraph = " ".join([text] + extra).strip()
+    st.markdown(paragraph or "No background yet.")
+    title = info.get("enwiki_title")
+    if isinstance(title, str) and intro:
+        st.caption(f"Source: [Wikipedia – {title}](https://en.wikipedia.org/wiki/{title.replace(' ', '_')}) (CC BY-SA) · "
+                   "AI summary of form and interviews (PDC news): coming soon.")
 
 
 def _titles(player_key: int) -> None:
-    t = data.table("player_titles")
-    t = t[t["player_key"] == player_key] if len(t) else t
     st.subheader("🏆 Titles")
+    t = data.table("player_titles")
+    t = t[t["player_key"] == player_key].sort_values("event_date", ascending=False) if len(t) else t
     if t.empty:
         st.caption("No titles in our data (PDC events since 2021).")
         return
-    majors = t[t["title_group"] == "Major"].sort_values("event_date", ascending=False)
-    if len(majors):
-        st.markdown("**Majors**")
-        for r in majors.itertuples():
-            st.markdown(f"- {pd.Timestamp(r.event_date).year} · {r.tournament_name}")
-    counts = t[t["title_group"] != "Major"].groupby("title_group").agg(titles=("tournament_name", "size"),
-                                                                       last=("event_date", "max")).reset_index()
-    if len(counts):
-        counts["last"] = pd.to_datetime(counts["last"]).dt.strftime("%b %Y")
-        st.dataframe(counts.rename(columns={"title_group": "Other titles", "titles": "Wins", "last": "Most recent"}),
-                     hide_index=True, width="stretch")
-    st.caption("Events won since 2021 in our data (PDC tours and majors).")
+
+    def line(r) -> str:
+        major = " · **Major**" if r.title_group == "Major" else f" · {r.title_group}"
+        return f"- {pd.Timestamp(r.event_date):%b %Y} · {r.tournament_name}{major}"
+
+    majors = int((t["title_group"] == "Major").sum())
+    st.caption(f"{len(t)} titles since 2021, {majors} of them majors.")
+    st.markdown("\n".join(line(r) for r in t.head(5).itertuples()))
+    if len(t) > 5:
+        with st.expander(f"All {len(t)} titles"):
+            st.markdown("\n".join(line(r) for r in t.itertuples()))
 
 
 def render() -> None:
@@ -82,35 +195,12 @@ def render() -> None:
     name = st.selectbox("Player", names, index=names.index(default) if default in names else 0, key="player",
                         placeholder="Type a name…")
     row = pi[pi["player_name"] == name].iloc[0]
-    info = data.players()
-    info = info[info["player_key"] == row["player_key"]]
+    info_all = data.players()
+    info = info_all[info_all["player_key"] == row["player_key"]]
     info = info.iloc[0] if len(info) else pd.Series(dtype=object)
 
-    photo, head = st.columns([1, 4])
-    with photo:
-        url = ui.photo_url(info.get("image_file"), 360)
-        if url:
-            st.image(url, width=170)
-            st.caption(ui.photo_credit(info["image_file"]))
-    with head:
-        nickname = info.get("nickname")
-        st.markdown(f"## {name}" + (f" · *“{nickname}”*" if isinstance(nickname, str) and nickname else ""))
-        c = st.columns(4)
-        oom = info.get("prize_money_rank")
-        c[0].metric("PDC Order of Merit", f"#{int(oom)}" if pd.notna(oom) else ui.oom_rank(row.get("oom_rank")),
-                    help="Current position in the official PDC ranking (2-year prize money)")
-        c[1].metric("Performance Index", ui.num(row["pi"], 2), help=ui.PI_HELP)
-        c[2].metric("PI rank", f"#{int(row['rank'])}")
-        c[3].metric("Effective Average", ui.num(row["effective_average"]), help=ui.EFFECTIVE_AVERAGE_HELP)
-        d = st.columns(4)
-        d[0].metric("3-Dart Average (L30)", ui.num(row["avg_l30"], 2), help="Points ÷ darts × 3 over the last 30 matches")
-        d[1].metric("Form (L10 vs L30)", f"{row['form']:+.2f}" if pd.notna(row["form"]) else "–",
-                    help="Average of the last 10 matches minus the average of the last 30")
-        d[2].metric("Opponent-Weighted Elo", ui.num(row["elo"], 0), help="Rating from results: wins over strong players count more")
-        stage = row.get("stage_delta")
-        d[3].metric("Stage Delta", f"{stage:+.2f}" if pd.notna(stage) else "–",
-                    help="Average on stage events (majors, European Tour, World Series, Premier League) minus on floor events, "
-                         "last 24 months. Information only: it narrowly misses the model's selection rules and does not change the PI.")
+    _header(name, row, info)
+    _breakdown(row)
 
     st.subheader("PI over time")
     hist = data.table("performance_index")
@@ -118,32 +208,6 @@ def render() -> None:
                     config={"displayModeBar": False})
     st.caption("Monthly snapshots, each computed only from matches before that date (with the current model's weights).")
 
-    st.subheader("Recent form")
-    recent = data.table("player_recent_matches")
-    recent = recent[recent["player_key"] == row["player_key"]].sort_values("recency").head(10)
-    if len(recent):
-        st.markdown(f"Last 5: {ui.form_chips(recent['result'].head(5).tolist())}")
-        show = recent.assign(match_date=pd.to_datetime(recent["match_date"]).dt.date)[
-            ["match_date", "tournament_name", "round", "opponent_name", "result", "score", "average", "checkout_pct"]]
-        st.dataframe(show, hide_index=True, width="stretch", column_config={
-            "match_date": "Date", "tournament_name": "Event", "round": "Round", "opponent_name": "Opponent",
-            "result": "", "score": "Score", "average": st.column_config.NumberColumn("Average", format="%.2f"),
-            "checkout_pct": st.column_config.NumberColumn("Checkout %", format="%.1f")})
-
-    st.subheader("Profile")
-    facts_col, bio_col = st.columns([2, 3])
-    with facts_col:
-        st.dataframe(_facts(row, info), hide_index=True, width="stretch")
-    with bio_col:
-        intro = info.get("intro")
-        if isinstance(intro, str) and intro:
-            for s in _sentences(intro, 4):
-                st.markdown(f"- {s}")
-            title = info.get("enwiki_title")
-            if isinstance(title, str):
-                st.caption(f"Source: [Wikipedia – {title}](https://en.wikipedia.org/wiki/{title.replace(' ', '_')}) (CC BY-SA)")
-        else:
-            st.caption("No Wikipedia background found for this player yet.")
-        st.caption("AI summary of form and interviews (PDC news): coming soon.")
-
+    _recent_form(row, info_all)
+    _profile(info)
     _titles(int(row["player_key"]))

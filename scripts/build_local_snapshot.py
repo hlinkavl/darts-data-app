@@ -30,7 +30,11 @@ OUT = REPO / "data" / "app_snapshot"
 TODAY = date.today()
 
 
+SPECIAL_LETTERS = str.maketrans({"ł": "l", "Ł": "L", "ø": "o", "Ø": "O", "đ": "d", "Đ": "D", "ß": "ss"})
+
+
 def norm(name: str) -> str:
+    name = name.translate(SPECIAL_LETTERS)
     return re.sub(r"[^a-z ]", "", unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()).strip()
 
 
@@ -91,8 +95,9 @@ def main() -> None:
         names.setdefault(norm(r.loser_name), r.loser_key)
     display = dict(zip(pm.player_key, pm.winner_name.where(pm.won, pm.loser_name)))
     display |= dict(zip(matches.winner_key, matches.winner_name)) | dict(zip(matches.loser_key, matches.loser_name))
-    hist = pd.DataFrame(jsonl("wikipedia/*/rankings_history.jsonl")).drop_duplicates(["as_of", "player_name"])
-    cur = pd.DataFrame(jsonl("wikipedia/*/rankings.jsonl", latest_only=True))
+    # Latest files only: earlier ones (parser 1) also hold the module's previous table, i.e. duplicate players.
+    hist = pd.DataFrame(jsonl("wikipedia/*/rankings_history.jsonl", latest_only=True)).drop_duplicates(["as_of", "player_name"])
+    cur = pd.DataFrame(jsonl("wikipedia/*/rankings.jsonl", latest_only=True)).drop_duplicates("player_name")
     for df in (hist, cur):
         df["player_key"] = df["player_name"].map(lambda n: names.get(norm(n)))
     rankings = (pd.concat([hist, cur]).dropna(subset=["player_key"]).rename(columns={"as_of": "snapshot_date"})

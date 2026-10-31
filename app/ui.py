@@ -12,6 +12,8 @@ TEXT_2 = "#c3c2b7"
 GRID = "#383835"
 # Categorical slots in fixed order: blue, orange, aqua
 SERIES = ["#3987e5", "#d95926", "#199e70"]
+# Diverging pair: positive (helps) blue, negative (hurts) red
+POSITIVE, NEGATIVE = "#3987e5", "#e66767"
 # Status palette, always shown with an icon and a label
 STATUS = {"green": ("🟢", "OK", "#0ca30c"), "yellow": ("🟡", "Attention", "#fab219"), "red": ("🔴", "Problem", "#d03b3b")}
 
@@ -105,7 +107,7 @@ EFFECTIVE_AVERAGE_HELP = (
 # ----------------------------------------------------------------------------------------------- photos
 
 def photo_url(image_file, width: int = 240) -> str | None:
-    """Wikimedia Commons thumbnail of the player's Wikidata image (free licence), or None."""
+    """Wikimedia Commons thumbnail of the player's photo (free licence), or None."""
     from urllib.parse import quote
 
     if not isinstance(image_file, str) or not image_file:
@@ -119,13 +121,22 @@ def photo_credit(image_file) -> str:
     return f"[Photo: Wikimedia Commons](https://commons.wikimedia.org/wiki/File:{quote(image_file.replace(' ', '_'))})"
 
 
-def avatar(image_file, size: int = 34) -> str:
-    """Round photo as inline HTML (empty if there is no photo)."""
+def initials(name) -> str:
+    parts = [p for p in str(name or "").replace("-", " ").split() if p[:1].isalpha()]
+    return ((parts[0][0] + parts[-1][0]) if len(parts) > 1 else (parts[0][:2] if parts else "?")).upper()
+
+
+def avatar(image_file, size: int = 34, name=None, ring: str | None = None) -> str:
+    """Round photo as inline HTML; players without a free photo get their initials (empty without a name)."""
     url = photo_url(image_file, 2 * size)
-    if not url:
+    border = f"border:2px solid {ring};" if ring else ""
+    base = (f"width:{size}px;height:{size}px;border-radius:50%;vertical-align:middle;margin:0 6px;flex:none;{border}")
+    if url:
+        return f"<img src='{url}' alt='' style='{base}object-fit:cover;object-position:top'>"
+    if not name:
         return ""
-    return (f"<img src='{url}' style='width:{size}px;height:{size}px;border-radius:50%;object-fit:cover;"
-            f"object-position:top;vertical-align:middle;margin:0 6px'>")
+    return (f"<span style='{base}display:inline-flex;align-items:center;justify-content:center;background:{GRID};"
+            f"color:{TEXT_2};font-weight:600;font-size:{max(10, int(size * 0.38))}px'>{initials(name)}</span>")
 
 
 def name_key(name) -> str:
@@ -135,4 +146,31 @@ def name_key(name) -> str:
 
     if not isinstance(name, str):
         return ""
-    return re.sub(r"[^a-z ]", "", unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()).strip()
+    special = str.maketrans({"ł": "l", "Ł": "L", "ø": "o", "Ø": "O", "đ": "d", "Đ": "D", "ß": "ss"})
+    key = unicodedata.normalize("NFKD", name.translate(special)).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"([aou])e", r"\1", " ".join(re.sub(r"[^a-z ]", "", key).split()))
+
+
+def surnames(names) -> dict[str, str]:
+    """Short names for a bracket: everything after the first name ('van Gerwen'); initial added when two players
+    share a surname ('R. Smith', 'M. Smith')."""
+    names = [n for n in dict.fromkeys(names) if isinstance(n, str) and n]
+    short = {n: (n.split(" ", 1)[1] if " " in n else n) for n in names}
+    counts = pd.Series(list(short.values())).value_counts()
+    return {n: (f"{n[0]}. {s}" if counts[s] > 1 else s) for n, s in short.items()}
+
+
+# ------------------------------------------------------------------------------------------ blocks
+
+WIN, LOSS = STATUS["green"][2], STATUS["red"][2]
+
+
+def info_block(rows: list[tuple[str, str]], note: str | None = None) -> str:
+    """Key facts as a neat grid of label / value pairs (HTML)."""
+    cells = "".join(f"<div><div style='color:{TEXT_2};font-size:0.78em;text-transform:uppercase;letter-spacing:.04em'>"
+                    f"{label}</div><div style='color:{TEXT};font-size:1.05em;margin-top:2px'>{value}</div></div>"
+                    for label, value in rows)
+    foot = f"<div style='color:{TEXT_2};font-size:0.85em;margin-top:12px'>{note}</div>" if note else ""
+    return (f"<div style='border:1px solid {GRID};border-radius:10px;padding:14px 18px;margin:4px 0 14px'>"
+            f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px 24px'>{cells}</div>"
+            f"{foot}</div>")

@@ -142,8 +142,11 @@ print("Orakel data until", ORAKEL_LAST_DATE)
 
 # COMMAND ----------
 
+SPECIAL_LETTERS = str.maketrans({"ł": "l", "Ł": "L", "ø": "o", "Ø": "O", "đ": "d", "Đ": "D", "ß": "ss"})
+
 def norm(name: str) -> str:
-    ascii_name = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode()
+    """Letters Unicode does not decompose (ł, ø, ß) are mapped first, so Białecki = Bialecki."""
+    ascii_name = unicodedata.normalize("NFKD", (name or "").translate(SPECIAL_LETTERS)).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z ]", "", ascii_name.lower()).strip()
 
 def new_key(normalized: str) -> int:
@@ -310,7 +313,10 @@ FROM {dedup("orakel_events", "event_key")}
 
 # COMMAND ----------
 
-ranking_sources = [f"SELECT to_date(as_of) AS snapshot_date, rank, player_name, prize_money, _run_date FROM darts_bronze.{t}"
+# Rows from parser 1 also contain the module's previous table (duplicates); parser 2 rows win.
+ranking_sources = [f"SELECT to_date(as_of) AS snapshot_date, rank, player_name, prize_money, _run_date, "
+                   f"{'coalesce(parser, 1)' if 'parser' in spark.table(f'darts_bronze.{t}').columns else '1'} AS parser "
+                   f"FROM darts_bronze.{t}"
                    for t in ("wiki_rankings_history", "wiki_rankings") if has(t)]
 if ranking_sources:
     spark.sql(f"""
@@ -318,7 +324,7 @@ if ranking_sources:
     SELECT r.snapshot_date, r.rank, x.player_key, r.player_name, r.prize_money AS prize_money_2y
     FROM ({' UNION ALL '.join(ranking_sources)}) r
     JOIN xw x ON x.source = 'wikipedia' AND x.source_id = r.player_name
-    QUALIFY row_number() OVER (PARTITION BY r.snapshot_date, r.player_name ORDER BY r._run_date DESC) = 1
+    QUALIFY row_number() OVER (PARTITION BY r.snapshot_date, r.player_name ORDER BY r.parser DESC, r._run_date DESC) = 1
     """)
 
 orakel_profile = f"""

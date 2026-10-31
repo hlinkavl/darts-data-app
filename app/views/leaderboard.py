@@ -21,7 +21,9 @@ def render() -> None:
     prev = hist[pd.to_datetime(hist["as_of_date"]) == snapshots[-2]] if len(snapshots) > 1 else pd.DataFrame(columns=["player_key", "pi"])
     board = pi.merge(prev[["player_key", "pi"]].rename(columns={"pi": "pi_prev"}), on="player_key", how="left")
     board["change"] = board["pi"] - board["pi_prev"]
-    board["Order of Merit"] = board["oom_rank"].map(ui.oom_rank)
+    official = data.players()[["player_key", "prize_money_rank"]].drop_duplicates("player_key")
+    board = board.merge(official, on="player_key", how="left")
+    board["Order of Merit"] = [f"#{int(r)}" if pd.notna(r) else ui.oom_rank(v) for r, v in zip(board["prize_money_rank"], board["oom_rank"])]
 
     names = pi["player_name"].tolist()
     find, go_to = st.columns([4, 1], vertical_alignment="bottom")
@@ -41,7 +43,14 @@ def render() -> None:
             "effective_average": st.column_config.NumberColumn("Effective Average", format="%.1f", help=ui.EFFECTIVE_AVERAGE_HELP),
             "avg_l30": st.column_config.NumberColumn("3-Dart Avg (L30)", format="%.2f"),
             "form": st.column_config.NumberColumn("Form", format="%+.2f"),
-            "elo": st.column_config.NumberColumn("Elo", format="%.0f")})
+            "elo": st.column_config.NumberColumn("Elo", format="%.0f"),
+            "Order of Merit": st.column_config.TextColumn("Order of Merit", help="Current official PDC ranking")})
+    top = pi.sort_values("rank")["pi"].tolist()
+    if len(top) >= 20:
+        st.caption(f"Sorted by PI. A gap in PI is a head-to-head chance: #1 vs #2 ({top[0]:.2f} vs {top[1]:.2f}) is "
+                   f"{ui.pct(ui.head_to_head(top[0], top[1]))} in a typical match, #1 vs #20 ({top[19]:.2f}) "
+                   f"{ui.pct(ui.head_to_head(top[0], top[19]))}. The scale stretches towards 0 and 10, so the same gap "
+                   "means more at the top than around 5. Try any pair below.")
 
     st.subheader("Head to head")
     c1, c2, c3 = st.columns([3, 3, 3])
