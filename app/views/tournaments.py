@@ -161,7 +161,10 @@ def _momentum(as_of) -> pd.DataFrame:
 
 
 def _short_round(name: str) -> str:
-    return {"Quarter-finals": "QF", "Semi-finals": "SF"}.get(name, name)
+    """'Quarter-finals' -> 'QF', 'First round' -> '1st round'."""
+    ordinals = {"First": "1st", "Second": "2nd", "Third": "3rd", "Fourth": "4th", "Fifth": "5th"}
+    first, _, rest = name.partition(" ")
+    return {"Quarter-finals": "QF", "Semi-finals": "SF"}.get(name, f"{ordinals[first]} {rest}" if first in ordinals else name)
 
 
 def _result(name: str, draw: pd.DataFrame, mode: str, seed) -> str:
@@ -198,7 +201,7 @@ def _players_to_watch(preds: pd.DataFrame, draw: pd.DataFrame, mode: str, photos
     for r in rising.itertuples():
         result = _result(r.player_name, draw, mode, r.seed)
         st.markdown(f"<div style='display:flex;align-items:center;margin:8px 0'>{_avatar(photos, r.player_name, 40)}"
-                    f"<div><b>{escape(r.player_name)}</b> <span style='color:{ui.TEXT_2};font-size:0.9em'>{result}</span><br>"
+                    f"<div><b>{escape(r.player_name)}</b>{f' <span style=\'color:{ui.TEXT_2}\'>({result})</span>' if result else ''}<br>"
                     f"<span style='color:{ui.WIN if r.pi_change >= 0 else ui.LOSS};font-weight:600'>"
                     f"{'▲' if r.pi_change >= 0 else '▼'} {r.pi_change:+.2f} PI</span> "
                     f"<span style='color:{ui.TEXT_2}'>in {RISING_MONTHS} months · form {r.form:+.2f}</span></div></div>",
@@ -402,8 +405,11 @@ def _season(cal: pd.DataFrame) -> None:
     rows["Predictions"] = rows["has_draw"].map({True: "✓ draw", False: ""})
     st.dataframe(rows[["tournament_name", "Dates", "Status", "Winner", "Predictions"]].rename(columns={"tournament_name": "Major"}),
                  hide_index=True, width="stretch",
-                 column_config={"Winner": st.column_config.TextColumn("Winner", width="large"),
-                                "Predictions": st.column_config.TextColumn("Predictions", width="small",
+                 column_config={"Major": st.column_config.TextColumn("Major", width=270),
+                                "Dates": st.column_config.TextColumn("Dates", width=150),
+                                "Status": st.column_config.TextColumn("Status", width=125),
+                                "Winner": st.column_config.TextColumn("Winner", width=270),
+                                "Predictions": st.column_config.TextColumn("Predictions", width=95,
                                                                            help="✓ draw = title chances and bracket available")})
 
 

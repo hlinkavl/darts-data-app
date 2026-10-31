@@ -98,10 +98,10 @@ def predictor_name(code: str) -> str:
 PI_HELP = ("Performance Index: 10 × the chance to beat an average top-32 player in a typical match (first to 6 legs). "
            "5 = a typical top-32 player, 7 = wins 70 % of such matches.")
 EFFECTIVE_AVERAGE_HELP = (
-    "The player's whole strength translated into 3-dart-average points. It starts from his real average over the "
-    "last 30 matches and adds (or takes away) what the model sees on top of it: the quality of the opponents he "
-    "beats (Elo), his current form and his Order of Merit ranking, each converted into average points. "
-    "Read it like a normal average: 102 beats 97.")
+    "The player's whole strength as one 3-dart average. Start from an average top-32 player (the mean of the 32 "
+    "strongest players): their 3-dart average is the base. Compare the player with them in every input of the model "
+    "(3-dart average, form, Elo, Order of Merit) and turn each gap into average points. Base + gaps = Effective "
+    "Average, and the PI follows from it. Read it like a normal average: 102 beats 97.")
 
 
 # ----------------------------------------------------------------------------------------------- photos
