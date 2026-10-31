@@ -119,11 +119,15 @@ def _breakdown(row: pd.Series) -> None:
                  f"<div style='text-align:right;color:{ui.WIN if pts >= 0 else ui.LOSS};font-weight:700'>{gap}</div></div>")
     st.markdown(f"<div style='max-width:760px'>{html}</div>", unsafe_allow_html=True)
     if base is not None and pd.notna(base):
-        st.caption(f"How to read it: the base is an average top-32 player (the mean of the 32 strongest players), whose "
-                   f"3-dart average is {ui.num(base)}. Each row compares the player with them; the gap is the difference "
-                   f"in 3-dart-average points (▲ better, ▼ worse). Base + all gaps = Effective Average "
-                   f"{ui.num(row['effective_average'])}, which gives the PI {ui.num(row['pi'], 2)}. "
-                   "How a gap in form, Elo or ranking is converted into points: see Methodology.")
+        with st.expander("How to read the breakdown"):
+            st.markdown(
+                f"1. **Base:** an average top-32 player (the mean of the 32 strongest players), with a 3-dart average of "
+                f"**{ui.num(base)}**.\n"
+                "2. **Gap:** each row compares the player with them, as a difference in 3-dart-average points "
+                "(▲ better, ▼ worse).\n"
+                f"3. **Result:** base + all gaps = Effective Average **{ui.num(row['effective_average'])}**, which gives "
+                f"the PI **{ui.num(row['pi'], 2)}**.\n\n"
+                "How a gap in form, Elo or ranking is converted into points: see Methodology.")
     stage = row.get("stage_delta")
     if stage is not None and pd.notna(stage):
         st.caption(f"Stage Delta {stage:+.2f} · information only, not part of the PI: average on stage events minus "
