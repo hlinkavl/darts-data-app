@@ -9,6 +9,7 @@ import streamlit as st
 import data
 import ui
 
+OPEN_ICON = "↗"
 JUMP_CONTEXT = 4  # rows shown above a searched player
 HIGHLIGHT = "background-color: rgba(57, 135, 229, 0.30); font-weight: 700"
 TABLE_FORMATS = {"oom": "{:.0f}", "rank": "{:.0f}", "pi": "{:.2f}", "change": "{:+.2f}", "effective_average": "{:.1f}",
@@ -64,7 +65,8 @@ def render() -> None:
     pick = st.selectbox("Find a player", sorted(names), index=None, placeholder="Start typing a name…", key="lb_find")
     first, second = ORDERS[order]
     board = board.sort_values([first, second], na_position="last").reset_index(drop=True)
-    columns = [first, "player_name", second, "pi", "change", "effective_average", "avg_l30", "form", "elo"]
+    board["open"] = OPEN_ICON
+    columns = ["open", first, "player_name", second, "pi", "change", "effective_average", "avg_l30", "form", "elo"]
     shown = board
     if pick:
         # A table cannot be scrolled from code, so it starts a few rows above the player instead.
@@ -77,6 +79,7 @@ def render() -> None:
         styled,
         hide_index=True, width="stretch", height=520,
         column_config={
+            "open": st.column_config.TextColumn("", width=34, help="Open the player's profile"),
             "oom": st.column_config.NumberColumn("PDC OoM #", help="Current official PDC Order of Merit (2-year prize money)"),
             "rank": st.column_config.NumberColumn("PI #", help="Position by Performance Index"),
             "player_name": "Player",
@@ -86,11 +89,11 @@ def render() -> None:
             "avg_l30": st.column_config.NumberColumn("3-Dart Avg (L30)", format="%.2f"),
             "form": st.column_config.NumberColumn("Form", format="%+.2f"),
             "elo": st.column_config.NumberColumn("Elo", format="%.0f")},
-        on_select="rerun", selection_mode="single-row", key="lb_table")
-    rows = picked.selection.rows if picked else []
-    if rows:
-        _open_profile(shown["player_name"].iloc[rows[0]])
-    st.caption("Click a player to open the profile.")
+        on_select="rerun", selection_mode="single-cell", key="lb_table")
+    cells = picked.selection.cells if picked else []
+    if cells and cells[0][1] in ("open", "player_name"):
+        _open_profile(shown["player_name"].iloc[cells[0][0]])
+    st.caption(f"Click {OPEN_ICON} or a name to open the player's profile.")
     top = pi.sort_values("rank")["pi"].tolist()
     if len(top) >= 20:
         st.caption(f"A gap in PI is a head-to-head chance: #1 vs #2 ({top[0]:.2f} vs {top[1]:.2f}) is "
