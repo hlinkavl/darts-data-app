@@ -25,6 +25,7 @@ INPUTS = {
     "elo": ("Opponent-Weighted Elo", lambda v: f"{v:.0f}", "Rating from results: wins over strong players count more"),
     "oom_rank": ("PDC Order of Merit", lambda v: ui.oom_rank(v), "Official ranking (2-year prize money)"),
 }
+SHORT = {"avg_l30": "Average", "form": "Form", "elo": "Elo", "oom_rank": "Order of Merit"}
 LABEL = f"color:{ui.TEXT_2};font-size:0.78em;text-transform:uppercase;letter-spacing:.04em"
 
 
@@ -84,9 +85,8 @@ def _breakdown(row: pd.Series) -> None:
     coef = data.versioned("pi_coefficients").set_index("predictor")
     per_point = coef["beta_per_unit"].get("avg_l30")
     st.subheader("PI breakdown")
-    st.caption("Every input of the model is compared with an average top-32 player and turned into 3-dart-average "
-               "points: how much it adds to (▲) or takes away from (▼) the player's strength. The base plus all the "
-               "effects is the Effective Average, which sets the PI.")
+    st.caption("The player against an average top-32 player in each input of the model. Green = better, red = worse; "
+               "the small number is what the input adds to the player's 3-dart average.")
     inputs = []
     for p in [p for p in INPUTS if p in coef.index]:
         value, ref, contrib = row.get(p), row.get(f"ref_{p}"), row.get(f"contrib_{p}")
@@ -115,15 +115,30 @@ def _breakdown(row: pd.Series) -> None:
     st.markdown(f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px'>{''.join(tiles)}</div>",
                 unsafe_allow_html=True)
     if inputs and base is not None and pd.notna(base):
-        terms = " ".join(f"{pts:+.1f} {INPUTS[p][0].split(' (')[0]}" for p, _, _, pts in inputs)
-        st.markdown(f"<div style='border:1px solid {ui.GRID};border-radius:10px;padding:10px 14px;margin-top:12px;"
-                    f"color:{ui.TEXT_2};font-size:0.9em'>{ui.num(base)} (average top-32 player) {escape(terms)} = "
-                    f"<b style='color:{ui.TEXT}'>{ui.num(row['effective_average'])} Effective Average</b> → PI "
-                    f"{ui.num(row['pi'], 2)}</div>", unsafe_allow_html=True)
+        st.markdown(_sum_strip(base, inputs, row), unsafe_allow_html=True)
     stage = row.get("stage_delta")
     if stage is not None and pd.notna(stage):
-        st.caption(f"Stage Delta {stage:+.2f} (information only, not part of the PI): average on stage events (majors, "
-                   "European Tour, World Series, Premier League) minus on floor events, last 24 months.")
+        st.caption(f"Stage Delta {stage:+.2f} · information only, not part of the PI: average on stage events minus "
+                   "floor events over the last 24 months.")
+
+
+def _sum_strip(base: float, inputs: list, row: pd.Series) -> str:
+    """How the Effective Average is built: base + each effect = Effective Average → PI, as a row of number chips."""
+    def chip(value, label, color=ui.TEXT, strong=False):
+        bg = "background:#222220;border:1px solid " + ui.GRID + ";" if strong else ""
+        return (f"<div style='text-align:center;padding:6px 10px;border-radius:8px;{bg}'>"
+                f"<div style='font-size:{'1.35em' if strong else '1.15em'};font-weight:700;color:{color}'>{value}</div>"
+                f"<div style='color:{ui.TEXT_2};font-size:0.75em'>{label}</div></div>")
+
+    op = f"<div style='color:{ui.TEXT_2};font-size:1.2em'>{{}}</div>"
+    parts = [chip(ui.num(base), "top-32 base")]
+    for p, _, _, pts in inputs:
+        parts += [op.format("+"), chip(f"{pts:+.1f}", SHORT[p], ui.WIN if pts >= 0 else ui.LOSS)]
+    parts += [op.format("="), chip(ui.num(row["effective_average"]), "Effective Average", strong=True),
+              op.format("→"), chip(ui.num(row["pi"], 2), "Performance Index", strong=True)]
+    return (f"<div style='border:1px solid {ui.GRID};border-radius:10px;padding:10px 14px;margin-top:14px'>"
+            f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-bottom:6px'>How it adds up (3-dart-average points)</div>"
+            f"<div style='display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px'>{''.join(parts)}</div></div>")
 
 
 def _recent_form(row: pd.Series, info_all: pd.DataFrame) -> None:
