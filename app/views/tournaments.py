@@ -12,7 +12,7 @@ import ui
 BRACKET_ROUNDS = 4  # last 16 to the final
 BRACKET_SLOT_PX = 84  # height per first-column match: a two-row box plus spacing, so boxes never get squeezed
 RISING_MONTHS = 3  # players to watch: PI change over this window
-MODE_ORDER = {"live": 0, "pre-tournament": 1, "backtest": 2}
+NO_DRAW = "no draw"  # a major in the calendar whose draw is not published yet
 
 
 def _photos() -> dict[str, str]:
@@ -53,22 +53,30 @@ def _short_title(title: str) -> str:
 # --------------------------------------------------------------------------------------- tournament picker
 
 def _events(preds: pd.DataFrame, cal: pd.DataFrame) -> list[dict]:
-    """One entry per (tournament, mode) with a label: final date and champion for finished events."""
+    """Every major to pick from: ✅ finished (champion, month of the final), 🔴 in progress, 🗓️ upcoming. Upcoming
+    majors without a published draw are listed too (mode "no draw") and only show a note."""
     cal = cal.drop_duplicates("wiki_title").set_index("wiki_title") if len(cal) else pd.DataFrame()
+    pairs = list(preds[["wiki_title", "mode"]].drop_duplicates().itertuples(index=False, name=None))
+    with_draw = {t for t, _ in pairs}
+    if len(cal):
+        pending = cal[cal["status"].isin(["upcoming", "in progress", "date unknown"]) & ~cal.index.isin(with_draw)]
+        pairs += [(t, NO_DRAW) for t in pending.index if isinstance(t, str)]
     out = []
-    for title, mode in preds[["wiki_title", "mode"]].drop_duplicates().itertuples(index=False, name=None):
+    for title, mode in pairs:
         row = cal.loc[title] if title in cal.index else None
         start, end = (row["start_date"], row["end_date"]) if row is not None else (None, None)
+        status = row["status"] if row is not None else None
         if mode == "backtest":
             winner = row["winner_name"] if row is not None and isinstance(row["winner_name"], str) else None
-            label = f"{_short_title(title)}" + (f" ({winner})" if winner else "") + f" · {_date(end, '%b %Y')}"
-        elif mode == "live":
-            label = f"🔴 {_short_title(title)} · in progress"
+            label = f"✅ {_short_title(title)}" + (f" ({winner})" if winner else "") + f" · {_date(end, '%b %Y')}"
+            sort = (2, -pd.Timestamp(end).value if end is not None and pd.notna(end) else 0)
+        elif mode == "live" or status == "in progress":
+            label, sort = f"🔴 {_short_title(title)} · in progress", (0, 0)
         else:
-            label = f"🗓️ {_short_title(title)} · starts {_date(start)}"
-        newest_first = -pd.Timestamp(end).value if end is not None and pd.notna(end) else 0
-        out.append({"title": title, "mode": mode, "label": label, "start": start, "end": end,
-                    "sort": (MODE_ORDER.get(mode, 3), newest_first)})
+            when = f"starts {_date(start)}" if start is not None and pd.notna(start) else "dates to be confirmed"
+            label = f"🗓️ {_short_title(title)} · {when}"
+            sort = (1, pd.Timestamp(start).value if start is not None and pd.notna(start) else float("inf"))
+        out.append({"title": title, "mode": mode, "label": label, "start": start, "end": end, "sort": sort})
     return sorted(out, key=lambda e: e["sort"])
 
 
@@ -408,12 +416,23 @@ def render() -> None:
 
     tab_pred, tab_season, tab_up = st.tabs(["Predictions", "Season calendar", "Upcoming matches"])
     with tab_pred:
-        if preds.empty:
-            st.info("No draw available yet.")
+        events = _events(preds if len(preds) else pd.DataFrame(columns=["wiki_title", "mode"]), cal)
+        ev = None
+        if not events:
+            st.info("No majors in the calendar yet.")
         else:
-            events = _events(preds, cal)
-            i = st.selectbox("Tournament", range(len(events)), key="event", format_func=lambda k: events[k]["label"])
+            first_with_data = next((k for k, e in enumerate(events) if e["mode"] != NO_DRAW), 0)
+            i = st.selectbox("Tournament", range(len(events)), index=first_with_data, key="event",
+                             format_func=lambda k: events[k]["label"])
             ev = events[i]
+            if ev["mode"] == NO_DRAW:
+                when = (f"It starts on {_date(ev['start'])}. " if ev["start"] is not None and pd.notna(ev["start"])
+                        else "The dates are not confirmed yet. ")
+                st.info(f"**{_short_title(ev['title'])}**: the draw is not published yet. {when}Title chances, the "
+                        "bracket and match predictions appear here automatically once it is, usually a few days "
+                        "before the first match.")
+                ev = None
+        if ev is not None:
             pr = preds[(preds["wiki_title"] == ev["title"]) & (preds["mode"] == ev["mode"])]
             dm = data.table("tournament_draw_matches")
             draw = dm[(dm["wiki_title"] == ev["title"]) & (dm["mode"] == ev["mode"])]
