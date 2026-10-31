@@ -1,4 +1,6 @@
+streamlit==1.66.1
 databricks-sdk
 databricks-sql-connector
 pandas
 plotly
+requests

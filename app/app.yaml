@@ -2,3 +2,10 @@ command:
   - streamlit
   - run
   - app.py
+env:
+  - name: DARTS_DATA
+    value: databricks
+  - name: DARTS_CATALOG
+    value: workspace
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
