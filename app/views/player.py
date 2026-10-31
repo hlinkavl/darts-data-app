@@ -70,38 +70,69 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
             unsafe_allow_html=True)
 
 
+def _effect_bar(points: float, scale: float) -> str:
+    """Small diverging bar: right (blue) when the input adds to the average, left (red) when it takes away."""
+    width = min(abs(points) / scale, 1) * 50 if scale else 0
+    left = 50 if points >= 0 else 50 - width
+    color = ui.POSITIVE if points >= 0 else ui.NEGATIVE
+    return (f"<div style='position:relative;height:8px;background:{ui.GRID};border-radius:4px;margin-top:8px'>"
+            f"<div style='position:absolute;left:{left:.1f}%;width:{width:.1f}%;height:8px;background:{color};"
+            f"border-radius:4px'></div><div style='position:absolute;left:50%;top:-3px;width:2px;height:14px;"
+            f"background:{ui.TEXT_2}'></div></div>")
+
+
 def _breakdown(row: pd.Series) -> None:
     """Each PI input next to the average top-32 player, converted into 3-dart-average points; they add up to the
     Effective Average, which the PI scale turns into a 0-10 score."""
     coef = data.versioned("pi_coefficients").set_index("predictor")
     per_point = coef["beta_per_unit"].get("avg_l30")
     st.subheader("PI breakdown")
-    st.caption("How the model gets to the PI: every input is compared with an average top-32 player and converted into "
-               "3-dart-average points. Together they give the Effective Average.")
-    tiles = []
+    st.caption("Every input of the model is compared with an average top-32 player and turned into 3-dart-average "
+               "points: how much it adds to (▲) or takes away from (▼) the player's strength. The base plus all the "
+               "effects is the Effective Average, which sets the PI.")
+    inputs = []
     for p in [p for p in INPUTS if p in coef.index]:
-        label, fmt, help_text = INPUTS[p]
         value, ref, contrib = row.get(p), row.get(f"ref_{p}"), row.get(f"contrib_{p}")
-        if value is None or pd.isna(value):
-            continue
-        points = contrib / per_point if per_point and pd.notna(contrib) else None
+        if value is not None and pd.notna(value) and per_point and pd.notna(contrib):
+            inputs.append((p, value, ref, contrib / per_point))
+    scale = max([abs(pts) for *_, pts in inputs] + [1.0])
+
+    def side(caption, value, strong):
+        return (f"<div><div style='color:{ui.TEXT_2};font-size:0.75em'>{caption}</div>"
+                f"<div style='font-size:{'1.55em' if strong else '1.15em'};font-weight:{700 if strong else 500};"
+                f"color:{ui.TEXT if strong else ui.TEXT_2}'>{value}</div></div>")
+
+    tiles = []
+    for p, value, ref, pts in inputs:
+        label, fmt, help_text = INPUTS[p]
         ref_txt = (ui.oom_rank(ref) if p == "oom_rank" else fmt(ref)) if ref is not None and pd.notna(ref) else "–"
-        color = ui.POSITIVE if (points or 0) >= 0 else ui.NEGATIVE
-        effect = f"{points:+.1f} avg points" if points is not None else "–"
+        arrow = "▲" if pts >= 0 else "▼"
         tiles.append(
-            f"<div title='{escape(help_text)}' style='border:1px solid {ui.GRID};border-top:3px solid {color};"
-            f"border-radius:10px;padding:12px 14px'><div style='{LABEL}'>{label}</div>"
-            f"<div style='font-size:1.6em;font-weight:700;color:{ui.TEXT};margin-top:2px'>{fmt(value)}</div>"
-            f"<div style='color:{ui.TEXT_2};font-size:0.85em'>top-32 average {ref_txt}</div>"
-            f"<div style='color:{ui.TEXT};font-weight:600;margin-top:6px'>{effect}</div></div>")
+            f"<div title='{escape(help_text)}' style='border:1px solid {ui.GRID};border-radius:10px;padding:12px 14px'>"
+            f"<div style='{LABEL}'>{label}</div>"
+            f"<div style='display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px'>"
+            f"{side('Player', fmt(value), True)}<div style='color:{ui.TEXT_2};padding-bottom:4px'>vs</div>"
+            f"<div style='text-align:right'>{side('Top-32 average', ref_txt, False)}</div></div>"
+            f"<div style='border-top:1px solid {ui.GRID};margin-top:10px;padding-top:8px'>"
+            f"<div style='color:{ui.TEXT_2};font-size:0.75em'>Effect on the Effective Average</div>"
+            f"<div style='font-size:1.25em;font-weight:700;color:{ui.TEXT}'>{arrow} {pts:+.1f} <span style='font-size:0.7em;"
+            f"font-weight:400;color:{ui.TEXT_2}'>avg points</span></div>{_effect_bar(pts, scale)}</div></div>")
+    base, total = row.get("ref_avg_l30"), sum(pts for *_, pts in inputs)
     tiles.append(
-        f"<div title='{escape(ui.EFFECTIVE_AVERAGE_HELP)}' style='border:1px solid {ui.GRID};border-radius:10px;padding:12px 14px;"
-        f"background:#222220'><div style='{LABEL}'>= Effective Average ⓘ</div>"
-        f"<div style='font-size:1.6em;font-weight:700;color:{ui.TEXT};margin-top:2px'>{ui.num(row['effective_average'])}</div>"
-        f"<div style='color:{ui.TEXT_2};font-size:0.85em'>top-32 average {ui.num(row.get('ref_avg_l30'))}</div>"
-        f"<div style='color:{ui.TEXT};font-weight:600;margin-top:6px'>→ PI {ui.num(row['pi'], 2)}</div></div>")
-    st.markdown(f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px'>{''.join(tiles)}</div>",
+        f"<div title='{escape(ui.EFFECTIVE_AVERAGE_HELP)}' style='border:1px solid {ui.GRID};border-radius:10px;"
+        f"padding:12px 14px;background:#222220'><div style='{LABEL}'>Effective Average ⓘ</div>"
+        f"<div style='font-size:1.9em;font-weight:700;color:{ui.TEXT};margin-top:6px'>{ui.num(row['effective_average'])}</div>"
+        f"<div style='color:{ui.TEXT_2};font-size:0.85em'>{ui.num(base)} top-32 base {total:+.1f} from the inputs</div>"
+        f"<div style='border-top:1px solid {ui.GRID};margin-top:10px;padding-top:8px'>"
+        f"<div style='color:{ui.TEXT_2};font-size:0.75em'>Performance Index</div>"
+        f"<div style='font-size:1.25em;font-weight:700;color:{ui.TEXT}'>{ui.num(row['pi'], 2)} "
+        f"<span style='font-size:0.7em;font-weight:400;color:{ui.TEXT_2}'>#{int(row['rank'])} by PI</span></div></div></div>")
+    st.markdown(f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px'>{''.join(tiles)}</div>",
                 unsafe_allow_html=True)
+    if inputs and base is not None and pd.notna(base):
+        terms = " ".join(f"{pts:+.1f} {INPUTS[p][0].split(' (')[0]}" for p, _, _, pts in inputs)
+        st.caption(f"{ui.num(base)} (average top-32 player) {terms} = **{ui.num(row['effective_average'])} Effective Average** "
+                   f"→ PI {ui.num(row['pi'], 2)}")
     stage = row.get("stage_delta")
     if stage is not None and pd.notna(stage):
         st.caption(f"Stage Delta {stage:+.2f} (information only, not part of the PI): average on stage events (majors, "
