@@ -26,6 +26,7 @@ INPUTS = {
     "elo": ("Opponent-Weighted Elo", lambda v: f"{v:.0f}", "Rating from results: wins over strong players count more"),
     "oom_rank": ("PDC Order of Merit", lambda v: ui.oom_rank(v), "Official ranking (2-year prize money)"),
 }
+TOTAL_COLOR = "#8cb8ee"  # soft blue for the Effective Average total
 LABEL = f"color:{ui.TEXT_2};font-size:0.78em;text-transform:uppercase;letter-spacing:.04em"
 
 
@@ -117,10 +118,11 @@ def _breakdown(row: pd.Series) -> None:
         html += (f"<div style='{grid};{line}'>"
                  f"<div title='{escape(help_text)}' style='color:{ui.TEXT};font-weight:{700 if total else 400};"
                  f"padding-left:{8 if total else 0}px'>{'= ' if total else ''}{label}</div>"
-                 f"<div style='text-align:right;color:{ui.TEXT};font-weight:700;font-size:{1.45 if total else 1.1}em'>{value}</div>"
+                 f"<div style='text-align:right;color:{TOTAL_COLOR if total else ui.TEXT};font-weight:700;font-size:1.1em'>"
+                 f"{value}</div>"
                  f"<div style='text-align:right;color:{ui.TEXT};font-weight:700'>{ref_txt}</div>"
                  f"<div style='text-align:right;color:{ui.WIN if pts >= 0 else ui.LOSS};font-weight:700'>{gap}</div></div>")
-    st.markdown(f"<div style='max-width:760px'>{html}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='max-width:760px;padding-bottom:20px'>{html}</div>", unsafe_allow_html=True)
     if base is not None and pd.notna(base):
         with st.expander("How to read the breakdown"):
             steps = [f"<b>Base</b>: an average top-32 player (the mean of the 32 strongest players), with a 3-dart "
