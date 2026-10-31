@@ -9,6 +9,10 @@ import streamlit as st
 import data
 import ui
 
+JUMP_CONTEXT = 4  # rows shown above a searched player
+HIGHLIGHT = "background-color: rgba(57, 135, 229, 0.30); font-weight: 700"
+TABLE_FORMATS = {"oom": "{:.0f}", "rank": "{:.0f}", "pi": "{:.2f}", "change": "{:+.2f}", "effective_average": "{:.1f}",
+                 "avg_l30": "{:.2f}", "form": "{:+.2f}", "elo": "{:.0f}"}
 # Ranking choice -> (first column = sort key, second column shown next to the name)
 ORDERS = {"PDC Order of Merit": ("oom", "rank"), "Performance Index": ("rank", "oom")}
 FORMATS = {"Typical match (first to 6 legs)": (6, "legs")} | {f"First to {n} legs": (n, "legs") for n in (3, 4, 5, 7, 8, 10, 11, 16, 18)} \
@@ -57,18 +61,24 @@ def render() -> None:
 
     names = pi["player_name"].tolist()
     order = st.segmented_control("Rank by", list(ORDERS), default=next(iter(ORDERS)), key="lb_order") or next(iter(ORDERS))
-    pick = st.selectbox("Find a player", sorted(names), index=None, placeholder="Start typing a name to open the profile…",
-                        key="lb_find")
-    if pick:
-        _open_profile(pick)
+    pick = st.selectbox("Find a player", sorted(names), index=None, placeholder="Start typing a name…", key="lb_find")
     first, second = ORDERS[order]
     board = board.sort_values([first, second], na_position="last").reset_index(drop=True)
+    columns = [first, "player_name", second, "pi", "change", "effective_average", "avg_l30", "form", "elo"]
+    shown = board
+    if pick:
+        # A table cannot be scrolled from code, so it starts a few rows above the player instead.
+        pos = int(board.index[board["player_name"] == pick][0])
+        shown = board.iloc[max(0, pos - JUMP_CONTEXT):].reset_index(drop=True)
+        st.caption(f"Jumped to {pick}. Clear the search to see the table from the top.")
+    styled = shown[columns].style.apply(
+        lambda r: [HIGHLIGHT if r["player_name"] == pick else "" for _ in r], axis=1).format(TABLE_FORMATS, na_rep="–")
     picked = st.dataframe(
-        board[[first, "player_name", second, "pi", "change", "effective_average", "avg_l30", "form", "elo"]],
+        styled,
         hide_index=True, width="stretch", height=520,
         column_config={
-            "oom": st.column_config.NumberColumn("PDC OoM #", format="%d", help="Current official PDC Order of Merit (2-year prize money)"),
-            "rank": st.column_config.NumberColumn("PI #", format="%d", help="Position by Performance Index"),
+            "oom": st.column_config.NumberColumn("PDC OoM #", help="Current official PDC Order of Merit (2-year prize money)"),
+            "rank": st.column_config.NumberColumn("PI #", help="Position by Performance Index"),
             "player_name": "Player",
             "change": st.column_config.NumberColumn("PI vs last month", format="%+.2f"),
             "pi": st.column_config.ProgressColumn("PI", min_value=0.0, max_value=10.0, format="%.2f", help=ui.PI_HELP),
@@ -79,7 +89,7 @@ def render() -> None:
         on_select="rerun", selection_mode="single-row", key="lb_table")
     rows = picked.selection.rows if picked else []
     if rows:
-        _open_profile(board["player_name"].iloc[rows[0]])
+        _open_profile(shown["player_name"].iloc[rows[0]])
     st.caption("Click a player to open the profile.")
     top = pi.sort_values("rank")["pi"].tolist()
     if len(top) >= 20:
