@@ -23,23 +23,27 @@ def render() -> None:
     board["change"] = board["pi"] - board["pi_prev"]
     board["Order of Merit"] = board["oom_rank"].map(ui.oom_rank)
 
-    query = st.text_input("Search player", placeholder="e.g. Littler")
-    if query:
-        board = board[board["player_name"].str.contains(query, case=False, na=False)]
+    names = pi["player_name"].tolist()
+    find, go_to = st.columns([4, 1], vertical_alignment="bottom")
+    pick = find.selectbox("Find a player", sorted(names), index=None, placeholder="Start typing a name…", key="lb_find")
+    if pick:
+        board = board[board["player_name"] == pick]
+        if go_to.button("Open profile →", width="stretch"):
+            st.session_state["player"] = pick
+            st.switch_page(st.session_state["pages"]["player"])
     st.dataframe(
         board[["rank", "player_name", "pi", "change", "effective_average", "avg_l30", "form", "elo", "Order of Merit"]],
         hide_index=True, width="stretch", height=520,
         column_config={
             "rank": "#", "player_name": "Player",
-            "pi": st.column_config.ProgressColumn("PI", min_value=0.0, max_value=10.0, format="%.2f"),
             "change": st.column_config.NumberColumn("vs last month", format="%+.2f"),
-            "effective_average": st.column_config.NumberColumn("Effective Average", format="%.1f"),
+            "pi": st.column_config.ProgressColumn("PI", min_value=0.0, max_value=10.0, format="%.2f", help=ui.PI_HELP),
+            "effective_average": st.column_config.NumberColumn("Effective Average", format="%.1f", help=ui.EFFECTIVE_AVERAGE_HELP),
             "avg_l30": st.column_config.NumberColumn("3-Dart Avg (L30)", format="%.2f"),
             "form": st.column_config.NumberColumn("Form", format="%+.2f"),
             "elo": st.column_config.NumberColumn("Elo", format="%.0f")})
 
     st.subheader("Head to head")
-    names = pi["player_name"].tolist()
     c1, c2, c3 = st.columns([3, 3, 3])
     a = c1.selectbox("Player A", names, index=0, key="h2h_a")
     b = c2.selectbox("Player B", names, index=min(1, len(names) - 1), key="h2h_b")

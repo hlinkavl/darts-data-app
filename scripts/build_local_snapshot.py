@@ -23,7 +23,7 @@ import yaml
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
-from analytics import elo, health, overview, pipeline  # noqa: E402
+from analytics import elo, health, overview, pipeline, titles  # noqa: E402
 
 RAW = REPO / "data" / "raw"
 OUT = REPO / "data" / "app_snapshot"
@@ -143,6 +143,11 @@ def main() -> None:
     # tournaments
     pages = pd.DataFrame([p for p in jsonl("wikipedia/*/tournament_pages.jsonl", latest_only=True) if not p.get("error")])
     events = pd.DataFrame(jsonl("orakel/*/events.jsonl")).drop_duplicates("event_key", keep="last")
+    all_events = events.assign(event_date=pd.to_datetime(events["event_date"].str[:10]),
+                               is_major=events["tournament_key"].isin(majors),
+                               tournament_name=events["tournament_name"].map(html.unescape),
+                               winner_name=events["winner_name"].map(lambda n: html.unescape(n) if isinstance(n, str) else n))
+    player_titles = titles.player_titles(all_events.rename(columns={"player_key": "winner_key"}))
     events = events[events.tournament_key.isin(majors)][["tournament_key", "event_date", "winner_name", "winner_avg"]]
     events["event_date"] = pd.to_datetime(events["event_date"].str[:10])
     cal, draws = overview.season_calendar(pages[["title", "wikitext"]], events, majors, TODAY)
@@ -172,6 +177,7 @@ def main() -> None:
         "pi_metrics": run.metrics.assign(version=version), "pi_benchmark": run.benchmark.assign(version=version),
         "pi_calibration": run.calibration.assign(version=version), "pi_training_data": run.data_summary.assign(version=version),
         "pi_model_registry": registry, "majors_calendar": cal, "health_report": health_report,
+        "player_titles": player_titles,
         "upcoming_matches": overview.upcoming_cards(pd.DataFrame(), current, elo_latest, matches),
         "snapshot_info": pd.DataFrame([{"built_at": pd.Timestamp.now(tz="UTC"), "data_until": pm.match_date.max(),
                                         "model_version": version}]),

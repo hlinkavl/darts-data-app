@@ -17,7 +17,7 @@ import sys
 import pandas as pd
 
 sys.path.append(os.path.abspath(".."))
-from analytics import pipeline
+from analytics import pipeline, titles
 
 dbutils.widgets.text("catalog", "workspace")
 catalog = dbutils.widgets.get("catalog")
@@ -87,3 +87,15 @@ FROM darts_silver.player_matches_v m
 JOIN darts_silver.players p ON p.player_key = m.player_key AND p.is_tracked
 """)
 display(spark.sql("SELECT * FROM darts_gold.player_recent_matches WHERE player_name = 'Luke Littler' AND recency <= 5"))
+
+# COMMAND ----------
+
+# MAGIC %md ## Titles (player profiles: events won since 2021)
+
+# COMMAND ----------
+
+events = spark.sql("""
+    SELECT event_date, tournament_name, category, is_major, winner_key, winner_name FROM darts_silver.events
+""").toPandas()
+spark.createDataFrame(titles.player_titles(events)).write.mode("overwrite").option("overwriteSchema", "true") \
+    .saveAsTable("darts_gold.player_titles")

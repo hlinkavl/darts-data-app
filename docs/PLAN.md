@@ -66,7 +66,7 @@ An end-to-end data app about PDC darts with two core features:
 | Day 1 | Data foundation: sources, ingestion, bronze → silver | ✅ done (2026-10-25) |
 | Day 2 | Analytics: Performance Index, prediction model, backtests | ✅ done (2026-10-28) |
 | Day 3 | Source switch (Orakel blocked → Mastercaller + Wikipedia), health report, model promotion, GitHub Actions, key test vs PDC ranking, AI layer | ⏳ in progress |
-| Day 4 | Streamlit app, Genie, deploy (ready for the Grand Slam, 14 Nov) | ⬜ |
+| Day 4 | Streamlit app, Genie, deploy (ready for the Grand Slam, 14 Nov) | ⏳ app done locally (2026-10-31) |
 
 ---
 
@@ -197,7 +197,7 @@ How fixes happen: config-only issues (e.g. a new major) can be fixed by editing 
 
 **Goal by end of day:** a live Databricks App URL with all pages, Genie Q&A, the Refresh button and the health badge, ready for the **Grand Slam (14–22 Nov 2026)** as the first live event.
 
-4.1 [ ] **Streamlit app** developed locally (`streamlit run app/app.py`) against the SQL warehouse; pages as in [DESIGN.md](DESIGN.md#app-design): Tournament Overview (calendar, predictions, live bracket, upcoming matches), Player Profile (PI, Effective Average, contributions, last 5, background, AI narrative, Big-Stage Delta as info), PI Leaderboard + head to head, Ask the data (Genie), Methodology (live from `pi_*` tables), Admin.
+4.1 [x] **Streamlit app** done locally (2026-10-31) against a Parquet snapshot (`DARTS_DATA=local`, built by `scripts/build_local_snapshot.py`); the same code reads the SQL warehouse in production. Pages: Tournament Overview (status banner finished / live / upcoming, match cards with score and winner first, player photos, predictions, upcoming matches with PI and Effective Average, season calendar), Player Profile (photo, current PDC Order of Merit rank, PI, Effective Average, Stage Delta as info, PI over time, recent form, structured profile facts, titles from `gold.player_titles`), PI Leaderboard (name search with autocomplete, head to head), Ask the data, Methodology, Data & Health. Feedback round 1 applied (seed `&nbsp;` fix, Effective Average tooltip, contributions chart dropped). Still open: warehouse mode test on Day A, AI narrative (3.5), Genie (4.3).
 4.2 [ ] **Refresh button + health badge**: dispatches the GitHub Actions refresh, shows the last refresh time and the health status with warnings.
 4.3 [ ] **Genie space** over the gold tables with instructions and sample questions, embedded via the Conversation API.
 4.4 [ ] **Deploy** as a Databricks App via the bundle (the app's service principal gets the permissions it needs), end-to-end test.

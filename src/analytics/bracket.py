@@ -5,6 +5,7 @@ other knockout majors in one or more blocks). Each round carries its format ("be
 sets) and, once played, the score, the 3-dart averages and the winner.
 """
 
+import html
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -110,7 +111,7 @@ def _params(block: str) -> dict[str, str]:
 def _clean(text: str) -> str:
     text = re.sub(r"<ref[^>]*/>|<ref.*?</ref>", "", text, flags=re.S)
     text = re.sub(r"\{\{\s*nowrap\s*\|\s*(?:1=)?", "", text).replace("}}", "")
-    text = re.sub(r"<[^>]+>", " ", text)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", text)).replace("\xa0", " ")  # &nbsp; marks an empty seed cell
     return re.sub(r"\s+", " ", text.replace("'''", "").replace("''", "")).strip()
 
 

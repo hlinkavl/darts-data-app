@@ -15,6 +15,7 @@ WIKITEXT = """
 | RD1-seed1 = 1
 | RD1-team1 = {{PDCFlag|Player A|avg=101.20}}
 | RD1-score1 = 6
+| RD1-seed2 = &nbsp;
 | RD1-team2 = {{PDCFlag|Player B|avg=95.00}}
 | RD1-score2 = 2
 | RD1-team3 = {{#invoke:DartsRankings|PDCFlag|Player C|avg=|b=1}}
@@ -37,6 +38,7 @@ def test_parse_formats_scores_and_walkover():
     sf, final = draw.rounds
     assert (sf.first_to, sf.unit, final.first_to, final.unit) == (6, "legs", 2, "sets")
     assert sf.matches[0].winner == "Player A" and sf.matches[0].avg_a == 101.2
+    assert sf.matches[0].seed_a == "1" and sf.matches[0].seed_b is None  # &nbsp; is an empty seed
     assert sf.matches[1].walkover and sf.matches[1].winner == "Player C"
     assert final.matches[0].winner is None
 

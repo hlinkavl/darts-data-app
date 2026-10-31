@@ -2,7 +2,6 @@
 
 import math
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
@@ -13,8 +12,6 @@ TEXT_2 = "#c3c2b7"
 GRID = "#383835"
 # Categorical slots in fixed order: blue, orange, aqua
 SERIES = ["#3987e5", "#d95926", "#199e70"]
-# Diverging pair: positive (helps) blue, negative (hurts) red, neutral gray
-POSITIVE, NEGATIVE, NEUTRAL = "#3987e5", "#e66767", "#383835"
 # Status palette, always shown with an icon and a label
 STATUS = {"green": ("🟢", "OK", "#0ca30c"), "yellow": ("🟡", "Attention", "#fab219"), "red": ("🔴", "Problem", "#d03b3b")}
 
@@ -94,14 +91,48 @@ def predictor_name(code: str) -> str:
     return DISPLAY_NAMES.get(code, code.replace("_", " ").title())
 
 
-def contributions_chart(row: pd.Series, predictors: list[str]) -> go.Figure:
-    """Horizontal diverging bars: how each predictor moves the player's PI against the average top-32 player."""
-    vals = [(predictor_name(p), float(row.get(f"contrib_{p}", np.nan))) for p in predictors]
-    vals = [(n, v) for n, v in vals if not np.isnan(v)]
-    vals.sort(key=lambda t: t[1])
-    fig = go.Figure(go.Bar(
-        x=[v for _, v in vals], y=[n for n, _ in vals], orientation="h",
-        marker=dict(color=[POSITIVE if v >= 0 else NEGATIVE for _, v in vals], line=dict(color=SURFACE, width=2)),
-        hovertemplate="%{y}: %{x:+.2f} log-odds<extra></extra>"))
-    fig.add_vline(x=0, line_color=TEXT_2, line_width=1)
-    return layout(fig, height=60 + 44 * len(vals), xaxis_title="effect on the win chance vs the average top-32 player (log-odds)")
+# ------------------------------------------------------------------------------------------- help texts
+
+PI_HELP = ("Performance Index: 10 × the chance to beat an average top-32 player in a typical match (first to 6 legs). "
+           "5 = a typical top-32 player, 7 = wins 70 % of such matches.")
+EFFECTIVE_AVERAGE_HELP = (
+    "The player's whole strength translated into 3-dart-average points. It starts from his real average over the "
+    "last 30 matches and adds (or takes away) what the model sees on top of it: the quality of the opponents he "
+    "beats (Elo), his current form and his Order of Merit ranking, each converted into average points. "
+    "Read it like a normal average: 102 beats 97.")
+
+
+# ----------------------------------------------------------------------------------------------- photos
+
+def photo_url(image_file, width: int = 240) -> str | None:
+    """Wikimedia Commons thumbnail of the player's Wikidata image (free licence), or None."""
+    from urllib.parse import quote
+
+    if not isinstance(image_file, str) or not image_file:
+        return None
+    return f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(image_file.replace(' ', '_'))}?width={width}"
+
+
+def photo_credit(image_file) -> str:
+    from urllib.parse import quote
+
+    return f"[Photo: Wikimedia Commons](https://commons.wikimedia.org/wiki/File:{quote(image_file.replace(' ', '_'))})"
+
+
+def avatar(image_file, size: int = 34) -> str:
+    """Round photo as inline HTML (empty if there is no photo)."""
+    url = photo_url(image_file, 2 * size)
+    if not url:
+        return ""
+    return (f"<img src='{url}' style='width:{size}px;height:{size}px;border-radius:50%;object-fit:cover;"
+            f"object-position:top;vertical-align:middle;margin:0 6px'>")
+
+
+def name_key(name) -> str:
+    """Accent-, case- and punctuation-insensitive key, to match names between Wikipedia and the results data."""
+    import re
+    import unicodedata
+
+    if not isinstance(name, str):
+        return ""
+    return re.sub(r"[^a-z ]", "", unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()).strip()

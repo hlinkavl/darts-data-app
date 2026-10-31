@@ -9,14 +9,16 @@ import data  # noqa: E402
 import ui  # noqa: E402
 from views import admin, ask, leaderboard, methodology, player, tournaments  # noqa: E402
 
-pages = st.navigation([
-    st.Page(tournaments.render, title="Tournament Overview", icon="🏆", url_path="tournaments", default=True),
-    st.Page(player.render, title="Player Profile", icon="👤", url_path="player"),
-    st.Page(leaderboard.render, title="PI Leaderboard", icon="📊", url_path="leaderboard"),
-    st.Page(ask.render, title="Ask the data", icon="💬", url_path="ask"),
-    st.Page(methodology.render, title="Methodology", icon="📖", url_path="methodology"),
-    st.Page(admin.render, title="Data & Health", icon="⚙️", url_path="health"),
-])
+PAGES = {
+    "tournaments": st.Page(tournaments.render, title="Tournament Overview", icon="🏆", url_path="tournaments", default=True),
+    "player": st.Page(player.render, title="Player Profile", icon="👤", url_path="player"),
+    "leaderboard": st.Page(leaderboard.render, title="PI Leaderboard", icon="📊", url_path="leaderboard"),
+    "ask": st.Page(ask.render, title="Ask the data", icon="🔎", url_path="ask"),
+    "methodology": st.Page(methodology.render, title="Methodology", icon="📖", url_path="methodology"),
+    "health": st.Page(admin.render, title="Data & Health", icon="⚙️", url_path="health"),
+}
+st.session_state["pages"] = PAGES  # lets a page switch to another one (st.switch_page)
+pages = st.navigation(list(PAGES.values()))
 
 with st.sidebar:
     st.markdown("### 🎯 Darts Performance Analyzer")
