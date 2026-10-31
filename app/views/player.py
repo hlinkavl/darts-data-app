@@ -1,5 +1,6 @@
 """Player Profile: photo, Order of Merit and PI, the PI breakdown, PI over time, recent form, profile, titles."""
 
+import math
 import re
 from datetime import date
 from html import escape
@@ -21,7 +22,8 @@ COUNTRY = {"ENG": "England", "SCO": "Scotland", "WAL": "Wales", "NIR": "Northern
 # How each PI input is shown in the breakdown: label, value format, one-line explanation.
 INPUTS = {
     "avg_l30": ("3-Dart Average (L30)", lambda v: f"{v:.2f}", "Points per 3 darts over the last 30 matches"),
-    "form": ("Form (L10 vs L30)", lambda v: f"{v:+.2f}", "Average of the last 10 matches minus the last 30"),
+    "form": ("Form (L10 vs L30)", lambda v: f"{v:+.2f}",
+             "Average of the last 10 matches minus the last 30; below zero = currently under the usual level"),
     "elo": ("Opponent-Weighted Elo", lambda v: f"{v:.0f}", "Rating from results: wins over strong players count more"),
     "oom_rank": ("PDC Order of Merit", lambda v: ui.oom_rank(v), "Official ranking (2-year prize money)"),
 }
@@ -85,18 +87,18 @@ def _breakdown(row: pd.Series) -> None:
     coef = data.versioned("pi_coefficients").set_index("predictor")
     per_point = coef["beta_per_unit"].get("avg_l30")
     st.subheader("PI breakdown")
-    st.caption("The player against an average top-32 player in each input of the model. Green = better, red = worse; "
-               "the small number is what the input adds to the player's 3-dart average.")
+    st.caption("The player against an average top-32 player in each input of the model. The line with the arrow is the "
+               "gap in 3-dart-average points: green ▲ better, red ▼ worse.")
     inputs = []
     for p in [p for p in INPUTS if p in coef.index]:
         value, ref, contrib = row.get(p), row.get(f"ref_{p}"), row.get(f"contrib_{p}")
         if value is not None and pd.notna(value) and per_point and pd.notna(contrib):
             inputs.append((p, value, ref, contrib / per_point))
+    per_avg_point = coef["avg_points_per_unit"]
 
-    def side(caption, value, color, strong):
+    def side(caption, value, strong):
         return (f"<div><div style='color:{ui.TEXT_2};font-size:0.75em'>{caption}</div>"
-                f"<div style='font-size:{'1.55em' if strong else '1.15em'};font-weight:{700 if strong else 500};"
-                f"color:{color}'>{value}</div></div>")
+                f"<div style='font-size:{'1.55em' if strong else '1.15em'};font-weight:700;color:{ui.TEXT}'>{value}</div></div>")
 
     tiles = []
     for p, value, ref, pts in inputs:
@@ -107,10 +109,12 @@ def _breakdown(row: pd.Series) -> None:
             f"<div title='{escape(help_text)}' style='border:1px solid {ui.GRID};border-radius:10px;padding:12px 14px'>"
             f"<div style='{LABEL}'>{label}</div>"
             f"<div style='display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px'>"
-            f"{side('Player', fmt(value), ui.WIN if pts >= 0 else ui.LOSS, True)}"
+            f"{side('Player', fmt(value), True)}"
             f"<div style='color:{ui.TEXT_2};padding-bottom:4px'>vs</div>"
-            f"<div style='text-align:right'>{side('Top-32 average', ref_txt, ui.TEXT_2, False)}</div></div>"
-            f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-top:10px'>{arrow} {pts:+.1f} avg points</div></div>")
+            f"<div style='text-align:right'>{side('Top-32 average', ref_txt, False)}</div></div>"
+            f"<div style='color:{ui.WIN if pts >= 0 else ui.LOSS};font-size:0.85em;font-weight:600;margin-top:10px'>"
+            f"{arrow} {pts:+.1f} avg points</div>"
+            f"<div style='color:{ui.TEXT_2};font-size:0.75em'>{_conversion(p, value, ref, per_avg_point.get(p))}</div></div>")
     base = row.get("ref_avg_l30")
     st.markdown(f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px'>{''.join(tiles)}</div>",
                 unsafe_allow_html=True)
@@ -122,18 +126,29 @@ def _breakdown(row: pd.Series) -> None:
                    "floor events over the last 24 months.")
 
 
+def _conversion(p: str, value: float, ref: float, per_unit: float | None) -> str:
+    """How the gap becomes average points, for inputs not measured in average points themselves."""
+    if per_unit is None or pd.isna(per_unit) or ref is None or pd.isna(ref) or p == "avg_l30":
+        return "the gap itself"
+    if p == "oom_rank":  # stored as -ln(rank): every halving of the rank is worth the same
+        return f"each halving of the rank ≈ {math.log(2) * per_unit:+.2f}"
+    unit = "Elo" if p == "elo" else "form"
+    digits = 0 if p == "elo" else 2
+    return f"{value - ref:+.{digits}f} {unit} × {per_unit:.{3 if p == 'elo' else 2}f}"
+
+
 def _sum_strip(base: float, inputs: list, row: pd.Series) -> str:
     """How the Effective Average is built: base + each effect = Effective Average → PI, as a row of number chips."""
-    def chip(value, label, color=ui.TEXT, strong=False):
+    def chip(value, label, strong=False):
         bg = "background:#222220;border:1px solid " + ui.GRID + ";" if strong else ""
         return (f"<div style='text-align:center;padding:6px 10px;border-radius:8px;{bg}'>"
-                f"<div style='font-size:{'1.35em' if strong else '1.15em'};font-weight:700;color:{color}'>{value}</div>"
+                f"<div style='font-size:{'1.35em' if strong else '1.15em'};font-weight:700;color:{ui.TEXT}'>{value}</div>"
                 f"<div style='color:{ui.TEXT_2};font-size:0.75em'>{label}</div></div>")
 
     op = f"<div style='color:{ui.TEXT_2};font-size:1.2em'>{{}}</div>"
     parts = [chip(ui.num(base), "top-32 base")]
     for p, _, _, pts in inputs:
-        parts += [op.format("+"), chip(f"{pts:+.1f}", SHORT[p], ui.WIN if pts >= 0 else ui.LOSS)]
+        parts += [op.format("+"), chip(f"{pts:+.1f}", SHORT[p])]
     parts += [op.format("="), chip(ui.num(row["effective_average"]), "Effective Average", strong=True),
               op.format("→"), chip(ui.num(row["pi"], 2), "Performance Index", strong=True)]
     return (f"<div style='border:1px solid {ui.GRID};border-radius:10px;padding:10px 14px;margin-top:14px'>"
