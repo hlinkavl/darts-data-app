@@ -1,6 +1,5 @@
 """Player Profile: photo, Order of Merit and PI, the PI breakdown, PI over time, recent form, profile, titles."""
 
-import math
 import re
 from datetime import date
 from html import escape
@@ -27,7 +26,6 @@ INPUTS = {
     "elo": ("Opponent-Weighted Elo", lambda v: f"{v:.0f}", "Rating from results: wins over strong players count more"),
     "oom_rank": ("PDC Order of Merit", lambda v: ui.oom_rank(v), "Official ranking (2-year prize money)"),
 }
-SHORT = {"avg_l30": "Average", "form": "Form", "elo": "Elo", "oom_rank": "Order of Merit"}
 LABEL = f"color:{ui.TEXT_2};font-size:0.78em;text-transform:uppercase;letter-spacing:.04em"
 
 
@@ -82,78 +80,50 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
 
 
 def _breakdown(row: pd.Series) -> None:
-    """Each PI input next to the average top-32 player, converted into 3-dart-average points; they add up to the
-    Effective Average, which the PI scale turns into a 0-10 score."""
+    """The player next to an average top-32 player in each PI input; the gap in 3-dart-average points. The last
+    row adds them up: Effective Average vs the top-32 average. How gaps are converted is on the Methodology page."""
     coef = data.versioned("pi_coefficients").set_index("predictor")
     per_point = coef["beta_per_unit"].get("avg_l30")
-    st.subheader("PI breakdown")
-    st.caption("The player against an average top-32 player in each input of the model. The line with the arrow is the "
-               "gap in 3-dart-average points: green ▲ better, red ▼ worse.")
-    inputs = []
+    rows = []
     for p in [p for p in INPUTS if p in coef.index]:
-        value, ref, contrib = row.get(p), row.get(f"ref_{p}"), row.get(f"contrib_{p}")
-        if value is not None and pd.notna(value) and per_point and pd.notna(contrib):
-            inputs.append((p, value, ref, contrib / per_point))
-    per_avg_point = coef["avg_points_per_unit"]
-
-    def side(caption, value, strong):
-        return (f"<div><div style='color:{ui.TEXT_2};font-size:0.75em'>{caption}</div>"
-                f"<div style='font-size:{'1.55em' if strong else '1.15em'};font-weight:700;color:{ui.TEXT}'>{value}</div></div>")
-
-    tiles = []
-    for p, value, ref, pts in inputs:
         label, fmt, help_text = INPUTS[p]
+        value, ref, contrib = row.get(p), row.get(f"ref_{p}"), row.get(f"contrib_{p}")
+        if value is None or pd.isna(value) or not per_point or pd.isna(contrib):
+            continue
         ref_txt = (ui.oom_rank(ref) if p == "oom_rank" else fmt(ref)) if ref is not None and pd.notna(ref) else "–"
-        arrow = "▲" if pts >= 0 else "▼"  # by the effect: a lower Order of Merit number is better
-        tiles.append(
-            f"<div title='{escape(help_text)}' style='border:1px solid {ui.GRID};border-radius:10px;padding:12px 14px'>"
-            f"<div style='{LABEL}'>{label}</div>"
-            f"<div style='display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px'>"
-            f"{side('Player', fmt(value), True)}"
-            f"<div style='color:{ui.TEXT_2};padding-bottom:4px'>vs</div>"
-            f"<div style='text-align:right'>{side('Top-32 average', ref_txt, False)}</div></div>"
-            f"<div style='color:{ui.WIN if pts >= 0 else ui.LOSS};font-size:0.85em;font-weight:600;margin-top:10px'>"
-            f"{arrow} {pts:+.1f} avg points</div>"
-            f"<div style='color:{ui.TEXT_2};font-size:0.75em'>{_conversion(p, value, ref, per_avg_point.get(p))}</div></div>")
+        rows.append((label, help_text, fmt(value), ref_txt, contrib / per_point, False))
     base = row.get("ref_avg_l30")
-    st.markdown(f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px'>{''.join(tiles)}</div>",
-                unsafe_allow_html=True)
-    if inputs and base is not None and pd.notna(base):
-        st.markdown(_sum_strip(base, inputs, row), unsafe_allow_html=True)
+    if rows and base is not None and pd.notna(base):
+        # Shown to one decimal, the gaps must add up to the total as displayed: round the total from the displayed
+        # numbers and give the rounding remainder to the largest gap.
+        total = round(round(row["effective_average"], 1) - round(base, 1), 1)
+        gaps = [round(r[4], 1) for r in rows]
+        big = max(range(len(gaps)), key=lambda i: abs(gaps[i]))
+        gaps[big] = round(gaps[big] + total - sum(gaps), 1)
+        rows = [r[:4] + (g, r[5]) for r, g in zip(rows, gaps)]
+        rows.append(("Effective Average", ui.EFFECTIVE_AVERAGE_HELP, ui.num(row["effective_average"]), ui.num(base),
+                     total, True))
+
+    st.subheader("PI breakdown")
+    grid = "display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr;gap:8px;align-items:center;padding:9px 4px"
+    head = "".join(f"<div style='text-align:{a}'>{t}</div>" for t, a in
+                   (("", "left"), ("Player", "right"), ("Top-32 average", "right"), ("Gap", "right")))
+    html = f"<div style='{grid};color:{ui.TEXT_2};font-size:0.8em;border-bottom:1px solid {ui.GRID}'>{head}</div>"
+    for label, help_text, value, ref_txt, pts, total in rows:
+        line = f"border-top:2px solid {ui.GRID};margin-top:2px" if total else f"border-bottom:1px solid {ui.GRID}"
+        gap = f"{'▲' if pts >= 0 else '▼'} {pts:+.1f}"
+        html += (f"<div style='{grid};{line}'>"
+                 f"<div title='{escape(help_text)}' style='color:{ui.TEXT};font-weight:{700 if total else 400}'>{label}</div>"
+                 f"<div style='text-align:right;color:{ui.TEXT};font-weight:700;font-size:1.1em'>{value}</div>"
+                 f"<div style='text-align:right;color:{ui.TEXT};font-weight:700'>{ref_txt}</div>"
+                 f"<div style='text-align:right;color:{ui.WIN if pts >= 0 else ui.LOSS};font-weight:700'>{gap}</div></div>")
+    st.markdown(f"<div style='max-width:760px'>{html}</div>", unsafe_allow_html=True)
+    st.caption("Gap = what the input adds to (▲) or takes from (▼) the player's 3-dart average compared with an average "
+               "top-32 player; together they make the Effective Average. How each gap is converted: see Methodology.")
     stage = row.get("stage_delta")
     if stage is not None and pd.notna(stage):
         st.caption(f"Stage Delta {stage:+.2f} · information only, not part of the PI: average on stage events minus "
                    "floor events over the last 24 months.")
-
-
-def _conversion(p: str, value: float, ref: float, per_unit: float | None) -> str:
-    """How the gap becomes average points, for inputs not measured in average points themselves."""
-    if per_unit is None or pd.isna(per_unit) or ref is None or pd.isna(ref) or p == "avg_l30":
-        return "the gap itself"
-    if p == "oom_rank":  # stored as -ln(rank): every halving of the rank is worth the same
-        return f"each halving of the rank ≈ {math.log(2) * per_unit:+.2f}"
-    unit = "Elo" if p == "elo" else "form"
-    digits = 0 if p == "elo" else 2
-    return f"{value - ref:+.{digits}f} {unit} × {per_unit:.{3 if p == 'elo' else 2}f}"
-
-
-def _sum_strip(base: float, inputs: list, row: pd.Series) -> str:
-    """How the Effective Average is built: base + each effect = Effective Average → PI, as a row of number chips."""
-    def chip(value, label, strong=False):
-        bg = "background:#222220;border:1px solid " + ui.GRID + ";" if strong else ""
-        return (f"<div style='text-align:center;padding:6px 10px;border-radius:8px;{bg}'>"
-                f"<div style='font-size:{'1.35em' if strong else '1.15em'};font-weight:700;color:{ui.TEXT}'>{value}</div>"
-                f"<div style='color:{ui.TEXT_2};font-size:0.75em'>{label}</div></div>")
-
-    op = f"<div style='color:{ui.TEXT_2};font-size:1.2em'>{{}}</div>"
-    parts = [chip(ui.num(base), "top-32 base")]
-    for p, _, _, pts in inputs:
-        parts += [op.format("+"), chip(f"{pts:+.1f}", SHORT[p])]
-    parts += [op.format("="), chip(ui.num(row["effective_average"]), "Effective Average", strong=True),
-              op.format("→"), chip(ui.num(row["pi"], 2), "Performance Index", strong=True)]
-    return (f"<div style='border:1px solid {ui.GRID};border-radius:10px;padding:10px 14px;margin-top:14px'>"
-            f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-bottom:6px'>How it adds up (3-dart-average points)</div>"
-            f"<div style='display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px'>{''.join(parts)}</div></div>")
 
 
 def _recent_form(row: pd.Series, info_all: pd.DataFrame) -> None:
