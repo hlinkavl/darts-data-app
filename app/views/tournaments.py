@@ -10,8 +10,8 @@ import data
 import ui
 
 BRACKET_ROUNDS = 4  # last 16 to the final
+BRACKET_SLOT_PX = 84  # height per first-column match: a two-row box plus spacing, so boxes never get squeezed
 RISING_MONTHS = 3  # players to watch: PI change over this window
-FAVOURITES = 8     # title favourites left out of the players to watch
 MODE_ORDER = {"live": 0, "pre-tournament": 1, "backtest": 2}
 
 
@@ -168,11 +168,10 @@ def _next_round(draw: pd.DataFrame, match) -> str:
 
 
 def _players_to_watch(preds: pd.DataFrame, draw: pd.DataFrame, mode: str, photos: dict) -> None:
-    """Rising players, not favourites: the biggest PI gain over the last 3 months before the event, with positive
-    recent form; the title favourites are left out."""
+    """Rising players: the biggest PI gain over the last 3 months before the event, with positive recent form
+    (favourites included when they are on the rise)."""
     winners = preds[preds["round_name"] == "Winner"].dropna(subset=["player_key"])
-    favourites = set(winners.nlargest(FAVOURITES, "p_reach")["player_key"])
-    cand = winners[~winners["player_key"].isin(favourites)].merge(_momentum(preds["as_of"].iloc[0]), on="player_key")
+    cand = winners.merge(_momentum(preds["as_of"].iloc[0]), on="player_key")
     rising = cand[(cand["pi_change"] > 0) & (cand["form"] > 0)].nlargest(3, "pi_change")
     if len(rising) < 3:
         rising = pd.concat([rising, cand.drop(rising.index).nlargest(3 - len(rising), "pi_change")])
@@ -188,7 +187,7 @@ def _players_to_watch(preds: pd.DataFrame, draw: pd.DataFrame, mode: str, photos
                     f"<span style='color:{ui.TEXT_2}'>in {RISING_MONTHS} months · form {r.form:+.2f}</span></div></div>",
                     unsafe_allow_html=True)
     st.caption(f"On the rise: the biggest PI gain over the {RISING_MONTHS} months before the event, with positive recent "
-               f"form (last 10 matches vs last 30). The {FAVOURITES} title favourites are left out.")
+               "form (last 10 matches vs last 30).")
 
 
 # ----------------------------------------------------------------------------------------------- bracket
@@ -226,14 +225,14 @@ def _bracket_box(m, short: dict, final: bool = False) -> str:
                  f"<span style='font-size:0.75em;color:{ui.TEXT_2};font-weight:400'>{p}</span>"
                  f"<span style='min-width:22px;text-align:right'>{score}</span></div>")
     return (f"<div title='{escape(tip)}' style='border:1px solid {ui.GRID};border-radius:6px;background:#222220;"
-            f"font-size:0.88em;margin:5px 0;overflow:hidden'>{html}</div>")
+            f"font-size:0.88em;margin:5px 0;overflow:hidden;flex-shrink:0'>{html}</div>")
 
 
 def _bracket(matches: pd.DataFrame) -> None:
     """The last rounds as a bracket: a match in slot i feeds slot i // 2 of the next round."""
     orders = sorted(matches["round_order"].unique())[-BRACKET_ROUNDS:]
     short = ui.surnames(pd.concat([matches["player_a"], matches["player_b"]]))
-    height = 2 ** (len(orders) - 1) * 66
+    height = 2 ** (len(orders) - 1) * BRACKET_SLOT_PX
     cols = []
     for k, order in enumerate(orders):
         rnd = matches[matches["round_order"] == order].drop_duplicates("slot").set_index("slot")
