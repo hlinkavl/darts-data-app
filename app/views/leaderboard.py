@@ -10,6 +10,7 @@ import data
 import ui
 
 OPEN_ICON = "↗"
+JUMP_CONTEXT = 4  # rows shown above a searched player
 HIGHLIGHT = "background-color: rgba(57, 135, 229, 0.30); font-weight: 700"
 TABLE_FORMATS = {"oom": "{:.0f}", "rank": "{:.0f}", "pi": "{:.2f}", "change": "{:+.2f}", "effective_average": "{:.1f}",
                  "avg_l30": "{:.2f}", "form": "{:+.2f}", "elo": "{:.0f}"}
@@ -68,10 +69,10 @@ def render() -> None:
     columns = ["open", first, "player_name", second, "pi", "change", "effective_average", "avg_l30", "form", "elo"]
     shown = board
     if pick:
-        # A table cannot be scrolled from code: the player is pinned as the first row, the full table follows
-        # (with the player highlighted in place), so it still scrolls from #1.
-        shown = pd.concat([board[board["player_name"] == pick], board], ignore_index=True)
-        st.caption(f"{pick} is pinned at the top and highlighted in the table. Clear the search to unpin.")
+        # A table cannot be scrolled from code, so it starts a few rows above the player instead.
+        pos = int(board.index[board["player_name"] == pick][0])
+        shown = board.iloc[max(0, pos - JUMP_CONTEXT):].reset_index(drop=True)
+        st.caption(f"Jumped to {pick}. Clear the search to see the table from the top.")
     styled = shown[columns].style.apply(
         lambda r: [HIGHLIGHT if r["player_name"] == pick else "" for _ in r], axis=1).format(TABLE_FORMATS, na_rep="–")
     picked = st.dataframe(

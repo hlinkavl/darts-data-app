@@ -70,17 +70,6 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
             unsafe_allow_html=True)
 
 
-def _effect_bar(points: float, scale: float) -> str:
-    """Small diverging bar: right (blue) when the input adds to the average, left (red) when it takes away."""
-    width = min(abs(points) / scale, 1) * 50 if scale else 0
-    left = 50 if points >= 0 else 50 - width
-    color = ui.POSITIVE if points >= 0 else ui.NEGATIVE
-    return (f"<div style='position:relative;height:8px;background:{ui.GRID};border-radius:4px;margin-top:8px'>"
-            f"<div style='position:absolute;left:{left:.1f}%;width:{width:.1f}%;height:8px;background:{color};"
-            f"border-radius:4px'></div><div style='position:absolute;left:50%;top:-3px;width:2px;height:14px;"
-            f"background:{ui.TEXT_2}'></div></div>")
-
-
 def _breakdown(row: pd.Series) -> None:
     """Each PI input next to the average top-32 player, converted into 3-dart-average points; they add up to the
     Effective Average, which the PI scale turns into a 0-10 score."""
@@ -95,7 +84,6 @@ def _breakdown(row: pd.Series) -> None:
         value, ref, contrib = row.get(p), row.get(f"ref_{p}"), row.get(f"contrib_{p}")
         if value is not None and pd.notna(value) and per_point and pd.notna(contrib):
             inputs.append((p, value, ref, contrib / per_point))
-    scale = max([abs(pts) for *_, pts in inputs] + [1.0])
 
     def side(caption, value, strong):
         return (f"<div><div style='color:{ui.TEXT_2};font-size:0.75em'>{caption}</div>"
@@ -113,10 +101,7 @@ def _breakdown(row: pd.Series) -> None:
             f"<div style='display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px'>"
             f"{side('Player', fmt(value), True)}<div style='color:{ui.TEXT_2};padding-bottom:4px'>vs</div>"
             f"<div style='text-align:right'>{side('Top-32 average', ref_txt, False)}</div></div>"
-            f"<div style='border-top:1px solid {ui.GRID};margin-top:10px;padding-top:8px'>"
-            f"<div style='color:{ui.TEXT_2};font-size:0.75em'>Effect on the Effective Average</div>"
-            f"<div style='font-size:1.25em;font-weight:700;color:{ui.TEXT}'>{arrow} {pts:+.1f} <span style='font-size:0.7em;"
-            f"font-weight:400;color:{ui.TEXT_2}'>avg points</span></div>{_effect_bar(pts, scale)}</div></div>")
+            f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-top:10px'>{arrow} {pts:+.1f} avg points</div></div>")
     base, total = row.get("ref_avg_l30"), sum(pts for *_, pts in inputs)
     tiles.append(
         f"<div title='{escape(ui.EFFECTIVE_AVERAGE_HELP)}' style='border:1px solid {ui.GRID};border-radius:10px;"
