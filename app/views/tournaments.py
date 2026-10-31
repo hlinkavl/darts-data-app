@@ -10,6 +10,8 @@ import data
 import ui
 
 BRACKET_ROUNDS = 4  # last 16 to the final
+RISING_MONTHS = 3  # players to watch: PI change over this window
+FAVOURITES = 8     # title favourites left out of the players to watch
 MODE_ORDER = {"live": 0, "pre-tournament": 1, "backtest": 2}
 
 
@@ -124,21 +126,69 @@ def _round_table(preds: pd.DataFrame) -> None:
                        **{c: st.column_config.ProgressColumn(c, min_value=0.0, max_value=1.0, format="percent") for c in cols}})
 
 
-def _players_to_watch(preds: pd.DataFrame, photos: dict) -> None:
-    """Model only (no odds): unseeded or lower-seeded players with the best chance to go deep."""
-    rounds = preds[["round_order", "round_name"]].drop_duplicates().sort_values("round_order")
-    qf = rounds[rounds["round_name"].str.contains("Quarter", case=False)]
-    target = qf["round_order"].iloc[0] if len(qf) else rounds["round_order"].iloc[-3]
-    deep = preds[preds["round_order"] == target].copy()
-    seed = pd.to_numeric(deep["seed"].map(lambda s: _seed(s).strip("()")), errors="coerce")
-    deep = deep[seed.isna() | (seed > 8)].nlargest(3, "p_reach")
-    for r in deep.itertuples():
-        seed_txt = _seed(r.seed) or "unseeded"
-        st.markdown(f"<div style='display:flex;align-items:center;margin:6px 0'>{_avatar(photos, r.player_name, 40)}"
-                    f"<div><b>{escape(r.player_name)}</b> <span style='color:{ui.TEXT_2}'>{seed_txt}</span><br>"
-                    f"<span style='font-size:1.2em'>{ui.pct(r.p_reach)}</span> <span style='color:{ui.TEXT_2}'>to reach the last 8</span>"
-                    f"</div></div>", unsafe_allow_html=True)
-    st.caption("Dark horses: unseeded or seeded below 8, ranked by their chance to reach the last 8. Model only.")
+def _momentum(as_of) -> pd.DataFrame:
+    """PI change over the 3 months before `as_of` and current form, from the monthly PI snapshots (each computed
+    only from earlier matches, so backtests do not look ahead)."""
+    hist = data.table("performance_index")
+    if hist.empty:
+        return pd.DataFrame(columns=["player_key", "pi_change", "form"])
+    when = pd.to_datetime(hist["as_of_date"])
+    now_d = when[when <= pd.Timestamp(as_of)].max()
+    then_d = when[when <= now_d - pd.DateOffset(months=RISING_MONTHS)].max() if pd.notna(now_d) else pd.NaT
+    if pd.isna(now_d) or pd.isna(then_d):
+        return pd.DataFrame(columns=["player_key", "pi_change", "form"])
+    now = hist[when == now_d][["player_key", "pi", "form"]]
+    then = hist[when == then_d][["player_key", "pi"]].rename(columns={"pi": "pi_then"})
+    m = now.merge(then, on="player_key")
+    return m.assign(pi_change=m["pi"] - m["pi_then"])[["player_key", "pi_change", "form"]]
+
+
+def _short_round(name: str) -> str:
+    return {"Quarter-finals": "QF", "Semi-finals": "SF"}.get(name, name)
+
+
+def _result(name: str, draw: pd.DataFrame, mode: str, seed) -> str:
+    """How far the player got: Champion, Runner-up, Out in QF; Still in during a live event; the seed before it."""
+    if mode == "pre-tournament" or draw.empty:
+        return f"seed {_seed(seed).strip('()')}" if _seed(seed) else "unseeded"
+    played = draw[(draw["player_a"] == name) | (draw["player_b"] == name)].sort_values("round_order")
+    if played.empty:
+        return ""
+    last, final = played.iloc[-1], draw["round_order"].max()
+    if last.winner == name:
+        return "🏆 Champion" if last.round_order == final else f"Still in · next {_short_round(_next_round(draw, last))}"
+    if last.winner:
+        return "Runner-up" if last.round_order == final else f"Out in {_short_round(last.round_name)}"
+    return f"Still in · {_short_round(last.round_name)}"
+
+
+def _next_round(draw: pd.DataFrame, match) -> str:
+    later = draw[draw["round_order"] > match.round_order].sort_values("round_order")
+    return later["round_name"].iloc[0] if len(later) else match.round_name
+
+
+def _players_to_watch(preds: pd.DataFrame, draw: pd.DataFrame, mode: str, photos: dict) -> None:
+    """Rising players, not favourites: the biggest PI gain over the last 3 months before the event, with positive
+    recent form; the title favourites are left out."""
+    winners = preds[preds["round_name"] == "Winner"].dropna(subset=["player_key"])
+    favourites = set(winners.nlargest(FAVOURITES, "p_reach")["player_key"])
+    cand = winners[~winners["player_key"].isin(favourites)].merge(_momentum(preds["as_of"].iloc[0]), on="player_key")
+    rising = cand[(cand["pi_change"] > 0) & (cand["form"] > 0)].nlargest(3, "pi_change")
+    if len(rising) < 3:
+        rising = pd.concat([rising, cand.drop(rising.index).nlargest(3 - len(rising), "pi_change")])
+    if rising.empty:
+        st.caption("Not enough PI history for the players in this draw.")
+        return
+    for r in rising.itertuples():
+        result = _result(r.player_name, draw, mode, r.seed)
+        st.markdown(f"<div style='display:flex;align-items:center;margin:8px 0'>{_avatar(photos, r.player_name, 40)}"
+                    f"<div><b>{escape(r.player_name)}</b> <span style='color:{ui.TEXT_2};font-size:0.9em'>{result}</span><br>"
+                    f"<span style='color:{ui.WIN if r.pi_change >= 0 else ui.LOSS};font-weight:600'>"
+                    f"{'▲' if r.pi_change >= 0 else '▼'} {r.pi_change:+.2f} PI</span> "
+                    f"<span style='color:{ui.TEXT_2}'>in {RISING_MONTHS} months · form {r.form:+.2f}</span></div></div>",
+                    unsafe_allow_html=True)
+    st.caption(f"On the rise: the biggest PI gain over the {RISING_MONTHS} months before the event, with positive recent "
+               f"form (last 10 matches vs last 30). The {FAVOURITES} title favourites are left out.")
 
 
 # ----------------------------------------------------------------------------------------------- bracket
@@ -321,7 +371,7 @@ def render() -> None:
                 st.plotly_chart(_title_chart(pr[pr["round_name"] == "Winner"]), width="stretch", config={"displayModeBar": False})
             with right:
                 st.subheader("Players to watch")
-                _players_to_watch(pr, photos)
+                _players_to_watch(pr, draw, ev["mode"], photos)
             st.subheader("The draw")
             if draw.empty:
                 st.info("The draw is not published yet.")
