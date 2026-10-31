@@ -110,24 +110,28 @@ def _breakdown(row: pd.Series) -> None:
                    (("", "left"), ("Player", "right"), ("Top-32 average", "right"), ("Gap", "right")))
     html = f"<div style='{grid};color:{ui.TEXT_2};font-size:0.8em;border-bottom:1px solid {ui.GRID}'>{head}</div>"
     for label, help_text, value, ref_txt, pts, total in rows:
-        line = f"border-top:2px solid {ui.GRID};margin-top:2px" if total else f"border-bottom:1px solid {ui.GRID}"
+        # The total row is the result of all the rows above: set apart as a highlighted band.
+        line = (f"background:#262624;border:1px solid {ui.GRID};border-radius:8px;margin-top:8px;padding:12px 4px"
+                if total else f"border-bottom:1px solid {ui.GRID}")
         gap = f"{'▲' if pts >= 0 else '▼'} {pts:+.1f}"
         html += (f"<div style='{grid};{line}'>"
-                 f"<div title='{escape(help_text)}' style='color:{ui.TEXT};font-weight:{700 if total else 400}'>{label}</div>"
-                 f"<div style='text-align:right;color:{ui.TEXT};font-weight:700;font-size:1.1em'>{value}</div>"
+                 f"<div title='{escape(help_text)}' style='color:{ui.TEXT};font-weight:{700 if total else 400};"
+                 f"padding-left:{8 if total else 0}px'>{'= ' if total else ''}{label}</div>"
+                 f"<div style='text-align:right;color:{ui.TEXT};font-weight:700;font-size:{1.45 if total else 1.1}em'>{value}</div>"
                  f"<div style='text-align:right;color:{ui.TEXT};font-weight:700'>{ref_txt}</div>"
                  f"<div style='text-align:right;color:{ui.WIN if pts >= 0 else ui.LOSS};font-weight:700'>{gap}</div></div>")
     st.markdown(f"<div style='max-width:760px'>{html}</div>", unsafe_allow_html=True)
     if base is not None and pd.notna(base):
         with st.expander("How to read the breakdown"):
-            st.markdown(
-                f"1. **Base:** an average top-32 player (the mean of the 32 strongest players), with a 3-dart average of "
-                f"**{ui.num(base)}**.\n"
-                "2. **Gap:** each row compares the player with them, as a difference in 3-dart-average points "
-                "(▲ better, ▼ worse).\n"
-                f"3. **Result:** base + all gaps = Effective Average **{ui.num(row['effective_average'])}**, which gives "
-                f"the PI **{ui.num(row['pi'], 2)}**.\n\n"
-                "How a gap in form, Elo or ranking is converted into points: see Methodology.")
+            steps = [f"<b>Base</b>: an average top-32 player (the mean of the 32 strongest players), with a 3-dart "
+                     f"average of {ui.num(base)}.",
+                     "<b>Gap</b>: each row compares the player with them, as a difference in 3-dart-average points "
+                     "(▲ better, ▼ worse).",
+                     f"<b>Result</b>: base + all gaps = Effective Average {ui.num(row['effective_average'])}, which "
+                     f"gives the PI {ui.num(row['pi'], 2)}."]
+            st.markdown(f"<div style='color:{ui.TEXT_2};font-size:0.88em;line-height:1.55'><ol style='margin:0 0 6px'>"
+                        + "".join(f"<li>{t}</li>" for t in steps) + "</ol>How a gap in form, Elo or ranking is "
+                        "converted into points: see Methodology.</div>", unsafe_allow_html=True)
     stage = row.get("stage_delta")
     if stage is not None and pd.notna(stage):
         st.caption(f"Stage Delta {stage:+.2f} · information only, not part of the PI: average on stage events minus "
