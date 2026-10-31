@@ -237,13 +237,6 @@ def _bracket_box(m, short: dict, final: bool = False, projected: tuple = (None, 
         p_txt = ui.pct(p) if name and pd.notna(p) else ""
         label = (short.get(name, name) + (" 🏆" if final and won else "")) if name else "TBD"
         rows.append((label, p_txt, score_txt, won, played, False))
-    tip = " · ".join(t for t in (
-        f"{_name(m.player_a) or 'TBD'} {_seed(m.seed_a)} vs {_name(m.player_b) or 'TBD'} {_seed(m.seed_b)}",
-        _format(m),
-        f"model before the match {ui.pct(m.p_a)} – {ui.pct(1 - m.p_a)}" if pd.notna(m.p_a) else "",
-        f"averages {ui.num(m.avg_a, 2)} – {ui.num(m.avg_b, 2)}" if pd.notna(m.avg_a) and pd.notna(m.avg_b) else "") if t)
-    if any(r[5] for r in rows):
-        tip += " · grey italics: most likely to get here, with the chance to do so"
     html = ""
     for i, (name, p, score, won, played, proj) in enumerate(rows):
         if won:
@@ -257,7 +250,7 @@ def _bracket_box(m, short: dict, final: bool = False, projected: tuple = (None, 
                  f"<span style='flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>{escape(name)}</span>"
                  f"<span style='font-size:0.75em;color:{ui.TEXT_2};font-weight:400;font-style:normal'>{p}</span>"
                  f"<span style='min-width:22px;text-align:right'>{score}</span></div>")
-    return (f"<div title='{escape(tip)}' style='border:1px solid {ui.GRID};border-radius:6px;background:#222220;"
+    return (f"<div style='border:1px solid {ui.GRID};border-radius:6px;background:#222220;"
             f"font-size:0.88em;margin:5px 0;overflow:hidden;flex-shrink:0'>{html}</div>")
 
 
@@ -301,8 +294,8 @@ def _bracket(matches: pd.DataFrame, preds: pd.DataFrame) -> None:
                     f"<div style='height:{height}px;display:flex;flex-direction:column;justify-content:space-around'>{boxes}</div></div>")
     st.markdown(f"<div style='display:flex;gap:14px;overflow-x:auto;padding-bottom:6px'>{''.join(cols)}</div>",
                 unsafe_allow_html=True)
-    note = ("Green = winner. The small % is the model's chance before the match. Hover over a match for full names, "
-            "format and averages; every round with details is below.")
+    note = ("Green = winner. The small % is the model's chance before the match. Full names, format and averages "
+            "of every match are in Match details below.")
     if any_projected:
         note += (" Grey italics = not decided yet: the player most likely to get there, with the chance to do so.")
     st.caption(note)

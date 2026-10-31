@@ -59,21 +59,21 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
                        unsafe_allow_html=True)
         who.markdown(
             f"<div style='font-size:2.1em;font-weight:700;line-height:1.2;color:{ui.TEXT}'>"
-            f"<span title='Current position in the official PDC Order of Merit' style='color:{ui.TEXT_2}'>{oom_txt}</span> "
+            f"<span style='color:{ui.TEXT_2}'>{oom_txt}</span> "
             f"{escape(name)}</div>"
             f"<div style='color:{ui.TEXT_2};margin-top:4px'>{' · '.join(s for s in sub if s)}</div>"
             f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-top:8px'>{oom_txt} in the PDC Order of Merit</div>",
             unsafe_allow_html=True)
         score.markdown(
-            f"<div title='{escape(ui.PI_HELP)}' style='text-align:center'>"
-            f"<div style='{LABEL}'>Performance Index ⓘ</div>"
+            f"<div style='text-align:center'>"
+            f"<div style='{LABEL}'>Performance Index</div>"
             f"<div style='font-size:2.6em;font-weight:700;color:{ui.TEXT};line-height:1.1'>{ui.num(row['pi'], 2)}</div>"
             f"<div style='color:{ui.TEXT_2};font-size:0.85em'>#{int(row['rank'])} by PI</div></div>",
             unsafe_allow_html=True)
         base = row.get("ref_avg_l30")
         effective.markdown(
-            f"<div title='{escape(ui.EFFECTIVE_AVERAGE_HELP)}' style='text-align:center'>"
-            f"<div style='{LABEL}'>Effective Average ⓘ</div>"
+            f"<div style='text-align:center'>"
+            f"<div style='{LABEL}'>Effective Average</div>"
             f"<div style='font-size:2.6em;font-weight:700;color:{ui.TEXT};line-height:1.1'>{ui.num(row['effective_average'])}</div>"
             f"<div style='color:{ui.TEXT_2};font-size:0.85em'>"
             f"{f'vs {ui.num(base)} top-32 average' if base is not None and pd.notna(base) else ''}</div></div>",
@@ -87,36 +87,35 @@ def _breakdown(row: pd.Series) -> None:
     per_point = coef["beta_per_unit"].get("avg_l30")
     rows = []
     for p in [p for p in INPUTS if p in coef.index]:
-        label, fmt, help_text = INPUTS[p]
+        label, fmt, _ = INPUTS[p]
         value, ref, contrib = row.get(p), row.get(f"ref_{p}"), row.get(f"contrib_{p}")
         if value is None or pd.isna(value) or not per_point or pd.isna(contrib):
             continue
         ref_txt = (ui.oom_rank(ref) if p == "oom_rank" else fmt(ref)) if ref is not None and pd.notna(ref) else "–"
-        rows.append((label, help_text, fmt(value), ref_txt, contrib / per_point, False))
+        rows.append((label, fmt(value), ref_txt, contrib / per_point, False))
     base = row.get("ref_avg_l30")
     if rows and base is not None and pd.notna(base):
         # Shown to one decimal, the gaps must add up to the total as displayed: round the total from the displayed
         # numbers and give the rounding remainder to the largest gap.
         total = round(round(row["effective_average"], 1) - round(base, 1), 1)
-        gaps = [round(r[4], 1) for r in rows]
+        gaps = [round(r[3], 1) for r in rows]
         big = max(range(len(gaps)), key=lambda i: abs(gaps[i]))
         gaps[big] = round(gaps[big] + total - sum(gaps), 1)
-        rows = [r[:4] + (g, r[5]) for r, g in zip(rows, gaps)]
-        rows.append(("Effective Average", ui.EFFECTIVE_AVERAGE_HELP, ui.num(row["effective_average"]), ui.num(base),
-                     total, True))
+        rows = [r[:3] + (g, r[4]) for r, g in zip(rows, gaps)]
+        rows.append(("Effective Average", ui.num(row["effective_average"]), ui.num(base), total, True))
 
     st.subheader("PI breakdown")
     grid = "display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr;gap:8px;align-items:center;padding:9px 4px"
     head = "".join(f"<div style='text-align:{a}'>{t}</div>" for t, a in
                    (("", "left"), ("Player", "right"), ("Top-32 average", "right"), ("Gap", "right")))
     html = f"<div style='{grid};color:{ui.TEXT_2};font-size:0.8em;border-bottom:1px solid {ui.GRID}'>{head}</div>"
-    for label, help_text, value, ref_txt, pts, total in rows:
+    for label, value, ref_txt, pts, total in rows:
         # The total row is the result of all the rows above: set apart as a highlighted band.
         line = (f"background:#262624;border:1px solid {ui.GRID};border-radius:8px;margin-top:8px;padding:12px 4px"
                 if total else f"border-bottom:1px solid {ui.GRID}")
         gap = f"{'▲' if pts >= 0 else '▼'} {pts:+.1f}"
         html += (f"<div style='{grid};{line}'>"
-                 f"<div title='{escape(help_text)}' style='color:{ui.TEXT};font-weight:{700 if total else 400};"
+                 f"<div style='color:{ui.TEXT};font-weight:{700 if total else 400};"
                  f"padding-left:{8 if total else 0}px'>{'= ' if total else ''}{label}</div>"
                  f"<div style='text-align:right;color:{TOTAL_COLOR if total else ui.TEXT};font-weight:700;font-size:1.1em'>"
                  f"{value}</div>"
@@ -131,9 +130,13 @@ def _breakdown(row: pd.Series) -> None:
                      "(▲ better, ▼ worse).",
                      f"<b>Result</b>: base + all gaps = Effective Average {ui.num(row['effective_average'])}, which "
                      f"gives the PI {ui.num(row['pi'], 2)}."]
+            inputs = "".join(f"<li><b>{label}</b>: {text}</li>" for label, _, text in INPUTS.values())
             st.markdown(f"<div style='color:{ui.TEXT_2};font-size:0.88em;line-height:1.55'><ol style='margin:0 0 6px'>"
-                        + "".join(f"<li>{t}</li>" for t in steps) + "</ol>How a gap in form, Elo or ranking is "
-                        "converted into points: see Methodology.</div>", unsafe_allow_html=True)
+                        + "".join(f"<li>{t}</li>" for t in steps) + "</ol>"
+                        f"<div style='margin-top:8px'>The inputs:</div><ul style='margin:0 0 6px'>{inputs}</ul>"
+                        f"<div style='margin-top:8px'><b>Performance Index</b>: {escape(ui.PI_HELP.split(': ', 1)[1])}</div>"
+                        "<div style='margin-top:4px'>How a gap in form, Elo or ranking is converted into points: see "
+                        "Methodology.</div></div>", unsafe_allow_html=True)
     stage = row.get("stage_delta")
     if stage is not None and pd.notna(stage):
         st.caption(f"Stage Delta {stage:+.2f} · information only, not part of the PI: average on stage events minus "
