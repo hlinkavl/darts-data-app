@@ -14,9 +14,11 @@ def _weights_chart(coef) -> go.Figure:
     fig = go.Figure(go.Bar(
         x=c["weight_pct"], y=[ui.predictor_name(p) for p in c["predictor"]], orientation="h",
         marker=dict(color=ui.SERIES[0], line=dict(color=ui.SURFACE, width=2)),
-        text=[f"{w:.0f} %" for w in c["weight_pct"]], textposition="outside", textfont=dict(color=ui.TEXT_2), cliponaxis=False,
+        text=[f"{w:.0f} %" for w in c["weight_pct"]], textposition="outside", textfont=dict(color=ui.TEXT_2), cliponaxis=True,
         hovertemplate="%{y}: %{x:.1f} % of the index<extra></extra>"))
-    return ui.layout(fig, height=60 + 44 * len(c), xaxis=dict(title="share of the index (%)"))
+    # Room for the % labels inside the plot, so they never spill into the next column.
+    return ui.layout(fig, height=60 + 44 * len(c),
+                     xaxis=dict(title="share of the index (%)", range=[0, c["weight_pct"].max() * 1.25]))
 
 
 def _calibration_chart(cal) -> go.Figure:
@@ -48,7 +50,7 @@ The index is built in three transparent steps: **select** only predictors that p
         return
     st.caption(f"Active model: {data.active_version()}")
 
-    left, right = st.columns(2)
+    left, right = st.columns(2, gap="large")
     with left:
         st.subheader("What the PI is made of")
         st.plotly_chart(_weights_chart(coef), width="stretch", config={"displayModeBar": False})
