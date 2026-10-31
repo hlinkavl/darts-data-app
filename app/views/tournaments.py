@@ -399,8 +399,12 @@ def _season(cal: pd.DataFrame) -> None:
                      else (f"{pd.Timestamp(e):%d %b %Y}" if pd.notna(e) else "–") for s, e in zip(rows.start_date, rows.end_date)]
     rows["Winner"] = [f"{w} ({ui.num(a, 2)})" if w and pd.notna(a) else (w or "–") for w, a in zip(rows.winner_name, rows.winner_avg)]
     rows["Predictions"] = rows["has_draw"].map({True: "✓ draw available", False: ""})
+    rows["Predictions"] = rows["has_draw"].map({True: "✓ draw", False: ""})
     st.dataframe(rows[["tournament_name", "Dates", "Status", "Winner", "Predictions"]].rename(columns={"tournament_name": "Major"}),
-                 hide_index=True, width="stretch")
+                 hide_index=True, width="stretch",
+                 column_config={"Winner": st.column_config.TextColumn("Winner", width="large"),
+                                "Predictions": st.column_config.TextColumn("Predictions", width="small",
+                                                                           help="✓ draw = title chances and bracket available")})
 
 
 def render() -> None:
