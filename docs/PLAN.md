@@ -66,7 +66,7 @@ An end-to-end data app about PDC darts with two core features:
 | Day 1 | Data foundation: sources, ingestion, bronze → silver | ✅ done (2026-10-25) |
 | Day 2 | Analytics: Performance Index, prediction model, backtests | ✅ done (2026-10-28) |
 | Day 3 | Source switch (Orakel blocked → Mastercaller + Wikipedia), health report, model promotion, GitHub Actions, key test vs PDC ranking, AI layer | ⏳ in progress |
-| Day 4 | Streamlit app, Genie, deploy (ready for the Grand Slam, 14 Nov) | ⏳ app done locally (2026-10-31) |
+| Day 4 | Streamlit app, Genie, deploy (ready for the Grand Slam, 14 Nov) | ⏳ app done locally (2026-10-31); deploy and Genie left |
 
 ---
 
@@ -182,12 +182,19 @@ An end-to-end data app about PDC darts with two core features:
 3.7 [ ] Improve Wikidata matching for player backgrounds.
 3.8 [x] **Odds: left out for good** (decided 2026-10-28). Nothing meets the conditions "free, legal from the Czech Republic, no manual work": Betfair and Smarkets are geo-blocked for CZ (403), odds-api.io is paid, The Odds API has no darts, Livesport/Tipsport/Betano forbid scraping (Livesport terms art. 2.9/2.10), and no free historical darts odds dataset exists. Re-check only if a free darts odds API reachable from CZ appears.
 
-### Next steps (in this order)
-1. **When the Databricks quota resets** (still paused on 2026-10-31): `make deploy` + **one** full run of `darts_refresh`. Check: silver with both sources, crosswalk report, Orakel vs Mastercaller overlap, health report, key test in `pi_benchmark`, `pi_model_registry` has the first active version.
-2. Fix whatever the verification run shows (expect a few small issues in the new silver).
-3. **You:** create a Databricks access token (User Settings → Developer → Access tokens → Generate, e.g. 90 days) and add two GitHub secrets (repo → Settings → Secrets and variables → Actions): `DATABRICKS_HOST` = `https://dbc-2318ef7e-ac1e.cloud.databricks.com`, `DATABRICKS_TOKEN` = the token. Then start "refresh" once by hand in the GitHub Actions tab. From then on no Mac is needed.
-4. 3.6 news → players + 3.5 AI narratives (Databricks `ai_query`, compare models on 20 players).
-5. 3.7 backgrounds, then **Day 4** (app, Genie, deploy) before the Grand Slam (14 Nov).
+### Next steps (in this order): two working days left before the Grand Slam (14 Nov)
+
+**Day A: Databricks (as soon as the fair-use quota resets, expected 1 Nov)**
+1. `make deploy` + **one** full run of `darts_refresh`. Check: silver with both sources, crosswalk report, Orakel vs Mastercaller overlap, Order of Merit without duplicates (parser 2), health report, key test in `pi_benchmark`, `pi_model_registry` has the first active version.
+2. Upload the refetched Wikipedia files (Order of Merit history with parser 2, player backgrounds with matcher 2) to the Volume, or let the first refresh fetch them.
+3. Fix whatever the verification run shows (expect a few small issues in the new silver).
+4. **You:** create a Databricks access token (User Settings → Developer → Access tokens → Generate, e.g. 90 days) and add two GitHub secrets (repo → Settings → Secrets and variables → Actions): `DATABRICKS_HOST` = `https://dbc-2318ef7e-ac1e.cloud.databricks.com`, `DATABRICKS_TOKEN` = the token. Then start "refresh" once by hand in the GitHub Actions tab. From then on no Mac is needed.
+5. Deploy the app as a Databricks App (4.4): test the SQL warehouse mode end to end, the Refresh button (GitHub token secret) and the health badge.
+
+**Day B: AI layer and Genie**
+1. 3.6 PDC news → players, 3.5 AI narratives (Databricks `ai_query`, compare models on 20 players), shown in the Player Profile.
+2. 4.3 Genie space over the gold tables, embedded in "Ask the data".
+3. 4.5 README with screenshots; final check before the Grand Slam.
 
 **Free Edition quota:** a full run is ~7 tasks. Avoid repeated full runs on the same day: use `--only <task>` while developing and test locally first.
 
@@ -199,6 +206,7 @@ How fixes happen: config-only issues (e.g. a new major) can be fixed by editing 
 
 4.1 [x] **Streamlit app** done locally (2026-10-31) against a Parquet snapshot (`DARTS_DATA=local`, built by `scripts/build_local_snapshot.py`); the same code reads the SQL warehouse in production. Pages: Tournament Overview (status banner finished / live / upcoming, match cards with score and winner first, player photos, predictions, upcoming matches with PI and Effective Average, season calendar), Player Profile (photo, current PDC Order of Merit rank, PI, Effective Average, Stage Delta as info, PI over time, recent form, structured profile facts, titles from `gold.player_titles`), PI Leaderboard (name search with autocomplete, head to head), Ask the data, Methodology, Data & Health. Feedback round 1 applied (seed `&nbsp;` fix, Effective Average tooltip, contributions chart dropped). Still open: warehouse mode test on Day A, AI narrative (3.5), Genie (4.3).
    - Feedback round 2 (2026-10-31): bracket view of the last 16 (surnames, scores, pre-match chance, winner in green) with match details from the final backwards; tournament picker shows the champion and the month of the final; facts as a structured block; season calendar newest first; Upcoming matches as the last tab. Player Profile: round photo, Order of Merit and PI as the headline numbers, **PI breakdown** (each input vs the average top-32 player in 3-dart-average points, adding up to the Effective Average), last 5 matches as cards, profile as one paragraph, latest 5 titles plus the full list.
+   - Feedback rounds 3–6 (2026-10-31): trophy for the champion inside the bracket; event facts as tiles; title chart no longer overlaps; profile header as one card (`#<OoM> Name`, PI, Effective Average vs the top-32 average); PI breakdown tiles show the player's value (green above / red below the top-32 average) vs the top-32 average with the effect in average points, plus the full sum in a framed line; leaderboard can rank by PDC Order of Merit or PI, search jumps to the player's row and highlights it, ↗ or the name opens the profile; head to head with photos and big win chances.
    - **Photos:** Wikidata matching rewritten (search only among items with occupation darts player, exact name match on labels and aliases, special letters such as ł). Photo fallbacks, all freely licensed: Wikidata P18 → English Wikipedia lead image → the player's Commons category. Players in the majors' draws are covered too. Players with no free photo anywhere get an initials avatar; records without a photo are retried monthly.
    - **Bug fix:** the Order of Merit parser also read the module's previous table (`data.rankingsold`), so ~220 players appeared twice per snapshot and silver could pick the older rank. Fixed (parser 2), the history is fetched again once, silver prefers parser-2 rows.
 4.2 [ ] **Refresh button + health badge**: dispatches the GitHub Actions refresh, shows the last refresh time and the health status with warnings.

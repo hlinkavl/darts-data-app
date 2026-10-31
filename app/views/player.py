@@ -93,30 +93,33 @@ def _breakdown(row: pd.Series) -> None:
         if value is not None and pd.notna(value) and per_point and pd.notna(contrib):
             inputs.append((p, value, ref, contrib / per_point))
 
-    def side(caption, value, strong):
+    def side(caption, value, color, strong):
         return (f"<div><div style='color:{ui.TEXT_2};font-size:0.75em'>{caption}</div>"
                 f"<div style='font-size:{'1.55em' if strong else '1.15em'};font-weight:{700 if strong else 500};"
-                f"color:{ui.TEXT if strong else ui.TEXT_2}'>{value}</div></div>")
+                f"color:{color}'>{value}</div></div>")
 
     tiles = []
     for p, value, ref, pts in inputs:
         label, fmt, help_text = INPUTS[p]
         ref_txt = (ui.oom_rank(ref) if p == "oom_rank" else fmt(ref)) if ref is not None and pd.notna(ref) else "–"
-        arrow = "▲" if pts >= 0 else "▼"
+        arrow = "▲" if pts >= 0 else "▼"  # by the effect: a lower Order of Merit number is better
         tiles.append(
             f"<div title='{escape(help_text)}' style='border:1px solid {ui.GRID};border-radius:10px;padding:12px 14px'>"
             f"<div style='{LABEL}'>{label}</div>"
             f"<div style='display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px'>"
-            f"{side('Player', fmt(value), True)}<div style='color:{ui.TEXT_2};padding-bottom:4px'>vs</div>"
-            f"<div style='text-align:right'>{side('Top-32 average', ref_txt, False)}</div></div>"
+            f"{side('Player', fmt(value), ui.WIN if pts >= 0 else ui.LOSS, True)}"
+            f"<div style='color:{ui.TEXT_2};padding-bottom:4px'>vs</div>"
+            f"<div style='text-align:right'>{side('Top-32 average', ref_txt, ui.TEXT_2, False)}</div></div>"
             f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-top:10px'>{arrow} {pts:+.1f} avg points</div></div>")
     base = row.get("ref_avg_l30")
     st.markdown(f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px'>{''.join(tiles)}</div>",
                 unsafe_allow_html=True)
     if inputs and base is not None and pd.notna(base):
         terms = " ".join(f"{pts:+.1f} {INPUTS[p][0].split(' (')[0]}" for p, _, _, pts in inputs)
-        st.caption(f"{ui.num(base)} (average top-32 player) {terms} = **{ui.num(row['effective_average'])} Effective Average** "
-                   f"→ PI {ui.num(row['pi'], 2)}")
+        st.markdown(f"<div style='border:1px solid {ui.GRID};border-radius:10px;padding:10px 14px;margin-top:12px;"
+                    f"color:{ui.TEXT_2};font-size:0.9em'>{ui.num(base)} (average top-32 player) {escape(terms)} = "
+                    f"<b style='color:{ui.TEXT}'>{ui.num(row['effective_average'])} Effective Average</b> → PI "
+                    f"{ui.num(row['pi'], 2)}</div>", unsafe_allow_html=True)
     stage = row.get("stage_delta")
     if stage is not None and pd.notna(stage):
         st.caption(f"Stage Delta {stage:+.2f} (information only, not part of the PI): average on stage events (majors, "
