@@ -40,7 +40,7 @@ def _history_chart(hist: pd.DataFrame) -> go.Figure:
 
 
 def _header(name: str, row: pd.Series, info: pd.Series) -> None:
-    """One card: round photo | '#<Order of Merit> Name' with nickname, country and age | the Performance Index."""
+    """One card: round photo | '#<Order of Merit> Name' with nickname, country and age | PI | Effective Average."""
     nickname = info.get("nickname")
     sub = [f"“{escape(nickname)}”" if isinstance(nickname, str) and nickname else None,
            COUNTRY.get(info.get("country"), info.get("country")) if isinstance(info.get("country"), str) else None]
@@ -52,7 +52,7 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
     image = info.get("image_file")
 
     with st.container(border=True):
-        photo, who, score = st.columns([1.2, 3.2, 1.6], vertical_alignment="center")
+        photo, who, score, effective = st.columns([1.2, 3, 1.4, 1.4], vertical_alignment="center")
         photo.markdown(f"<div style='text-align:center'>{ui.avatar(image, 128, name=name, ring=ui.GRID)}</div>",
                        unsafe_allow_html=True)
         who.markdown(
@@ -67,6 +67,14 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
             f"<div style='{LABEL}'>Performance Index ⓘ</div>"
             f"<div style='font-size:2.6em;font-weight:700;color:{ui.TEXT};line-height:1.1'>{ui.num(row['pi'], 2)}</div>"
             f"<div style='color:{ui.TEXT_2};font-size:0.85em'>#{int(row['rank'])} by PI</div></div>",
+            unsafe_allow_html=True)
+        base = row.get("ref_avg_l30")
+        effective.markdown(
+            f"<div title='{escape(ui.EFFECTIVE_AVERAGE_HELP)}' style='text-align:center'>"
+            f"<div style='{LABEL}'>Effective Average ⓘ</div>"
+            f"<div style='font-size:2.6em;font-weight:700;color:{ui.TEXT};line-height:1.1'>{ui.num(row['effective_average'])}</div>"
+            f"<div style='color:{ui.TEXT_2};font-size:0.85em'>"
+            f"{f'vs {ui.num(base)} top-32 average' if base is not None and pd.notna(base) else ''}</div></div>",
             unsafe_allow_html=True)
 
 
@@ -102,17 +110,8 @@ def _breakdown(row: pd.Series) -> None:
             f"{side('Player', fmt(value), True)}<div style='color:{ui.TEXT_2};padding-bottom:4px'>vs</div>"
             f"<div style='text-align:right'>{side('Top-32 average', ref_txt, False)}</div></div>"
             f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-top:10px'>{arrow} {pts:+.1f} avg points</div></div>")
-    base, total = row.get("ref_avg_l30"), sum(pts for *_, pts in inputs)
-    tiles.append(
-        f"<div title='{escape(ui.EFFECTIVE_AVERAGE_HELP)}' style='border:1px solid {ui.GRID};border-radius:10px;"
-        f"padding:12px 14px;background:#222220'><div style='{LABEL}'>Effective Average ⓘ</div>"
-        f"<div style='font-size:1.9em;font-weight:700;color:{ui.TEXT};margin-top:6px'>{ui.num(row['effective_average'])}</div>"
-        f"<div style='color:{ui.TEXT_2};font-size:0.85em'>{ui.num(base)} top-32 base {total:+.1f} from the inputs</div>"
-        f"<div style='border-top:1px solid {ui.GRID};margin-top:10px;padding-top:8px'>"
-        f"<div style='color:{ui.TEXT_2};font-size:0.75em'>Performance Index</div>"
-        f"<div style='font-size:1.25em;font-weight:700;color:{ui.TEXT}'>{ui.num(row['pi'], 2)} "
-        f"<span style='font-size:0.7em;font-weight:400;color:{ui.TEXT_2}'>#{int(row['rank'])} by PI</span></div></div></div>")
-    st.markdown(f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px'>{''.join(tiles)}</div>",
+    base = row.get("ref_avg_l30")
+    st.markdown(f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px'>{''.join(tiles)}</div>",
                 unsafe_allow_html=True)
     if inputs and base is not None and pd.notna(base):
         terms = " ".join(f"{pts:+.1f} {INPUTS[p][0].split(' (')[0]}" for p, _, _, pts in inputs)
