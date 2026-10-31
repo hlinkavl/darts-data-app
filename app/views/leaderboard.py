@@ -1,6 +1,7 @@
 """PI Leaderboard and head-to-head calculator."""
 
 import math
+from html import escape
 
 import pandas as pd
 import streamlit as st
@@ -12,6 +13,29 @@ import ui
 ORDERS = {"PDC Order of Merit": ("oom", "rank"), "Performance Index": ("rank", "oom")}
 FORMATS = {"Typical match (first to 6 legs)": (6, "legs")} | {f"First to {n} legs": (n, "legs") for n in (3, 4, 5, 7, 8, 10, 11, 16, 18)} \
     | {f"First to {n} sets": (n, "sets") for n in (2, 3, 4, 5, 6, 7)}
+
+
+def _open_profile(name: str) -> None:
+    st.session_state["open_player"] = name
+    st.switch_page(st.session_state["pages"]["player"])
+
+
+def _h2h_card(ra: pd.Series, rb: pd.Series, p: float, fmt: str, photos: dict, oom) -> str:
+    """Both players with photos and their win chances in big type, a split bar between them."""
+    def side(r, chance, color, align):
+        return (f"<div style='flex:1;text-align:{align};min-width:0'>"
+                f"{ui.avatar(photos.get(r['player_key']), 84, name=r['player_name'], ring=color)}"
+                f"<div style='font-weight:700;color:{ui.TEXT};margin-top:6px'>{escape(r['player_name'])}</div>"
+                f"<div style='color:{ui.TEXT_2};font-size:0.8em'>{oom(r)} Order of Merit · PI {ui.num(r['pi'], 2)}</div>"
+                f"<div style='font-size:2.8em;font-weight:800;color:{ui.TEXT};line-height:1.1;margin-top:6px'>{ui.pct(chance, 1)}</div>"
+                f"</div>")
+    return (f"<div style='border:1px solid {ui.GRID};border-radius:12px;padding:18px 20px;margin:6px 0 12px'>"
+            f"<div style='display:flex;align-items:flex-end;gap:16px'>{side(ra, p, ui.SERIES[0], 'left')}"
+            f"<div style='color:{ui.TEXT_2};padding-bottom:18px'>vs</div>{side(rb, 1 - p, ui.SERIES[1], 'right')}</div>"
+            f"<div style='display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;margin-top:12px'>"
+            f"<div style='width:{100 * p:.1f}%;background:{ui.SERIES[0]}'></div><div style='flex:1;background:{ui.SERIES[1]}'></div></div>"
+            f"<div style='text-align:center;color:{ui.TEXT_2};font-size:0.85em;margin-top:8px'>Chance to win · {escape(fmt.lower())}</div>"
+            f"</div>")
 
 
 def render() -> None:
@@ -33,16 +57,13 @@ def render() -> None:
 
     names = pi["player_name"].tolist()
     order = st.segmented_control("Rank by", list(ORDERS), default=next(iter(ORDERS)), key="lb_order") or next(iter(ORDERS))
-    find, go_to = st.columns([4, 1], vertical_alignment="bottom")
-    pick = find.selectbox("Find a player", sorted(names), index=None, placeholder="Start typing a name…", key="lb_find")
+    pick = st.selectbox("Find a player", sorted(names), index=None, placeholder="Start typing a name to open the profile…",
+                        key="lb_find")
     if pick:
-        board = board[board["player_name"] == pick]
-        if go_to.button("Open profile →", width="stretch"):
-            st.session_state["player"] = pick
-            st.switch_page(st.session_state["pages"]["player"])
+        _open_profile(pick)
     first, second = ORDERS[order]
-    board = board.sort_values([first, second], na_position="last")
-    st.dataframe(
+    board = board.sort_values([first, second], na_position="last").reset_index(drop=True)
+    picked = st.dataframe(
         board[[first, "player_name", second, "pi", "change", "effective_average", "avg_l30", "form", "elo"]],
         hide_index=True, width="stretch", height=520,
         column_config={
@@ -54,7 +75,12 @@ def render() -> None:
             "effective_average": st.column_config.NumberColumn("Effective Average", format="%.1f", help=ui.EFFECTIVE_AVERAGE_HELP),
             "avg_l30": st.column_config.NumberColumn("3-Dart Avg (L30)", format="%.2f"),
             "form": st.column_config.NumberColumn("Form", format="%+.2f"),
-            "elo": st.column_config.NumberColumn("Elo", format="%.0f")})
+            "elo": st.column_config.NumberColumn("Elo", format="%.0f")},
+        on_select="rerun", selection_mode="single-row", key="lb_table")
+    rows = picked.selection.rows if picked else []
+    if rows:
+        _open_profile(board["player_name"].iloc[rows[0]])
+    st.caption("Click a player to open the profile.")
     top = pi.sort_values("rank")["pi"].tolist()
     if len(top) >= 20:
         st.caption(f"A gap in PI is a head-to-head chance: #1 vs #2 ({top[0]:.2f} vs {top[1]:.2f}) is "
@@ -76,7 +102,8 @@ def render() -> None:
         return f"#{int(rank)}" if rank is not None and pd.notna(rank) else ui.oom_rank(r["oom_rank"])
 
     p = ui.match_probability(ui.head_to_head(ra["pi"], rb["pi"]), first_to, unit)
-    st.progress(p, text=f"**{a}** {ui.pct(p, 1)}  ·  {ui.pct(1 - p, 1)} **{b}**")
+    photos = dict(zip(data.players()["player_key"], data.players()["image_file"]))
+    st.markdown(_h2h_card(ra, rb, p, fmt, photos, _oom), unsafe_allow_html=True)
     comp = pd.DataFrame({
         "": ["PI", "Effective Average", "3-Dart Average (L30)", "Form", "Elo", "Order of Merit"],
         a: [ui.num(ra["pi"], 2), ui.num(ra["effective_average"]), ui.num(ra["avg_l30"], 2), f"{ra['form']:+.2f}",

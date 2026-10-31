@@ -40,8 +40,7 @@ def _history_chart(hist: pd.DataFrame) -> go.Figure:
 
 
 def _header(name: str, row: pd.Series, info: pd.Series) -> None:
-    """Round photo, '#<Order of Merit> Name', and our headline number, the Performance Index."""
-    photo = ui.avatar(info.get("image_file"), 150, name=name, ring=ui.GRID)
+    """One card: round photo | '#<Order of Merit> Name' with nickname, country and age | the Performance Index."""
     nickname = info.get("nickname")
     sub = [f"“{escape(nickname)}”" if isinstance(nickname, str) and nickname else None,
            COUNTRY.get(info.get("country"), info.get("country")) if isinstance(info.get("country"), str) else None]
@@ -50,23 +49,25 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
         sub.append(f"{int((pd.Timestamp(date.today()) - dob).days // 365.25)} years")
     oom = info.get("prize_money_rank")
     oom_txt = f"#{int(oom)}" if pd.notna(oom) else ui.oom_rank(row.get("oom_rank"))
+    image = info.get("image_file")
 
-    def number(label, value, extra, tip):
-        return (f"<div title='{escape(tip)}'><div style='{LABEL}'>{label} ⓘ</div>"
-                f"<div style='font-size:2.4em;font-weight:700;color:{ui.TEXT};line-height:1.15'>{value}"
-                f"<span style='font-size:0.42em;font-weight:400;color:{ui.TEXT_2};margin-left:8px'>{extra}</span></div></div>")
-
-    st.markdown(
-        f"<div style='display:flex;align-items:center;gap:30px;flex-wrap:wrap;margin:8px 0 6px'>{photo}<div>"
-        f"<div style='font-size:2em;font-weight:700;color:{ui.TEXT}'>"
-        f"<span title='PDC Order of Merit: current position in the official ranking (2-year prize money)' "
-        f"style='color:{ui.TEXT_2};margin-right:12px'>{oom_txt}</span>{escape(name)}</div>"
-        f"<div style='color:{ui.TEXT_2}'>{' · '.join(s for s in [f'{oom_txt} PDC Order of Merit'] + sub if s)}</div>"
-        f"<div style='display:flex;gap:44px;flex-wrap:wrap;margin-top:14px'>"
-        f"{number('Performance Index', ui.num(row['pi'], 2), f'#{int(row['rank'])} by PI', ui.PI_HELP)}"
-        f"</div></div></div>", unsafe_allow_html=True)
-    if isinstance(info.get("image_file"), str):
-        st.caption(ui.photo_credit(info["image_file"]))
+    with st.container(border=True):
+        photo, who, score = st.columns([1.2, 3.2, 1.6], vertical_alignment="center")
+        photo.markdown(f"<div style='text-align:center'>{ui.avatar(image, 128, name=name, ring=ui.GRID)}</div>",
+                       unsafe_allow_html=True)
+        who.markdown(
+            f"<div style='font-size:2.1em;font-weight:700;line-height:1.2;color:{ui.TEXT}'>"
+            f"<span title='Current position in the official PDC Order of Merit' style='color:{ui.TEXT_2}'>{oom_txt}</span> "
+            f"{escape(name)}</div>"
+            f"<div style='color:{ui.TEXT_2};margin-top:4px'>{' · '.join(s for s in sub if s)}</div>"
+            f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-top:8px'>{oom_txt} in the PDC Order of Merit</div>",
+            unsafe_allow_html=True)
+        score.markdown(
+            f"<div title='{escape(ui.PI_HELP)}' style='text-align:center'>"
+            f"<div style='{LABEL}'>Performance Index ⓘ</div>"
+            f"<div style='font-size:2.6em;font-weight:700;color:{ui.TEXT};line-height:1.1'>{ui.num(row['pi'], 2)}</div>"
+            f"<div style='color:{ui.TEXT_2};font-size:0.85em'>#{int(row['rank'])} by PI</div></div>",
+            unsafe_allow_html=True)
 
 
 def _breakdown(row: pd.Series) -> None:
@@ -159,10 +160,14 @@ def _profile(info: pd.Series) -> None:
         extra.append(f"Prize money over the last two years: £{int(money):,}.")
     paragraph = " ".join([text] + extra).strip()
     st.markdown(paragraph or "No background yet.")
+    sources = []
     title = info.get("enwiki_title")
     if isinstance(title, str) and intro:
-        st.caption(f"Source: [Wikipedia – {title}](https://en.wikipedia.org/wiki/{title.replace(' ', '_')}) (CC BY-SA) · "
-                   "AI summary of form and interviews (PDC news): coming soon.")
+        sources.append(f"Text: [Wikipedia – {title}](https://en.wikipedia.org/wiki/{title.replace(' ', '_')}) (CC BY-SA)")
+    if isinstance(info.get("image_file"), str):
+        sources.append(ui.photo_credit(info["image_file"]))
+    sources.append("AI summary of form and interviews (PDC news): coming soon")
+    st.caption(" · ".join(sources))
 
 
 def _titles(player_key: int) -> None:
@@ -192,9 +197,12 @@ def render() -> None:
         st.warning("No Performance Index yet.")
         return
     names = pi.sort_values("rank")["player_name"].tolist()
-    default = st.session_state.get("player", names[0])
-    name = st.selectbox("Player", names, index=names.index(default) if default in names else 0, key="player",
-                        placeholder="Type a name…")
+    wanted = st.session_state.pop("open_player", None)  # set by the leaderboard before switching here
+    if wanted in names:
+        st.session_state["player"] = wanted
+    if st.session_state.get("player") not in names:
+        st.session_state["player"] = names[0]
+    name = st.selectbox("Player", names, key="player", placeholder="Type a name…")
     row = pi[pi["player_name"] == name].iloc[0]
     info_all = data.players()
     info = info_all[info_all["player_key"] == row["player_key"]]
