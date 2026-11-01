@@ -31,7 +31,8 @@ version = f"v{date.today().isoformat()}"
 
 player_matches = spark.sql("""
     SELECT match_key, player_key, opponent_key, match_date, round, tournament_key, is_major, won, category, tournament_name,
-           points, darts, first9_points, first9_darts, checkouts_hit, checkout_attempts, one_eighties
+           points, darts, first9_points, first9_darts, checkouts_hit, checkout_attempts, one_eighties,
+           score_for, score_against
     FROM darts_silver.player_matches
 """).toPandas()
 matches = spark.sql("SELECT match_key, match_date, round, winner_key, loser_key, is_major FROM darts_silver.matches").toPandas()

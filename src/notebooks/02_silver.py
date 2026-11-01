@@ -313,7 +313,8 @@ FROM {dedup("orakel_events", "event_key")}
 
 # COMMAND ----------
 
-# Rows from parser 1 also contain the module's previous table (duplicates); parser 2 rows win.
+# Rows from parser 1 also contain the module's previous table, often with other spellings ("De Zwaan", "O’Connor"),
+# so they are dropped as soon as parser-2 rows exist; one row per player and snapshot (not per spelling).
 ranking_sources = [f"SELECT to_date(as_of) AS snapshot_date, rank, player_name, prize_money, _run_date, "
                    f"{'coalesce(parser, 1)' if 'parser' in spark.table(f'darts_bronze.{t}').columns else '1'} AS parser "
                    f"FROM darts_bronze.{t}"
@@ -324,7 +325,8 @@ if ranking_sources:
     SELECT r.snapshot_date, r.rank, x.player_key, r.player_name, r.prize_money AS prize_money_2y
     FROM ({' UNION ALL '.join(ranking_sources)}) r
     JOIN xw x ON x.source = 'wikipedia' AND x.source_id = r.player_name
-    QUALIFY row_number() OVER (PARTITION BY r.snapshot_date, r.player_name ORDER BY r.parser DESC, r._run_date DESC) = 1
+    WHERE r.parser = (SELECT max(parser) FROM ({' UNION ALL '.join(ranking_sources)}))
+    QUALIFY row_number() OVER (PARTITION BY r.snapshot_date, x.player_key ORDER BY r._run_date DESC, r.rank) = 1
     """)
 
 orakel_profile = f"""

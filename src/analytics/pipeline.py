@@ -40,11 +40,18 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str,
 
     candidates = [c for c in features.CANDIDATES if rankings is not None or c != "oom_rank"]
     feats = features.point_in_time_features(player_matches, elo_history, rankings, major_elo_history)
+    log = model.SelectionLog()
+    # A candidate without any data (e.g. an input column the caller did not pass) would empty every pair in
+    # build_pairs; it is set aside and logged instead.
+    for c in [c for c in candidates if feats[c].notna().sum() == 0]:
+        log.add(c, "0 data", "dropped", "no data for this predictor in the input")
+        candidates.remove(c)
     pairs = model.build_pairs(feats, candidates)
+    if pairs.empty:
+        raise ValueError("no complete training pairs: check the inputs of the model")
     split = model.time_split(pairs, VALIDATION_FROM, TEST_FROM)
     scale = split.train[candidates].std()
 
-    log = model.SelectionLog()
     kept, corr = model.step1a_correlation(split, candidates, scale, log)
     kept = model.step1b_significance(split, kept, scale, log)
     selected, share = model.step1c_bootstrap(split, kept, scale, log)

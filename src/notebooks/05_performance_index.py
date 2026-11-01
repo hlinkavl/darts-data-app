@@ -38,8 +38,9 @@ version = active_version()
 coefficients = spark.sql(f"SELECT * FROM darts_gold.pi_coefficients WHERE version = '{version}'").toPandas()
 elo_history = spark.sql(f"SELECT * FROM darts_gold.elo_history WHERE version = '{version}'").toPandas()
 player_matches = spark.sql("""
-    SELECT match_key, player_key, opponent_key, match_date, round, tournament_key, is_major, won,
-           points, darts, first9_points, first9_darts, checkouts_hit, checkout_attempts, one_eighties
+    SELECT match_key, player_key, opponent_key, match_date, round, tournament_key, is_major, won, category,
+           points, darts, first9_points, first9_darts, checkouts_hit, checkout_attempts, one_eighties,
+           score_for, score_against
     FROM darts_silver.player_matches
 """).toPandas()
 players = spark.sql("SELECT player_key, player_name FROM darts_silver.players WHERE is_tracked").toPandas()
