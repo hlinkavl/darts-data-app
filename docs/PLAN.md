@@ -65,8 +65,8 @@ An end-to-end data app about PDC darts with two core features:
 | Day 0 | Admin and setup | ✅ done (2026-10-24) |
 | Day 1 | Data foundation: sources, ingestion, bronze → silver | ✅ done (2026-10-25) |
 | Day 2 | Analytics: Performance Index, prediction model, backtests | ✅ done (2026-10-28) |
-| Day 3 | Source switch (Orakel blocked → Mastercaller + Wikipedia), health report, model promotion, GitHub Actions, key test vs PDC ranking, AI layer | ⏳ in progress |
-| Day 4 | Streamlit app, Genie, deploy (ready for the Grand Slam, 14 Nov) | ⏳ app done locally (2026-10-31); deploy and Genie left |
+| Day 3 | Source switch (Orakel blocked → Mastercaller + Wikipedia), health report, model promotion, GitHub Actions, key test vs PDC ranking | ✅ done (verified in Databricks 2026-11-01) |
+| Day 4 | Streamlit app, Genie, deploy (ready for the Grand Slam, 14 Nov) | ⏳ app live on Databricks (2026-11-01); Day B operations and Day C AI + Genie left |
 
 ---
 
@@ -182,22 +182,22 @@ An end-to-end data app about PDC darts with two core features:
 3.7 [ ] Improve Wikidata matching for player backgrounds.
 3.8 [x] **Odds: left out for good** (decided 2026-10-28). Nothing meets the conditions "free, legal from the Czech Republic, no manual work": Betfair and Smarkets are geo-blocked for CZ (403), odds-api.io is paid, The Odds API has no darts, Livesport/Tipsport/Betano forbid scraping (Livesport terms art. 2.9/2.10), and no free historical darts odds dataset exists. Re-check only if a free darts odds API reachable from CZ appears.
 
-### Next steps (in this order): two working days left before the Grand Slam (14 Nov)
+### Next steps: two short days left before the Grand Slam (14 Nov)
 
-**Day A: Databricks (as soon as the fair-use quota resets, expected 1 Nov)**
-> **Status 2026-11-01:** quota back. Bundle deployed, ingestion (Mastercaller, Wikipedia with parser 2 and matcher 2, PDC news) uploaded, **full `darts_refresh` green** after two fixes (notebooks now pass match scores to the model; silver rankings one row per player and snapshot). Results match the local ones: model `v2026-11-01` active (avg_l30, form, elo, oom_rank), walk-forward on majors 0.628 vs Order of Merit 0.652, p < 0.001; Littler PI 7.29. App deployed with the SQL warehouse resource and running. Open: grants for the app's service principal (step 5), PAT + GitHub secrets (step 4), runtime (pi_model ~20 min and tournaments ~21 min on serverless vs seconds locally), 15 tracked players without history (aliases), `unit` (legs/sets) missing in silver player_matches (Long-Format Delta counts sets as legs; info-only predictor).
+**Day A: Databricks ✅ (2026-11-01)**
+Bundle deployed; ingestion (Mastercaller, Wikipedia with parser 2 and matcher 2, PDC news) uploaded; **full `darts_refresh` green** after two fixes (notebooks now pass match scores to the model; silver rankings one row per player and snapshot). Results match the local ones: model `v2026-11-01` active (avg_l30, form, elo, oom_rank), walk-forward on majors 0.628 vs Order of Merit 0.652, p < 0.001; Littler PI 7.29. App deployed as a Databricks App with the SQL warehouse resource and read grants for its service principal, running on real data (two fixes: Python 3.11 f-string, warehouse types; `scripts/smoke_app.py databricks` now runs before every app deploy). Databricks token + GitHub secrets set, **first manual GitHub Actions refresh started** (CI waits up to 80 min for the job).
 
-1. `make deploy` + **one** full run of `darts_refresh`. Check: silver with both sources, crosswalk report, Orakel vs Mastercaller overlap, Order of Merit without duplicates (parser 2), health report, key test in `pi_benchmark`, `pi_model_registry` has the first active version.
-2. Upload the refetched Wikipedia files (Order of Merit history with parser 2, player backgrounds with matcher 2) to the Volume, or let the first refresh fetch them.
-3. Fix whatever the verification run shows (expect a few small issues in the new silver).
-4. **You:** create a Databricks access token (User Settings → Developer → Access tokens → Generate, e.g. 90 days) and add two GitHub secrets (repo → Settings → Secrets and variables → Actions): `DATABRICKS_HOST` = `https://dbc-2318ef7e-ac1e.cloud.databricks.com`, `DATABRICKS_TOKEN` = the token. Then start "refresh" once by hand in the GitHub Actions tab. From then on no Mac is needed.
-5. Deploy the app as a Databricks App (4.4): test the SQL warehouse mode end to end, the Refresh button (GitHub token secret) and the health badge.
+**Day B: operations (short)**
+1. Check the first GitHub Actions refresh (green, all 7 tasks, health report).
+2. The app's **Refresh button**: a fine-grained GitHub token allowed to run the workflow, stored as an app secret (`GITHUB_TOKEN`); test it from the app.
+3. **Speed up the Databricks run** (~50 min now: pi_model ~20 min and tournaments ~21 min on serverless, seconds locally); it runs daily during majors, so it costs quota.
+4. Aliases for the **15 tracked players without history** (health report yellow).
+5. Optional: `unit` (legs/sets) in silver player_matches (Long-Format Delta counts sets as legs; info-only predictor).
 
-**Day B: AI layer and Genie**
-0. Carried over from Day A (2026-11-01): (a) the app's **Refresh button**: a GitHub token that may dispatch the workflow, stored as an app secret (`GITHUB_TOKEN`); (b) **speed up the Databricks run** (~50 min: pi_model ~20 min and tournaments ~21 min on serverless, seconds locally); (c) aliases for the **15 tracked players without history** (health report yellow); (d) `unit` (legs/sets) in silver player_matches.
+**Day C: AI layer, Genie, README (short)**
 1. 3.6 PDC news → players, 3.5 AI narratives (Databricks `ai_query`, compare models on 20 players), shown in the Player Profile.
 2. 4.3 Genie space over the gold tables, embedded in "Ask the data".
-3. 4.5 README with screenshots; final check before the Grand Slam.
+3. 4.5 README with screenshots; final check before the Grand Slam (draw usually published a few days before 14 Nov).
 
 **Free Edition quota:** a full run is ~7 tasks. Avoid repeated full runs on the same day: use `--only <task>` while developing and test locally first.
 
