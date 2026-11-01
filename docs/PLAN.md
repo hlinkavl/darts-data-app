@@ -185,6 +185,8 @@ An end-to-end data app about PDC darts with two core features:
 ### Next steps (in this order): two working days left before the Grand Slam (14 Nov)
 
 **Day A: Databricks (as soon as the fair-use quota resets, expected 1 Nov)**
+> **Status 2026-11-01:** quota back. Bundle deployed, ingestion (Mastercaller, Wikipedia with parser 2 and matcher 2, PDC news) uploaded, **full `darts_refresh` green** after two fixes (notebooks now pass match scores to the model; silver rankings one row per player and snapshot). Results match the local ones: model `v2026-11-01` active (avg_l30, form, elo, oom_rank), walk-forward on majors 0.628 vs Order of Merit 0.652, p < 0.001; Littler PI 7.29. App deployed with the SQL warehouse resource and running. Open: grants for the app's service principal (step 5), PAT + GitHub secrets (step 4), runtime (pi_model ~20 min and tournaments ~21 min on serverless vs seconds locally), 15 tracked players without history (aliases), `unit` (legs/sets) missing in silver player_matches (Long-Format Delta counts sets as legs; info-only predictor).
+
 1. `make deploy` + **one** full run of `darts_refresh`. Check: silver with both sources, crosswalk report, Orakel vs Mastercaller overlap, Order of Merit without duplicates (parser 2), health report, key test in `pi_benchmark`, `pi_model_registry` has the first active version.
 2. Upload the refetched Wikipedia files (Order of Merit history with parser 2, player backgrounds with matcher 2) to the Volume, or let the first refresh fetch them.
 3. Fix whatever the verification run shows (expect a few small issues in the new silver).

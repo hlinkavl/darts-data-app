@@ -9,6 +9,10 @@ variables:
   catalog:
     description: Unity Catalog catalog (Free Edition default is "workspace")
     default: workspace
+  warehouse_id:
+    description: SQL warehouse the app reads the gold tables from (Free Edition has one)
+    lookup:
+      warehouse: Serverless Starter Warehouse
 
 targets:
   dev:

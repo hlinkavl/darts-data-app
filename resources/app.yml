@@ -4,3 +4,10 @@ resources:
       name: darts-performance-analyzer
       description: PDC darts tournament predictions and player Performance Index.
       source_code_path: ../app
+      # Exposed to the app as DATABRICKS_WAREHOUSE_ID (app.yaml: valueFrom: sql-warehouse).
+      resources:
+        - name: sql-warehouse
+          description: SQL warehouse for the gold tables
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
