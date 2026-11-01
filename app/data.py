@@ -6,6 +6,7 @@ scripts/build_local_snapshot.py.
 """
 
 import os
+from decimal import Decimal
 from pathlib import Path
 
 import pandas as pd
@@ -42,10 +43,23 @@ def table(name: str, where: str | None = None) -> pd.DataFrame:
     try:
         with _connection().cursor() as cur:
             cur.execute(query)
-            return cur.fetchall_arrow().to_pandas()
+            return _like_snapshot(cur.fetchall_arrow().to_pandas(date_as_object=False))
     except Exception as exc:  # a table that doesn't exist yet (e.g. no draw parsed) must not break a page
         st.session_state.setdefault("data_errors", {})[name] = str(exc)[:300]
         return pd.DataFrame()
+
+
+def _like_snapshot(df: pd.DataFrame) -> pd.DataFrame:
+    """Warehouse types made to match the local snapshot, so pages behave the same in both modes: timestamps
+    without a time zone (UTC), decimals as floats."""
+    for col in df.columns:
+        if isinstance(df[col].dtype, pd.DatetimeTZDtype):
+            df[col] = df[col].dt.tz_convert("UTC").dt.tz_localize(None)
+        elif df[col].dtype == object:
+            sample = df[col].dropna()
+            if len(sample) and isinstance(sample.iloc[0], Decimal):
+                df[col] = df[col].astype(float)
+    return df
 
 
 def _pandas_condition(where: str) -> str:
