@@ -194,6 +194,7 @@ An end-to-end data app about PDC darts with two core features:
 5. Deploy the app as a Databricks App (4.4): test the SQL warehouse mode end to end, the Refresh button (GitHub token secret) and the health badge.
 
 **Day B: AI layer and Genie**
+0. Carried over from Day A (2026-11-01): (a) the app's **Refresh button**: a GitHub token that may dispatch the workflow, stored as an app secret (`GITHUB_TOKEN`); (b) **speed up the Databricks run** (~50 min: pi_model ~20 min and tournaments ~21 min on serverless, seconds locally); (c) aliases for the **15 tracked players without history** (health report yellow); (d) `unit` (legs/sets) in silver player_matches.
 1. 3.6 PDC news → players, 3.5 AI narratives (Databricks `ai_query`, compare models on 20 players), shown in the Player Profile.
 2. 4.3 Genie space over the gold tables, embedded in "Ask the data".
 3. 4.5 README with screenshots; final check before the Grand Slam.

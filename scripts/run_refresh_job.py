@@ -6,6 +6,7 @@ from datetime import timedelta
 from databricks.sdk import WorkspaceClient
 
 JOB_SUFFIX = "darts_refresh"
+WAIT_MINUTES = 80  # a full run takes ~50 min on serverless (2026-11-01); speeding it up is planned
 
 
 def main() -> None:
@@ -14,7 +15,7 @@ def main() -> None:
     if job is None:
         sys.exit(f"no job named *{JOB_SUFFIX} found: deploy the bundle first")
     print(f"starting {job.settings.name} ({job.job_id})")
-    run = w.jobs.run_now(job.job_id).result(timeout=timedelta(minutes=45))
+    run = w.jobs.run_now(job.job_id).result(timeout=timedelta(minutes=WAIT_MINUTES))
     for task in sorted(run.tasks, key=lambda t: t.start_time or 0):
         print(f"  {task.task_key}: {task.state.result_state.value if task.state.result_state else task.state.life_cycle_state.value}")
     state = run.state.result_state.value if run.state.result_state else "UNKNOWN"
