@@ -200,8 +200,9 @@ def _players_to_watch(preds: pd.DataFrame, draw: pd.DataFrame, mode: str, photos
         return
     for r in rising.itertuples():
         result = _result(r.player_name, draw, mode, r.seed)
+        result_html = f" <span style='color:{ui.TEXT_2}'>({result})</span>" if result else ""
         st.markdown(f"<div style='display:flex;align-items:center;margin:8px 0'>{_avatar(photos, r.player_name, 40)}"
-                    f"<div><b>{escape(r.player_name)}</b>{f' <span style=\'color:{ui.TEXT_2}\'>({result})</span>' if result else ''}<br>"
+                    f"<div><b>{escape(r.player_name)}</b>{result_html}<br>"
                     f"<span style='color:{ui.WIN if r.pi_change >= 0 else ui.LOSS};font-weight:600'>"
                     f"{'▲' if r.pi_change >= 0 else '▼'} {r.pi_change:+.2f} PI</span> "
                     f"<span style='color:{ui.TEXT_2}'>in {RISING_MONTHS} months · form {r.form:+.2f}</span></div></div>",
