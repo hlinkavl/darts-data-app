@@ -33,9 +33,10 @@ for name in ["tournaments", "player", "leaderboard", "methodology", "admin", "as
     at = AppTest.from_string(SRC.format(name=name, mode=MODE), default_timeout=300); at.run()
     check(at, name)
     if name == "tournaments" and not at.exception:
-        box = at.selectbox(key="event")
-        for i in range(len(box.options)):
-            at.selectbox(key="event").set_value(i).run(); check(at, "  " + box.format_func(i)[:50])
+        majors = at.dataframe[0].value
+        for i in range(len(majors)):
+            at.session_state["event_table"] = {"selection": {"rows": [i], "columns": [], "cells": []}}
+            at.run(); check(at, "  " + " ".join(str(v) for v in majors.iloc[i, :3])[:50])
     if name == "player" and not at.exception:
         opts = at.selectbox(key="player").options
         for n in [opts[0], opts[len(opts) // 2], opts[-1]]:

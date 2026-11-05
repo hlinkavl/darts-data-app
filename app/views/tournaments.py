@@ -11,7 +11,10 @@ import ui
 
 BRACKET_ROUNDS = 4  # last 16 to the final
 BRACKET_SLOT_PX = 84  # height per first-column match: a two-row box plus spacing, so boxes never get squeezed
+OUTSIDER_FAVOURITES = 8     # Beat the odds: the model's top title favourites are not outsiders
+OUTSIDER_MAX_CHANCE = 0.25  # ... and a run is a surprise only if it had less than this chance
 RISING_MONTHS = 3  # players to watch: PI change over this window
+DATE_COLOR = "#8cb8ee"  # soft blue, as the Effective Average in the player profile
 NO_DRAW = "no draw"  # a major in the calendar whose draw is not published yet
 
 
@@ -53,13 +56,15 @@ def _short_title(title: str) -> str:
 # --------------------------------------------------------------------------------------- tournament picker
 
 def _date_range(start, end) -> str:
-    """'22–25 Oct', '11 Dec – 3 Jan', 'dates TBC'."""
+    """'22–25 Oct 2026', '28 Sep – 4 Oct 2026', '11 Dec 2026 – 3 Jan 2027', 'dates TBC'."""
     if start is None or pd.isna(start) or end is None or pd.isna(end):
         return "dates TBC"
     a, b = pd.Timestamp(start), pd.Timestamp(end)
+    if a.year != b.year:
+        return f"{a.day} {a:%b %Y} – {b.day} {b:%b %Y}"
     if a.month == b.month:
-        return f"{a.day}–{b.day} {b:%b}"
-    return f"{a.day} {a:%b} – {b.day} {b:%b}"
+        return f"{a.day}–{b.day} {b:%b %Y}"
+    return f"{a.day} {a:%b} – {b.day} {b:%b %Y}"
 
 
 def _events(preds: pd.DataFrame, cal: pd.DataFrame) -> list[dict]:
@@ -97,6 +102,32 @@ def _events(preds: pd.DataFrame, cal: pd.DataFrame) -> list[dict]:
     return sorted(out, key=lambda e: e["when"].value if e["when"] is not None else float("inf"), reverse=True)
 
 
+def _pick_event(events: list[dict]) -> int:
+    """The majors as a short clickable list (dates in blue, newest first); one row is always selected."""
+    rows = pd.DataFrame({
+        "": [e["label"].split(" ", 1)[0] for e in events],
+        "Dates": [e["dates"] for e in events],
+        "Major": [e["name"] for e in events],
+        "Winner": [e["label"].split("(", 1)[1].split(")", 1)[0] if e["mode"] == "backtest" and "(" in e["label"] else ""
+                   for e in events]})
+    key = "event_table"
+    state = st.session_state.get(key)
+    selected = list(getattr(getattr(state, "selection", None), "rows", None) or
+                    (state.get("selection", {}).get("rows", []) if isinstance(state, dict) else []))
+    if not selected or selected[0] >= len(events):  # nothing picked yet, or the row was clicked off again
+        last = st.session_state.get("event_last")
+        selected = [last if last is not None and last < len(events) else _default_event(events)]
+        st.session_state[key] = {"selection": {"rows": selected, "columns": [], "cells": []}}
+    st.session_state["event_last"] = selected[0]
+    styled = rows.style.map(lambda _: f"color: {DATE_COLOR}", subset=["Dates"])
+    st.dataframe(styled, hide_index=True, width="stretch", height=min(36 + 35 * len(rows), 36 + 35 * 6),
+                 on_select="rerun", selection_mode="single-row", key=key,
+                 column_config={"": st.column_config.TextColumn("", width=40),
+                                "Dates": st.column_config.TextColumn("Dates", width=170),
+                                "Major": st.column_config.TextColumn("Major", width=260)})
+    return selected[0]
+
+
 def _default_event(events: list[dict]) -> int:
     """Live event, else the next upcoming one with a draw, else the latest finished one."""
     for wanted in (("live",), ("pre-tournament",), ("backtest",)):
@@ -113,7 +144,6 @@ STATUS_PILL = {"backtest": ("Finished", "#2a3a2a", "#8fd18f"), "live": ("Live", 
 def _header(ev: dict, preds: pd.DataFrame, draw: pd.DataFrame, cal: pd.DataFrame) -> None:
     """One compact card: event name with a status pill, dates, and up to three facts in normal-size text."""
     mode = ev["mode"]
-    year = f" {pd.Timestamp(ev['end']):%Y}" if ev["end"] is not None and pd.notna(ev["end"]) else ""
     fav = preds[preds["round_name"] == "Winner"].nlargest(1, "p_reach")
     favourite = f"{fav['player_name'].iloc[0]} · {ui.pct(fav['p_reach'].iloc[0], 1)}" if len(fav) else "–"
     facts, note = [], ""
@@ -123,7 +153,7 @@ def _header(ev: dict, preds: pd.DataFrame, draw: pd.DataFrame, cal: pd.DataFrame
         avg = cal.loc[cal["wiki_title"] == ev["title"], "winner_avg"]
         if len(b):
             b = b.iloc[0]
-            avg_txt = f" · average {ui.num(avg.iloc[0], 2)} in the final" if len(avg) and pd.notna(avg.iloc[0]) else ""
+            avg_txt = f" ({avg.iloc[0]:.1f} final avg)" if len(avg) and pd.notna(avg.iloc[0]) else ""
             facts = [("Champion", f"🏆 {b.champion}{avg_txt}"),
                      ("Champion's chance before the event", f"{ui.pct(b.champion_p_title, 1)} (#{int(b.champion_rank_by_p_title)} in the model)"),
                      ("Pre-match favourite won", f"{ui.num(b.favourite_won_pct, 0)} % of {int(b.matches)} matches")]
@@ -146,7 +176,7 @@ def _header(ev: dict, preds: pd.DataFrame, draw: pd.DataFrame, cal: pd.DataFrame
         f"<div style='border:1px solid {ui.GRID};border-radius:12px;padding:16px 20px;margin:6px 0 18px'>"
         f"<div style='display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap'>"
         f"<div><div style='font-size:1.35em;font-weight:700;color:{ui.TEXT}'>{escape(ev['name'])}</div>"
-        f"<div style='color:{ui.TEXT_2};font-size:0.9em;margin-top:2px'>{escape(ev['dates'])}{year}</div></div>"
+        f"<div style='color:{DATE_COLOR};font-size:0.9em;margin-top:2px'>{escape(ev['dates'])}</div></div>"
         f"<span style='background:{bg};color:{fg};border-radius:999px;padding:3px 12px;font-size:0.82em;"
         f"font-weight:600'>{label}</span></div>"
         + (f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 28px;"
@@ -258,36 +288,36 @@ def _on_the_rise(preds: pd.DataFrame, draw: pd.DataFrame, mode: str, photos: dic
 
 
 def _beat_the_odds(preds: pd.DataFrame, draw: pd.DataFrame, photos: dict) -> None:
-    """Finished events: the players whose run beat the model's pre-event expectation the most (matches won minus
-    the matches the model expected them to win)."""
+    """Finished events: outsiders (not among the model's favourites) who reached at least the quarter-finals,
+    the least likely runs first."""
     st.subheader("Beat the odds")
-    first = preds["round_order"].min()
+    first, last = preds["round_order"].min(), preds["round_order"].max()
+    title = preds[preds["round_order"] == last]
+    favourites = set(title.nlargest(max(OUTSIDER_FAVOURITES, title["player_name"].nunique() // 8), "p_reach")["player_name"])
+    last_eight = last - 3  # Winner, Final, Semi-finals, Quarter-finals
     reached = {}
     for m in draw.itertuples():
         for name in (_name(m.player_a), _name(m.player_b)):
             if name:
-                r = m.round_order + (1 if _name(m.winner) == name else 0)
-                reached[name] = max(reached.get(name, first), r)
+                reached[name] = max(reached.get(name, first), m.round_order + (1 if _name(m.winner) == name else 0))
     rows = []
     for name, r in reached.items():
-        mine = preds[preds["player_name"] == name]
-        if mine.empty:
-            continue
-        expected = mine.loc[mine["round_order"] > first, "p_reach"].sum()
-        p_here = mine.loc[mine["round_order"] == r, "p_reach"]
-        rows.append({"player_name": name, "wins": r - first, "expected": expected, "exceed": (r - first) - expected,
-                     "p_here": float(p_here.iloc[0]) if len(p_here) else None})
-    best = pd.DataFrame(rows)
-    best = best[best["exceed"] > 0.5].nlargest(3, "exceed") if len(best) else best
+        p_here = preds.loc[(preds["player_name"] == name) & (preds["round_order"] == r), "p_reach"]
+        if name not in favourites and r >= last_eight and len(p_here) and p_here.iloc[0] < OUTSIDER_MAX_CHANCE:
+            rank = int((title["p_reach"] > title.loc[title["player_name"] == name, "p_reach"].max()).sum()) + 1
+            rows.append({"player_name": name, "p_here": float(p_here.iloc[0]), "rank": rank})
+    best = pd.DataFrame(rows).nsmallest(3, "p_here") if rows else pd.DataFrame()
     if best.empty:
-        st.caption("Nobody went much further than the model expected.")
+        st.caption("No outsider reached the quarter-finals: the favourites dominated.")
         return
-    cards = "".join(_player_card(photos, r.player_name, _result(r.player_name, draw, "backtest", None),
-                                 f"{ui.pct(r.p_here, 0 if r.p_here >= 0.1 else 1)} chance to get this far",
-                                 ui.WIN, f"Won {r.wins} matches, the model expected {r.expected:.1f}")
+    cards = "".join(_player_card(photos, " ".join(r.player_name.split()),
+                                 _result(r.player_name, draw, "backtest", None),
+                                 f"{ui.pct(r.p_here, 0 if r.p_here >= 0.1 else 1)} chance to get this far", ui.WIN,
+                                 f"#{r.rank} in the model's title ranking before the event")
                     for r in best.itertuples())
     st.markdown(cards, unsafe_allow_html=True)
-    st.caption("The players who went furthest beyond the model's expectation before the event.")
+    st.caption(f"Outsiders (outside the model's top {OUTSIDER_FAVOURITES} title favourites) who reached at least the "
+               "quarter-finals, the least likely runs first.")
 
 
 # ----------------------------------------------------------------------------------------------- bracket
@@ -493,7 +523,7 @@ def render() -> None:
         nxt = cal[cal["status"].isin(["in progress", "upcoming"])].sort_values("start_date").head(1)
         if len(nxt):
             n = nxt.iloc[0]
-            when = f"{_date_range(n.start_date, n.end_date)} {pd.Timestamp(n.end_date):%Y}" if pd.notna(n.start_date) else "dates TBC"
+            when = _date_range(n.start_date, n.end_date)
             st.caption(f"{'🔴 Now' if n.status == 'in progress' else '🗓️ Next major'}: **{n.tournament_name}** · {when}"
                        + ("" if n.has_draw else " · predictions appear once the draw is published"))
 
@@ -504,9 +534,7 @@ def render() -> None:
         if not events:
             st.info("No majors in the calendar yet.")
         else:
-            i = st.selectbox("Tournament", range(len(events)), index=_default_event(events), key="event",
-                             format_func=lambda k: events[k]["label"])
-            ev = events[i]
+            ev = events[_pick_event(events)]
             if ev["mode"] == NO_DRAW:
                 when = (f"It starts on {_date(ev['start'])}. " if ev["start"] is not None and pd.notna(ev["start"])
                         else "The dates are not confirmed yet. ")
