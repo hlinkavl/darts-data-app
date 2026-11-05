@@ -106,45 +106,53 @@ def _default_event(events: list[dict]) -> int:
     return 0
 
 
+STATUS_PILL = {"backtest": ("Finished", "#2a3a2a", "#8fd18f"), "live": ("Live", "#4a2323", "#ff8a8a"),
+               "pre-tournament": ("Upcoming", "#22324a", "#8cb8ee")}
+
+
 def _header(ev: dict, preds: pd.DataFrame, draw: pd.DataFrame, cal: pd.DataFrame) -> None:
-    """Event name, one line with dates and status, then a few numbers."""
+    """One compact card: event name with a status pill, dates, and up to three facts in normal-size text."""
     mode = ev["mode"]
     year = f" {pd.Timestamp(ev['end']):%Y}" if ev["end"] is not None and pd.notna(ev["end"]) else ""
-    status = {"backtest": "✅ Finished", "live": "🔴 In progress"}.get(mode, "🗓️ Not started yet")
-    st.markdown(f"### {ev['name']}")
-    st.caption(f"{ev['dates']}{year} · {status}")
     fav = preds[preds["round_name"] == "Winner"].nlargest(1, "p_reach")
-    c = st.columns(4)
+    favourite = f"{fav['player_name'].iloc[0]} · {ui.pct(fav['p_reach'].iloc[0], 1)}" if len(fav) else "–"
+    facts, note = [], ""
     if mode == "backtest":
         bts = data.table("tournament_backtest_summary")
         b = bts[(bts["wiki_title"] == ev["title"]) & (bts["metric_set"] == "model, round format")]
         avg = cal.loc[cal["wiki_title"] == ev["title"], "winner_avg"]
         if len(b):
             b = b.iloc[0]
-            c[0].metric("Champion", f"🏆 {b.champion}")
-            c[1].metric("Average in the final", ui.num(avg.iloc[0], 2) if len(avg) else "–")
-            c[2].metric("Champion's chance before", ui.pct(b.champion_p_title, 1),
-                        help=f"The model's title chance for the champion before the first match: #{int(b.champion_rank_by_p_title)} "
-                             "in its ranking.")
-            c[3].metric("Favourite won", f"{ui.num(b.favourite_won_pct, 0)} %",
-                        help=f"Share of the {int(b.matches)} matches won by the player the model favoured before the match.")
-        st.caption("Below is what the model predicted before the first match (strengths as of the first day).")
+            avg_txt = f" · average {ui.num(avg.iloc[0], 2)} in the final" if len(avg) and pd.notna(avg.iloc[0]) else ""
+            facts = [("Champion", f"🏆 {b.champion}{avg_txt}"),
+                     ("Champion's chance before the event", f"{ui.pct(b.champion_p_title, 1)} (#{int(b.champion_rank_by_p_title)} in the model)"),
+                     ("Pre-match favourite won", f"{ui.num(b.favourite_won_pct, 0)} % of {int(b.matches)} matches")]
+        note = "Everything below is what the model predicted before the first match."
     elif mode == "live":
         known = draw[_known(draw["player_a"]) & _known(draw["player_b"])]
-        c[0].metric("Matches played", f"{int(_known(known['winner']).sum())} / {len(known)}")
-        if len(fav):
-            c[1].metric("Title favourite now", fav["player_name"].iloc[0])
-            c[2].metric("Their chance", ui.pct(fav["p_reach"].iloc[0], 1))
-        st.caption("Played matches are fixed; the rest of the draw is simulated again after every refresh.")
+        facts = [("Matches played", f"{int(_known(known['winner']).sum())} of {len(known)}"),
+                 ("Title favourite now", favourite)]
+        note = "Played matches are fixed; the rest of the draw is simulated again after every refresh."
     else:
         days = (pd.Timestamp(ev["start"]).normalize() - pd.Timestamp.now().normalize()).days \
             if ev["start"] is not None and pd.notna(ev["start"]) else None
-        c[0].metric("Starts in", f"{days} days" if days is not None and days > 1 else ("tomorrow" if days == 1 else "–"))
-        c[1].metric("Players", preds["player_name"].nunique())
-        if len(fav):
-            c[2].metric("Title favourite", fav["player_name"].iloc[0])
-            c[3].metric("Their chance", ui.pct(fav["p_reach"].iloc[0], 1))
-        st.caption("Predictions from the players' current form.")
+        facts = [("Starts", "tomorrow" if days == 1 else (f"in {days} days" if days and days > 1 else "–")),
+                 ("Players", str(preds["player_name"].nunique())), ("Title favourite", favourite)]
+        note = "Predictions from the players' current form."
+    label, bg, fg = STATUS_PILL.get(mode, STATUS_PILL["pre-tournament"])
+    cells = "".join(f"<div><div style='color:{ui.TEXT_2};font-size:0.78em'>{escape(k)}</div>"
+                    f"<div style='color:{ui.TEXT};font-weight:600;margin-top:2px'>{escape(v)}</div></div>" for k, v in facts)
+    st.markdown(
+        f"<div style='border:1px solid {ui.GRID};border-radius:12px;padding:16px 20px;margin:6px 0 18px'>"
+        f"<div style='display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap'>"
+        f"<div><div style='font-size:1.35em;font-weight:700;color:{ui.TEXT}'>{escape(ev['name'])}</div>"
+        f"<div style='color:{ui.TEXT_2};font-size:0.9em;margin-top:2px'>{escape(ev['dates'])}{year}</div></div>"
+        f"<span style='background:{bg};color:{fg};border-radius:999px;padding:3px 12px;font-size:0.82em;"
+        f"font-weight:600'>{label}</span></div>"
+        + (f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 28px;"
+           f"border-top:1px solid {ui.GRID};margin-top:14px;padding-top:12px'>{cells}</div>" if cells else "")
+        + f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-top:12px'>{escape(note)}</div></div>",
+        unsafe_allow_html=True)
 
 
 # ------------------------------------------------------------------------------------------- predictions
