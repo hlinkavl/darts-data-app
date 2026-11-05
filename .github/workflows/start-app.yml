@@ -1,0 +1,25 @@
+# Start the Databricks App on demand (outside majors it is stopped to save compute). It runs for 24 h, then
+# Free Edition stops it. Actions → start-app → Run workflow. Secrets: DATABRICKS_HOST, DATABRICKS_TOKEN.
+name: start-app
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install databricks-sdk
+      - name: Start the app
+        run: python scripts/start_app.py

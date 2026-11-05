@@ -6,8 +6,9 @@ from datetime import timedelta
 
 from databricks.sdk import WorkspaceClient
 
+from start_app import start_app
+
 JOB_SUFFIX = "darts_refresh"
-APP_NAME = "darts-performance-analyzer"
 WAIT_MINUTES = 80  # a full run takes ~50 min on serverless (2026-11-01); speeding it up is planned
 
 
@@ -26,17 +27,6 @@ def main() -> None:
         sys.exit(1)
     if "--start-app" in sys.argv:
         start_app(w)
-
-
-def start_app(w: WorkspaceClient) -> None:
-    """During a major the app should be up: start it (Free Edition stops apps after 24 h, so the daily refresh
-    keeps it running for the whole event). Outside majors it stays stopped to save compute."""
-    app = w.apps.get(APP_NAME)
-    if app.compute_status and app.compute_status.state and app.compute_status.state.value in ("ACTIVE", "STARTING"):
-        print(f"app {APP_NAME} already running: {app.url}")
-        return
-    w.apps.start(APP_NAME).result(timeout=timedelta(minutes=20))
-    print(f"app {APP_NAME} started: {app.url}")
 
 
 if __name__ == "__main__":
