@@ -52,9 +52,20 @@ def _short_title(title: str) -> str:
 
 # --------------------------------------------------------------------------------------- tournament picker
 
+def _date_range(start, end) -> str:
+    """'22–25 Oct', '11 Dec – 3 Jan', 'dates TBC'."""
+    if start is None or pd.isna(start) or end is None or pd.isna(end):
+        return "dates TBC"
+    a, b = pd.Timestamp(start), pd.Timestamp(end)
+    if a.month == b.month:
+        return f"{a.day}–{b.day} {b:%b}"
+    return f"{a.day} {a:%b} – {b.day} {b:%b}"
+
+
 def _events(preds: pd.DataFrame, cal: pd.DataFrame) -> list[dict]:
-    """Every major to pick from: ✅ finished (champion, month of the final), 🔴 in progress, 🗓️ upcoming. Upcoming
-    majors without a published draw are listed too (mode "no draw") and only show a note."""
+    """Every major as one timeline, newest first: ✅ finished, 🔴 in progress, 🗓️ upcoming. Majors without a
+    published draw are listed too (mode "no draw") and only show a note. Without confirmed dates an event is
+    placed by last year's dates."""
     cal = cal.drop_duplicates("wiki_title").set_index("wiki_title") if len(cal) else pd.DataFrame()
     pairs = list(preds[["wiki_title", "mode"]].drop_duplicates().itertuples(index=False, name=None))
     with_draw = {t for t, _ in pairs}
@@ -66,51 +77,74 @@ def _events(preds: pd.DataFrame, cal: pd.DataFrame) -> list[dict]:
         row = cal.loc[title] if title in cal.index else None
         start, end = (row["start_date"], row["end_date"]) if row is not None else (None, None)
         status = row["status"] if row is not None else None
+        name = f"{row['tournament_name']} {int(row['edition'])}" if row is not None else _short_title(title)
+        when = pd.Timestamp(start if start is not None and pd.notna(start) else end) \
+            if (start is not None and pd.notna(start)) or (end is not None and pd.notna(end)) else None
+        if when is None and row is not None:  # dates not confirmed yet: last year's edition + 1 year
+            last = cal[(cal["tournament_key"] == row["tournament_key"]) & (cal["edition"] == row["edition"] - 1)]
+            last_date = last["start_date"].fillna(last["end_date"]).dropna() if len(last) else pd.Series(dtype="datetime64[ns]")
+            when = pd.Timestamp(last_date.iloc[0]) + pd.DateOffset(years=1) if len(last_date) else None
+        dates = _date_range(start, end)
         if mode == "backtest":
             winner = row["winner_name"] if row is not None and isinstance(row["winner_name"], str) else None
-            label = f"✅ {_short_title(title)}" + (f" ({winner})" if winner else "") + f" · {_date(end, '%b %Y')}"
-            sort = (2, -pd.Timestamp(end).value if end is not None and pd.notna(end) else 0)
+            label = f"✅ {name}" + (f" ({winner})" if winner else "") + f" · {dates}"
         elif mode == "live" or status == "in progress":
-            label, sort = f"🔴 {_short_title(title)} · in progress", (0, 0)
+            label = f"🔴 {name} · {dates} · live"
         else:
-            when = f"starts {_date(start)}" if start is not None and pd.notna(start) else "dates to be confirmed"
-            label = f"🗓️ {_short_title(title)} · {when}"
-            sort = (1, pd.Timestamp(start).value if start is not None and pd.notna(start) else float("inf"))
-        out.append({"title": title, "mode": mode, "label": label, "start": start, "end": end, "sort": sort})
-    return sorted(out, key=lambda e: e["sort"])
+            label = f"🗓️ {name} · {dates}"
+        out.append({"title": title, "mode": mode, "label": label, "name": name, "dates": dates, "start": start,
+                    "end": end, "when": when})
+    return sorted(out, key=lambda e: e["when"].value if e["when"] is not None else float("inf"), reverse=True)
 
 
-def _status_block(ev: dict, preds: pd.DataFrame, draw: pd.DataFrame, cal: pd.DataFrame) -> None:
-    title, mode = ev["title"], ev["mode"]
-    dates = (f"{_date(ev['start'], '%d %b')} – {_date(ev['end'])}" if ev["start"] is not None and pd.notna(ev["start"])
-             else _date(ev["end"]))
+def _default_event(events: list[dict]) -> int:
+    """Live event, else the next upcoming one with a draw, else the latest finished one."""
+    for wanted in (("live",), ("pre-tournament",), ("backtest",)):
+        hits = [k for k, e in enumerate(events) if e["mode"] in wanted]
+        if hits:
+            return hits[-1] if wanted == ("pre-tournament",) else hits[0]  # nearest upcoming is the last one
+    return 0
+
+
+def _header(ev: dict, preds: pd.DataFrame, draw: pd.DataFrame, cal: pd.DataFrame) -> None:
+    """Event name, one line with dates and status, then a few numbers."""
+    mode = ev["mode"]
+    year = f" {pd.Timestamp(ev['end']):%Y}" if ev["end"] is not None and pd.notna(ev["end"]) else ""
+    status = {"backtest": "✅ Finished", "live": "🔴 In progress"}.get(mode, "🗓️ Not started yet")
+    st.markdown(f"### {ev['name']}")
+    st.caption(f"{ev['dates']}{year} · {status}")
     fav = preds[preds["round_name"] == "Winner"].nlargest(1, "p_reach")
-    favourite = f"{fav['player_name'].iloc[0]} · {ui.pct(fav['p_reach'].iloc[0], 1)}" if len(fav) else "–"
+    c = st.columns(4)
     if mode == "backtest":
-        rows = [("Status", "✅ Finished"), ("Final", _date(ev["end"]))]
-        note = "Everything below is what the model predicted before the first match (strengths as of the first day)."
-        cal_row = cal[cal["wiki_title"] == title]
         bts = data.table("tournament_backtest_summary")
-        b = bts[(bts["wiki_title"] == title) & (bts["metric_set"] == "model, round format")]
+        b = bts[(bts["wiki_title"] == ev["title"]) & (bts["metric_set"] == "model, round format")]
+        avg = cal.loc[cal["wiki_title"] == ev["title"], "winner_avg"]
         if len(b):
             b = b.iloc[0]
-            avg = cal_row["winner_avg"].iloc[0] if len(cal_row) else None
-            rows += [("Champion", f"🏆 {b.champion}"),
-                     ("Average in the final", ui.num(avg, 2) if avg is not None and pd.notna(avg) else "–"),
-                     ("Champion's chance before the event (rank in the model)",
-                      f"{ui.pct(b.champion_p_title, 1)} (#{int(b.champion_rank_by_p_title)})"),
-                     ("Matches won by the pre-match favourite", f"{ui.num(b.favourite_won_pct, 0)} % of {int(b.matches)}")]
+            c[0].metric("Champion", f"🏆 {b.champion}")
+            c[1].metric("Average in the final", ui.num(avg.iloc[0], 2) if len(avg) else "–")
+            c[2].metric("Champion's chance before", ui.pct(b.champion_p_title, 1),
+                        help=f"The model's title chance for the champion before the first match: #{int(b.champion_rank_by_p_title)} "
+                             "in its ranking.")
+            c[3].metric("Favourite won", f"{ui.num(b.favourite_won_pct, 0)} %",
+                        help=f"Share of the {int(b.matches)} matches won by the player the model favoured before the match.")
+        st.caption("Below is what the model predicted before the first match (strengths as of the first day).")
     elif mode == "live":
         known = draw[_known(draw["player_a"]) & _known(draw["player_b"])]
-        played = int(_known(known["winner"]).sum())
-        rows = [("Status", "🔴 In progress"), ("Dates", dates), ("Matches played", f"{played} of {len(known)}"),
-                ("Title favourite", favourite)]
-        note = "Played matches are fixed; the rest of the draw is simulated again after every refresh."
+        c[0].metric("Matches played", f"{int(_known(known['winner']).sum())} / {len(known)}")
+        if len(fav):
+            c[1].metric("Title favourite now", fav["player_name"].iloc[0])
+            c[2].metric("Their chance", ui.pct(fav["p_reach"].iloc[0], 1))
+        st.caption("Played matches are fixed; the rest of the draw is simulated again after every refresh.")
     else:
-        rows = [("Status", "🗓️ Not started"), ("Dates", dates), ("Players", f"{preds['player_name'].nunique()}"),
-                ("Title favourite", favourite)]
-        note = "Predictions from the players' current form."
-    st.markdown(ui.info_block(rows, note), unsafe_allow_html=True)
+        days = (pd.Timestamp(ev["start"]).normalize() - pd.Timestamp.now().normalize()).days \
+            if ev["start"] is not None and pd.notna(ev["start"]) else None
+        c[0].metric("Starts in", f"{days} days" if days is not None and days > 1 else ("tomorrow" if days == 1 else "–"))
+        c[1].metric("Players", preds["player_name"].nunique())
+        if len(fav):
+            c[2].metric("Title favourite", fav["player_name"].iloc[0])
+            c[3].metric("Their chance", ui.pct(fav["p_reach"].iloc[0], 1))
+        st.caption("Predictions from the players' current form.")
 
 
 # ------------------------------------------------------------------------------------------- predictions
@@ -187,9 +221,17 @@ def _next_round(draw: pd.DataFrame, match) -> str:
     return later["round_name"].iloc[0] if len(later) else match.round_name
 
 
-def _players_to_watch(preds: pd.DataFrame, draw: pd.DataFrame, mode: str, photos: dict) -> None:
-    """Rising players: the biggest PI gain over the last 3 months before the event, with positive recent form
-    (favourites included when they are on the rise)."""
+def _player_card(photos: dict, name: str, tag: str, main: str, main_color: str, detail: str) -> str:
+    return (f"<div style='display:flex;align-items:center;gap:12px;border:1px solid {ui.GRID};border-radius:10px;"
+            f"padding:10px 12px;margin:8px 0'>{_avatar(photos, name, 46)}<div style='min-width:0'>"
+            f"<div><b>{escape(name)}</b> <span style='color:{ui.TEXT_2};font-size:0.85em'>{escape(tag)}</span></div>"
+            f"<div style='color:{main_color};font-weight:700;margin-top:2px'>{main}</div>"
+            f"<div style='color:{ui.TEXT_2};font-size:0.82em'>{detail}</div></div></div>")
+
+
+def _on_the_rise(preds: pd.DataFrame, draw: pd.DataFrame, mode: str, photos: dict) -> None:
+    """Upcoming and live events: the biggest PI gain over the 3 months before the event, with positive form."""
+    st.subheader("On the rise")
     winners = preds[preds["round_name"] == "Winner"].dropna(subset=["player_key"])
     cand = winners.merge(_momentum(preds["as_of"].iloc[0]), on="player_key")
     rising = cand[(cand["pi_change"] > 0) & (cand["form"] > 0)].nlargest(3, "pi_change")
@@ -198,17 +240,46 @@ def _players_to_watch(preds: pd.DataFrame, draw: pd.DataFrame, mode: str, photos
     if rising.empty:
         st.caption("Not enough PI history for the players in this draw.")
         return
-    for r in rising.itertuples():
-        result = _result(r.player_name, draw, mode, r.seed)
-        result_html = f" <span style='color:{ui.TEXT_2}'>({result})</span>" if result else ""
-        st.markdown(f"<div style='display:flex;align-items:center;margin:8px 0'>{_avatar(photos, r.player_name, 40)}"
-                    f"<div><b>{escape(r.player_name)}</b>{result_html}<br>"
-                    f"<span style='color:{ui.WIN if r.pi_change >= 0 else ui.LOSS};font-weight:600'>"
-                    f"{'▲' if r.pi_change >= 0 else '▼'} {r.pi_change:+.2f} PI</span> "
-                    f"<span style='color:{ui.TEXT_2}'>in {RISING_MONTHS} months · form {r.form:+.2f}</span></div></div>",
-                    unsafe_allow_html=True)
-    st.caption(f"On the rise: the biggest PI gain over the {RISING_MONTHS} months before the event, with positive recent "
-               "form (last 10 matches vs last 30).")
+    cards = "".join(_player_card(photos, r.player_name, _result(r.player_name, draw, mode, r.seed),
+                                 f"{'▲' if r.pi_change >= 0 else '▼'} {r.pi_change:+.2f} PI in {RISING_MONTHS} months",
+                                 ui.WIN if r.pi_change >= 0 else ui.LOSS,
+                                 f"Form {r.form:+.2f} · title chance {ui.pct(r.p_reach, 1)}") for r in rising.itertuples())
+    st.markdown(cards, unsafe_allow_html=True)
+    st.caption(f"The biggest PI gains over the {RISING_MONTHS} months before the event, with positive recent form "
+               "(last 10 matches vs last 30).")
+
+
+def _beat_the_odds(preds: pd.DataFrame, draw: pd.DataFrame, photos: dict) -> None:
+    """Finished events: the players whose run beat the model's pre-event expectation the most (matches won minus
+    the matches the model expected them to win)."""
+    st.subheader("Beat the odds")
+    first = preds["round_order"].min()
+    reached = {}
+    for m in draw.itertuples():
+        for name in (_name(m.player_a), _name(m.player_b)):
+            if name:
+                r = m.round_order + (1 if _name(m.winner) == name else 0)
+                reached[name] = max(reached.get(name, first), r)
+    rows = []
+    for name, r in reached.items():
+        mine = preds[preds["player_name"] == name]
+        if mine.empty:
+            continue
+        expected = mine.loc[mine["round_order"] > first, "p_reach"].sum()
+        p_here = mine.loc[mine["round_order"] == r, "p_reach"]
+        rows.append({"player_name": name, "wins": r - first, "expected": expected, "exceed": (r - first) - expected,
+                     "p_here": float(p_here.iloc[0]) if len(p_here) else None})
+    best = pd.DataFrame(rows)
+    best = best[best["exceed"] > 0.5].nlargest(3, "exceed") if len(best) else best
+    if best.empty:
+        st.caption("Nobody went much further than the model expected.")
+        return
+    cards = "".join(_player_card(photos, r.player_name, _result(r.player_name, draw, "backtest", None),
+                                 f"{ui.pct(r.p_here, 0 if r.p_here >= 0.1 else 1)} chance to get this far",
+                                 ui.WIN, f"Won {r.wins} matches, the model expected {r.expected:.1f}")
+                    for r in best.itertuples())
+    st.markdown(cards, unsafe_allow_html=True)
+    st.caption("The players who went furthest beyond the model's expectation before the event.")
 
 
 # ----------------------------------------------------------------------------------------------- bracket
@@ -414,7 +485,7 @@ def render() -> None:
         nxt = cal[cal["status"].isin(["in progress", "upcoming"])].sort_values("start_date").head(1)
         if len(nxt):
             n = nxt.iloc[0]
-            when = f"{pd.Timestamp(n.start_date):%d %b} – {pd.Timestamp(n.end_date):%d %b %Y}" if pd.notna(n.start_date) else "dates to be confirmed"
+            when = f"{_date_range(n.start_date, n.end_date)} {pd.Timestamp(n.end_date):%Y}" if pd.notna(n.start_date) else "dates TBC"
             st.caption(f"{'🔴 Now' if n.status == 'in progress' else '🗓️ Next major'}: **{n.tournament_name}** · {when}"
                        + ("" if n.has_draw else " · predictions appear once the draw is published"))
 
@@ -425,14 +496,13 @@ def render() -> None:
         if not events:
             st.info("No majors in the calendar yet.")
         else:
-            first_with_data = next((k for k, e in enumerate(events) if e["mode"] != NO_DRAW), 0)
-            i = st.selectbox("Tournament", range(len(events)), index=first_with_data, key="event",
+            i = st.selectbox("Tournament", range(len(events)), index=_default_event(events), key="event",
                              format_func=lambda k: events[k]["label"])
             ev = events[i]
             if ev["mode"] == NO_DRAW:
                 when = (f"It starts on {_date(ev['start'])}. " if ev["start"] is not None and pd.notna(ev["start"])
                         else "The dates are not confirmed yet. ")
-                st.info(f"**{_short_title(ev['title'])}**: the draw is not published yet. {when}Title chances, the "
+                st.info(f"**{ev['name']}**: the draw is not published yet. {when}Title chances, the "
                         "bracket and match predictions appear here automatically once it is, usually a few days "
                         "before the first match.")
                 ev = None
@@ -440,15 +510,17 @@ def render() -> None:
             pr = preds[(preds["wiki_title"] == ev["title"]) & (preds["mode"] == ev["mode"])]
             dm = data.table("tournament_draw_matches")
             draw = dm[(dm["wiki_title"] == ev["title"]) & (dm["mode"] == ev["mode"])]
-            _status_block(ev, pr, draw, cal)
+            _header(ev, pr, draw, cal)
             photos = _photos()
             left, right = st.columns([3, 2], gap="large")
             with left:
                 st.subheader("Chance to win the title")
                 st.plotly_chart(_title_chart(pr[pr["round_name"] == "Winner"]), width="stretch", config={"displayModeBar": False})
             with right:
-                st.subheader("Players to watch")
-                _players_to_watch(pr, draw, ev["mode"], photos)
+                if ev["mode"] == "backtest":
+                    _beat_the_odds(pr, draw, photos)
+                else:
+                    _on_the_rise(pr, draw, ev["mode"], photos)
             st.subheader("The draw")
             if draw.empty:
                 st.info("The draw is not published yet.")
