@@ -18,6 +18,9 @@ resources:
         # auto: refit the PI model only when the active one is 28+ days old; force: refit now
         - name: refit
           default: auto
+        # comma-separated models: write trial summaries of 20 players per model instead of the real ones
+        - name: compare_models
+          default: ""
       # Serverless compute: notebook tasks need no cluster definition.
       # Raw files are uploaded to the Volume by `python -m ingestion.run --upload` (Darts Orakel blocks
       # Databricks IPs; since 30 Oct 2026 Mastercaller + Wikipedia, see docs/PLAN.md). AI tasks follow on Day 3.
@@ -50,10 +53,16 @@ resources:
             - task_key: performance_index
           notebook_task:
             notebook_path: ../src/notebooks/06_tournaments.py
+        - task_key: narratives
+          depends_on:
+            - task_key: performance_index
+          notebook_task:
+            notebook_path: ../src/notebooks/08_narratives.py
         # Last step: a red health report fails the job, which sends the failure e-mail.
         - task_key: health
           depends_on:
             - task_key: tournaments
+            - task_key: narratives
           notebook_task:
             notebook_path: ../src/notebooks/07_health.py
 

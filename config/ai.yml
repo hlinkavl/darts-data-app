@@ -1,0 +1,4 @@
+# AI form summaries in the player profiles (src/notebooks/08_narratives.py).
+# model: the Databricks foundation model for ai_query. Empty = summaries are skipped (news are still matched).
+#   To be chosen on Databricks: compare candidates with the job parameter compare_models=<m1>,<m2>,...
+model: ""

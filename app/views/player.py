@@ -201,8 +201,29 @@ def _profile(info: pd.Series) -> None:
         sources.append(f"Text: [Wikipedia – {title}](https://en.wikipedia.org/wiki/{title.replace(' ', '_')}) (CC BY-SA)")
     if isinstance(info.get("image_file"), str):
         sources.append(ui.photo_credit(info["image_file"]))
-    sources.append("AI summary of form and interviews (PDC news): coming soon")
     st.caption(" · ".join(sources))
+
+
+def _form_and_news(player_key: int) -> None:
+    """AI summary of form and news (when there is one) and the latest PDC articles about the player."""
+    summaries = data.table("player_narratives")
+    summary = summaries[(summaries["player_key"] == player_key) & summaries["narrative"].notna()] if len(summaries) else summaries
+    articles = data.table("player_news")
+    if len(articles):
+        articles = articles[(articles["player_key"] == player_key) & articles["relevant"].astype(bool)] \
+            .sort_values("published", ascending=False).head(3)
+    if summary.empty and articles.empty:
+        return
+    st.subheader("Form & news")
+    if len(summary):
+        s = summary.iloc[0]
+        st.markdown(s["narrative"])
+        st.caption(f"AI summary ({s['model']}, {pd.Timestamp(s['generated_at']):%d %b %Y}) written only from the numbers "
+                   "on this page and PDC news; it can still contain mistakes.")
+    for a in articles.itertuples():
+        st.markdown(f"- [{a.title}]({a.link}) · {pd.Timestamp(a.published):%d %b %Y}")
+    if len(articles):
+        st.caption("Source: pdc.tv news")
 
 
 def _titles(player_key: int) -> None:
@@ -253,5 +274,6 @@ def render() -> None:
     st.caption("Monthly snapshots, each computed only from matches before that date (with the current model's weights).")
 
     _recent_form(row, info_all)
+    _form_and_news(int(row["player_key"]))
     _profile(info)
     _titles(int(row["player_key"]))
