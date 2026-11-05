@@ -41,10 +41,14 @@ else:
 
 last_match = spark.sql("SELECT max(match_date) FROM darts_silver.matches").first()[0]
 
-tracked_without_history = spark.sql("""
-    SELECT p.player_name FROM darts_silver.players p
+no_rows = spark.sql("""
+    SELECT p.player_name,
+           EXISTS (SELECT 1 FROM darts_silver.matches r WHERE p.player_key IN (r.winner_key, r.loser_key)) AS has_results
+    FROM darts_silver.players p
     WHERE p.is_tracked AND NOT EXISTS (SELECT 1 FROM darts_silver.player_matches m WHERE m.player_key = p.player_key)
-""").toPandas()["player_name"].tolist()
+""").toPandas()
+tracked_without_history = no_rows.loc[~no_rows["has_results"], "player_name"].tolist()
+tracked_without_stats = no_rows.loc[no_rows["has_results"], "player_name"].tolist()
 
 with open("../../config/majors.yml") as f:
     majors = yaml.safe_load(f)["majors"]
@@ -78,7 +82,7 @@ checks = (
     health.ingestion(manifest, last_run, today, major_running)
     + [health.freshness(last_match, today, major_running)]
     + (health.draws(calendar, today) if calendar is not None else [])
-    + [health.player_matching(tracked_without_history)]
+    + health.player_matching(tracked_without_history, tracked_without_stats)
     + health.new_series(recent_series, known)
     + [health.model(registry_latest)] + health.benchmark(bench) + [health.upcoming(major_running, n_upcoming)]
 )

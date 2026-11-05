@@ -89,14 +89,26 @@ def draws(calendar: pd.DataFrame, today: date) -> list[Check]:
     return out
 
 
-def player_matching(tracked_without_history: list[str]) -> Check:
+def player_matching(tracked_without_history: list[str], without_stats: list[str] | None = None) -> list[Check]:
+    """Tracked players (Order of Merit top 150) the data cannot describe well.
+
+    tracked_without_history: no result at all under their name, so probably another spelling in a source (fix:
+    an alias). without_stats: results (hence Elo) but no 3-dart averages, a known gap: Darts Orakel averages were
+    fetched for the top 150 of October 2026 only, and Mastercaller fills the gap from then on. No action."""
     n = len(tracked_without_history)
     status = GREEN if n <= NEW_PLAYERS_LIMIT else YELLOW
-    return Check("players", "name matching", status, f"{n} tracked players without history",
-                 "Tracked players (Order of Merit top 150) that have no match history under their name"
+    out = [Check("players", "name matching", status, f"{n} tracked players without results",
+                 "Tracked players (Order of Merit top 150) with no result under their name"
                  + (f": {', '.join(tracked_without_history[:10])}." if n else "."),
                  "" if status == GREEN else "Probably a different spelling in another source: add the name to "
-                 "config/player_aliases.yml (edit on GitHub).")
+                 "config/player_aliases.yml (edit on GitHub).")]
+    if without_stats:
+        out.append(Check("players", "averages", GREEN, f"{len(without_stats)} tracked players without averages",
+                         "Known gap, no action needed: these players have results (and so an Elo rating, used for "
+                         "their strength in tournament simulations) but no 3-dart averages yet, because averages from "
+                         "Darts Orakel cover the top 150 of October 2026 only. Mastercaller adds their averages from "
+                         "their next matches: " + ", ".join(without_stats[:10]) + ".", ""))
+    return out
 
 
 def new_series(recent_series: set[str], known_series: set[str]) -> list[Check]:

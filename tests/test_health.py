@@ -37,5 +37,7 @@ def test_missing_draw_for_running_major_and_overall_status():
 
 def test_new_series_and_name_matching():
     assert health.new_series({"players-championships", "budapest-darts-masters"}, {"players-championships"})[0].status == health.YELLOW
-    assert health.player_matching(["A", "B"]).status == health.GREEN
-    assert health.player_matching([str(i) for i in range(8)]).status == health.YELLOW
+    assert health.player_matching(["A", "B"])[0].status == health.GREEN
+    assert health.player_matching([str(i) for i in range(8)])[0].status == health.YELLOW
+    known_gap = health.player_matching([], [str(i) for i in range(15)])
+    assert [c.status for c in known_gap] == [health.GREEN, health.GREEN]
