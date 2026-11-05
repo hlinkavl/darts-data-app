@@ -92,40 +92,14 @@ def _events(preds: pd.DataFrame, cal: pd.DataFrame) -> list[dict]:
         dates = _date_range(start, end)
         if mode == "backtest":
             winner = row["winner_name"] if row is not None and isinstance(row["winner_name"], str) else None
-            label = f"✅ {name}" + (f" ({winner})" if winner else "") + f" · {dates}"
+            label = f"✅ {name}" + (f" ({winner})" if winner else "") + f"  |  {dates}"
         elif mode == "live" or status == "in progress":
-            label = f"🔴 {name} · {dates} · live"
+            label = f"🔴 {name} · live  |  {dates}"
         else:
-            label = f"🗓️ {name} · {dates}"
+            label = f"🗓️ {name}  |  {dates}"
         out.append({"title": title, "mode": mode, "label": label, "name": name, "dates": dates, "start": start,
                     "end": end, "when": when})
     return sorted(out, key=lambda e: e["when"].value if e["when"] is not None else float("inf"), reverse=True)
-
-
-def _pick_event(events: list[dict]) -> int:
-    """The majors as a short clickable list (dates in blue, newest first); one row is always selected."""
-    rows = pd.DataFrame({
-        "": [e["label"].split(" ", 1)[0] for e in events],
-        "Dates": [e["dates"] for e in events],
-        "Major": [e["name"] for e in events],
-        "Winner": [e["label"].split("(", 1)[1].split(")", 1)[0] if e["mode"] == "backtest" and "(" in e["label"] else ""
-                   for e in events]})
-    key = "event_table"
-    state = st.session_state.get(key)
-    selected = list(getattr(getattr(state, "selection", None), "rows", None) or
-                    (state.get("selection", {}).get("rows", []) if isinstance(state, dict) else []))
-    if not selected or selected[0] >= len(events):  # nothing picked yet, or the row was clicked off again
-        last = st.session_state.get("event_last")
-        selected = [last if last is not None and last < len(events) else _default_event(events)]
-        st.session_state[key] = {"selection": {"rows": selected, "columns": [], "cells": []}}
-    st.session_state["event_last"] = selected[0]
-    styled = rows.style.map(lambda _: f"color: {DATE_COLOR}", subset=["Dates"])
-    st.dataframe(styled, hide_index=True, width="stretch", height=min(36 + 35 * len(rows), 36 + 35 * 6),
-                 on_select="rerun", selection_mode="single-row", key=key,
-                 column_config={"": st.column_config.TextColumn("", width=40),
-                                "Dates": st.column_config.TextColumn("Dates", width=170),
-                                "Major": st.column_config.TextColumn("Major", width=260)})
-    return selected[0]
 
 
 def _default_event(events: list[dict]) -> int:
@@ -197,6 +171,22 @@ def _title_chart(winners: pd.DataFrame) -> go.Figure:
                                                                 range=[0, top["p_reach"].max() * 1.22]))
     fig.update_traces(cliponaxis=True)
     return fig
+
+
+def _all_title_chances(preds: pd.DataFrame) -> None:
+    """Every player's title chance (the chart shows the top 16)."""
+    winners = preds[preds["round_name"] == "Winner"].sort_values("p_reach", ascending=False)
+    if len(winners) <= 16:
+        return
+    with st.expander(f"All {len(winners)} players"):
+        table = winners.assign(seed=winners["seed"].map(lambda v: _seed(v).strip("()")),
+                               rank=range(1, len(winners) + 1))[["rank", "player_name", "seed", "p_reach"]]
+        st.dataframe(table, hide_index=True, width="stretch", height=min(36 + 35 * len(table), 420),
+                     column_config={"rank": st.column_config.NumberColumn("#", width=40), "player_name": "Player",
+                                    "seed": st.column_config.TextColumn("Seed", width=60),
+                                    "p_reach": st.column_config.ProgressColumn("Chance to win the title", min_value=0.0,
+                                                                               max_value=float(table["p_reach"].max()),
+                                                                               format="percent")})
 
 
 def _round_table(preds: pd.DataFrame) -> None:
@@ -534,7 +524,9 @@ def render() -> None:
         if not events:
             st.info("No majors in the calendar yet.")
         else:
-            ev = events[_pick_event(events)]
+            i = st.selectbox("Tournament", range(len(events)), index=_default_event(events), key="event",
+                             format_func=lambda k: events[k]["label"])
+            ev = events[i]
             if ev["mode"] == NO_DRAW:
                 when = (f"It starts on {_date(ev['start'])}. " if ev["start"] is not None and pd.notna(ev["start"])
                         else "The dates are not confirmed yet. ")
@@ -552,6 +544,7 @@ def render() -> None:
             with left:
                 st.subheader("Chance to win the title")
                 st.plotly_chart(_title_chart(pr[pr["round_name"] == "Winner"]), width="stretch", config={"displayModeBar": False})
+                _all_title_chances(pr)
             with right:
                 if ev["mode"] == "backtest":
                     _beat_the_odds(pr, draw, photos)
