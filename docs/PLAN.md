@@ -196,10 +196,19 @@ Bundle deployed; ingestion (Mastercaller, Wikipedia with parser 2 and matcher 2,
 4. Aliases for the **15 tracked players without history** (health report yellow).
 5. Optional: `unit` (legs/sets) in silver player_matches (Long-Format Delta counts sets as legs; info-only predictor).
 
-**Day C: AI layer, Genie, README (short)**
-1. 3.6 PDC news → players, 3.5 AI narratives (Databricks `ai_query`, compare models on 20 players), shown in the Player Profile.
-2. 4.3 Genie space over the gold tables, embedded in "Ask the data".
-3. 4.5 README with screenshots; final check before the Grand Slam (draw usually published a few days before 14 Nov).
+**Day C: everything outside Databricks ✅ (2026-11-05)**
+- `start-app` GitHub workflow: open the app for 24 h outside majors (Actions → start-app → Run workflow).
+- README rewritten (features, PI summary, architecture, Free Edition limits, sources); screenshots still to add.
+- 3.6 **PDC news per player** (`analytics/news.py`, tested): full-name matching, round-ups such as entry lists are not relevant unless the player is in the headline; `gold.player_news`; "Form & news" section in the Player Profile (works locally).
+- 3.5 **AI form summaries** prepared (`analytics/narratives.py`, notebook `08_narratives`, job task before health): prompt only from the player's numbers, last matches and news; regenerated only when inputs or the model change, max 40 per run; model in `config/ai.yml` (empty = skipped); compare mode via `compare_models`.
+- 4.3 **Genie** prepared: space definition `config/genie/space.yml` (6 tables, instructions, 5 sample questions, 3 example SQLs), `scripts/genie_space.py` (create or update), chat on the "Ask the data" page via the Conversation API (shows the answer, the table and the SQL).
+
+**Day D: Databricks only (when the quota is back)**
+1. `make deploy` (job with the narratives task, app with the GitHub token) and check the next refresh's run time.
+2. Refresh button: test from the app (also shows whether the app reaches api.github.com).
+3. AI summaries: list the available foundation models, compare 2–3 on 20 players (`compare_models`), set the winner in `config/ai.yml`, run once.
+4. Genie: check the 3 example SQLs on the warehouse, review the space design with the user, create it (`scripts/genie_space.py`), add the genie-space resource to the app (`GENIE_SPACE_ID`, CAN RUN), test a few questions.
+5. Screenshots for the README; final check before the Grand Slam (draw a few days before 14 Nov).
 
 **Free Edition quota:** a full run is ~7 tasks. Avoid repeated full runs on the same day: use `--only <task>` while developing and test locally first.
 

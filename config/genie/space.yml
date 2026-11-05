@@ -1,0 +1,109 @@
+# Genie space behind the app's "Ask the data" page. Built and pushed by scripts/genie_space.py
+# (create or update by title). Example SQL must be checked on the warehouse before pushing.
+title: Darts Performance Analyzer
+description: >-
+  Questions about PDC darts players and majors: Performance Index (PI), 3-dart averages, form, results,
+  titles, the season calendar and the model's title chances. Data since 2021.
+
+tables:
+  - identifier: workspace.darts_gold.performance_index
+    description: Monthly Performance Index snapshots per tracked player; is_current = true is today's value.
+    columns:
+      player_name: {entity_matching: true}
+      pi: {description: "Performance Index 0-10: 10 x chance to beat an average top-32 player in a typical match", synonyms: [PI, performance index, rating]}
+      rank: {description: "Position by PI among tracked players (1 = best)", synonyms: [PI rank]}
+      effective_average: {description: "The player's whole strength in 3-dart-average points", synonyms: [EA]}
+      avg_l30: {description: "3-dart average over the last 30 matches", synonyms: [average, 3-dart average]}
+      form: {description: "Average of the last 10 matches minus the last 30"}
+      elo: {description: "Opponent-Weighted Elo rating", synonyms: [Elo]}
+  - identifier: workspace.darts_gold.player_recent_matches
+    description: Every match of tracked players (one row per player and match), newest first by recency.
+    columns:
+      player_name: {entity_matching: true}
+      opponent_name: {entity_matching: true}
+      tournament_name: {entity_matching: true}
+      average: {description: "The player's 3-dart average in the match", synonyms: [3-dart average]}
+      result: {description: "W = won, L = lost"}
+  - identifier: workspace.darts_silver.players
+    description: All players; is_tracked = the PDC Order of Merit top 150.
+    columns:
+      player_name: {entity_matching: true}
+      prize_money_rank: {description: "Current PDC Order of Merit position", synonyms: [Order of Merit, OoM, world ranking, ranking]}
+      prize_money_2y: {description: "Prize money over the last two years (GBP)"}
+      country: {format_assistance: true}
+      intro: {exclude: true}
+      image_file: {exclude: true}
+  - identifier: workspace.darts_gold.player_titles
+    description: Events won since 2021, one row per title.
+    columns:
+      player_name: {entity_matching: true}
+      title_group: {format_assistance: true, description: "Major, Players Championship, European Tour, World Series, ..."}
+  - identifier: workspace.darts_gold.majors_calendar
+    description: The majors per season with dates, status and winner.
+    columns:
+      tournament_name: {entity_matching: true}
+      status: {format_assistance: true}
+  - identifier: workspace.darts_gold.tournament_predictions
+    description: The model's chance for every player to reach each round of a major (round_name = 'Winner' is the title).
+    columns:
+      player_name: {entity_matching: true}
+      tournament_name: {entity_matching: true}
+      p_reach: {description: "Probability (0-1) to reach the round", synonyms: [chance, probability, odds]}
+      mode: {format_assistance: true, description: "backtest = finished event (prediction before the first match), live, pre-tournament"}
+
+instructions: |
+  ## PURPOSE
+  Answer questions about PDC darts players and majors from the tables of this space.
+  ## DISAMBIGUATION
+  - "Current", "now", "today" PI or form: performance_index WHERE is_current = true.
+  - "Ranking" or "world ranking" means the PDC Order of Merit (players.prize_money_rank), not the PI rank.
+  - "Average" means the 3-dart average. Per match: player_recent_matches.average; recent level: performance_index.avg_l30.
+  - "Majors" in match questions: player_recent_matches.is_major = true.
+  - "Chance to win" a tournament: tournament_predictions WHERE round_name = 'Winner'; for an event that has
+    not finished use mode <> 'backtest'. Show probabilities as percentages.
+  - A year means the calendar year of match_date or event_date.
+  ## DATA QUALITY NOTES
+  - Match averages since November 2026 are estimated from Mastercaller results (within about 0.3 points).
+  - Only tracked players (Order of Merit top 150) have PI values and full match lists.
+  ## CONSTRAINTS
+  - No betting advice. Round averages to 2 decimals and PI to 2 decimals.
+
+sample_questions:
+  - Who are the top 10 players by Performance Index right now?
+  - Who had the highest 3-dart average in a major match in 2026?
+  - How many majors has Luke Littler won since 2021?
+  - Who has the best chance to win the next major?
+  - Which players improved their PI the most in the last 3 months?
+
+examples:
+  - question: Who are the top 10 players by Performance Index right now?
+    sql: |
+      SELECT performance_index.rank, performance_index.player_name, ROUND(performance_index.pi, 2) AS pi,
+             ROUND(performance_index.effective_average, 1) AS effective_average
+      FROM workspace.darts_gold.performance_index
+      WHERE performance_index.is_current = true
+      ORDER BY performance_index.rank
+      LIMIT 10
+  - question: Who had the highest 3-dart average in a major match in 2026?
+    sql: |
+      SELECT player_recent_matches.player_name, ROUND(player_recent_matches.average, 2) AS average,
+             player_recent_matches.opponent_name, player_recent_matches.tournament_name,
+             player_recent_matches.round, player_recent_matches.match_date
+      FROM workspace.darts_gold.player_recent_matches
+      WHERE player_recent_matches.is_major = true AND year(player_recent_matches.match_date) = 2026
+        AND player_recent_matches.average IS NOT NULL
+      ORDER BY player_recent_matches.average DESC
+      LIMIT 10
+  - question: Which players improved their PI the most in the last 3 months?
+    sql: |
+      WITH now AS (
+        SELECT player_key, player_name, pi FROM workspace.darts_gold.performance_index WHERE is_current = true
+      ), before AS (
+        SELECT player_key, pi FROM workspace.darts_gold.performance_index
+        WHERE as_of_date = (SELECT max(as_of_date) FROM workspace.darts_gold.performance_index
+                            WHERE as_of_date <= add_months(current_date(), -3))
+      )
+      SELECT now.player_name, ROUND(now.pi - before.pi, 2) AS pi_change, ROUND(now.pi, 2) AS pi_now
+      FROM now JOIN before ON now.player_key = before.player_key
+      ORDER BY pi_change DESC
+      LIMIT 10
