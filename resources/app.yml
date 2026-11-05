@@ -11,3 +11,9 @@ resources:
           sql_warehouse:
             id: ${var.warehouse_id}
             permission: CAN_USE
+        - name: github-token
+          description: GitHub token for the Refresh button (Actions read and write on this repository)
+          secret:
+            scope: darts
+            key: github_token
+            permission: READ

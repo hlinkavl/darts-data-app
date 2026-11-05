@@ -9,3 +9,5 @@ env:
     value: workspace
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse
+  - name: GITHUB_TOKEN
+    valueFrom: github-token
