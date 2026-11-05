@@ -15,6 +15,9 @@ resources:
       parameters:
         - name: catalog
           default: ${var.catalog}
+        # auto: refit the PI model only when the active one is 28+ days old; force: refit now
+        - name: refit
+          default: auto
       # Serverless compute: notebook tasks need no cluster definition.
       # Raw files are uploaded to the Volume by `python -m ingestion.run --upload` (Darts Orakel blocks
       # Databricks IPs; since 30 Oct 2026 Mastercaller + Wikipedia, see docs/PLAN.md). AI tasks follow on Day 3.

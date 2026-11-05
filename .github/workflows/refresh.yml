@@ -1,6 +1,7 @@
 # Refresh: ingest new data (Mastercaller, Wikipedia) into the Databricks Volume, then run the darts_refresh job.
 # Scheduled daily, but only does work while a major is running (or starts tomorrow); otherwise run it by hand
 # ("Run workflow") or from the app's Refresh button. Secrets: DATABRICKS_HOST, DATABRICKS_TOKEN.
+# The "is a major running?" check reads the majors' Wikipedia pages, so it uses no Databricks compute.
 name: refresh
 
 on:
@@ -51,4 +52,5 @@ jobs:
 
       - name: Run the darts_refresh job (bronze → silver → model → tournaments → health)
         if: steps.gate.outputs.run == 'true'
-        run: python scripts/run_refresh_job.py
+        # Scheduled runs only happen during a major: then the app is started too (it stays stopped otherwise).
+        run: python scripts/run_refresh_job.py ${{ github.event_name == 'schedule' && '--start-app' || '' }}

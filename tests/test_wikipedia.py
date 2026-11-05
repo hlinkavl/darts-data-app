@@ -56,3 +56,13 @@ def test_draw_players_and_bracket_names():
     short = ui.surnames(sorted(names))
     assert short == {"Michael Smith": "M. Smith", "Michael van Gerwen": "van Gerwen", "Ross Smith": "R. Smith"}
     assert ui.initials("Michael van Gerwen") == "MG" and ui.initials("Rowby-John Rodriguez") == "RR"
+
+
+def test_scheduled_refresh_runs_during_a_major_and_the_day_before():
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from should_refresh import refresh_today
+
+    gs = [(date(2026, 11, 14), date(2026, 11, 22)), (None, None)]
+    assert not refresh_today(date(2026, 11, 12), gs)
+    assert refresh_today(date(2026, 11, 13), gs) and refresh_today(date(2026, 11, 22), gs)
+    assert not refresh_today(date(2026, 11, 23), gs)

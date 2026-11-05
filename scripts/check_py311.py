@@ -13,7 +13,8 @@ def problems(path: Path) -> list[str]:
         if not isinstance(node, ast.JoinedStr):
             continue
         whole = ast.get_source_segment(src, node) or ""
-        quote = whole.lstrip("rRbBfF")[:1]
+        body = whole.lstrip("rRbBfF")
+        quote = body[:3] if body[:3] in ('"""', "'''") else body[:1]  # a single quote is fine inside ''' or """
         for part in node.values:
             if isinstance(part, ast.FormattedValue):
                 expr = ast.get_source_segment(src, part.value) or ""

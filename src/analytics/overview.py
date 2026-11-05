@@ -65,20 +65,44 @@ def season_calendar(pages: pd.DataFrame, events: pd.DataFrame, majors: dict, tod
     return cal.sort_values("end_date", na_position="last").reset_index(drop=True), draws
 
 
+BACKTEST_TABLES = {"tournament_predictions": "predictions", "tournament_draw_matches": "draw_matches",
+                   "tournament_backtest_matches": "bt_matches", "tournament_backtest_summary": "bt_summary"}
+
+
 def draw_outputs(cal: pd.DataFrame, draws: dict, players: pd.DataFrame, current: pd.DataFrame,
-                 elo_latest: pd.DataFrame, strength_history: Callable[[], object], today: date) -> dict[str, pd.DataFrame]:
+                 elo_latest: pd.DataFrame, strength_history: Callable[[], object], today: date,
+                 previous: dict[str, pd.DataFrame] | None = None) -> dict[str, pd.DataFrame]:
     """Simulations for every parsed draw: backtests for finished events (strengths as of the start date, from
     strength_history() built lazily), predictions for the others (current strengths; live if matches were played).
 
     current: player_key, strength (current PI model, major strength). elo_latest: player_key, elo.
+    previous: the earlier output of the same model version; a finished event found there is reused as it is (a
+    backtest only changes with the model), so a daily refresh does not simulate the past again.
     """
     history = None
-    predictions, draw_matches, bt_matches, bt_summary = [], [], [], []
+    collected = {"predictions": [], "draw_matches": [], "bt_matches": [], "bt_summary": []}
+    predictions, draw_matches, bt_matches, bt_summary = (collected[k] for k in collected)
+    done = set()
+    if previous is not None and len(previous.get("tournament_predictions", [])):
+        prev = previous["tournament_predictions"]
+        done = set(prev.loc[prev["mode"] == "backtest", "wiki_title"])
     for c in cal[cal.has_draw].itertuples():
         draw = draws[c.wiki_title]
         finished = draw.rounds[-1].matches[0].winner is not None
         meta = {"tournament_key": c.tournament_key, "tournament_name": c.tournament_name, "edition": c.edition,
                 "wiki_title": c.wiki_title}
+        if finished and c.wiki_title in done:
+            for table, key in BACKTEST_TABLES.items():
+                df = previous.get(table)
+                if df is not None and len(df):
+                    rows = df[df["wiki_title"] == c.wiki_title]
+                    if "mode" in rows.columns:
+                        rows = rows[rows["mode"] == "backtest"]
+                    if key == "draw_matches":
+                        collected[key].extend(rows.to_dict("records"))
+                    else:
+                        collected[key].append(rows)
+            continue
         if finished:
             if pd.isna(c.start_date):
                 continue

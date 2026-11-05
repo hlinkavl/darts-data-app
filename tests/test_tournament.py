@@ -58,3 +58,34 @@ def test_live_simulation_respects_played_matches():
     assert final["Player A"] == 1.0 and final["Player B"] == 0.0 and final["Player C"] == 1.0
     pre = tournament.simulate(draw, slots, fix_played=False, n_sims=2000)
     assert pre[pre.round_name == "Final"].set_index("player_name")["p_reach"]["Player B"] > 0.9
+
+
+def test_backtests_of_the_same_model_are_reused():
+    """A finished major is simulated once per model version; later refreshes reuse it."""
+    from datetime import date
+
+    from analytics import overview
+
+    text = WIKITEXT.replace("| RD2-team1 = {{PDCFlag|Player A|avg=}}", "| RD2-team1 = {{PDCFlag|Player A|avg=}}\n| RD2-score1 = 2") \
+                   .replace("| RD2-team2 = {{PDCFlag|Player C|avg=}}", "| RD2-team2 = {{PDCFlag|Player C|avg=}}\n| RD2-score2 = 0")
+    draw = bracket.Draw("test", bracket.parse_blocks(text)[0]["rounds"])
+    assert draw.rounds[-1].matches[0].winner == "Player A"
+    cal = pd.DataFrame([{"has_draw": True, "wiki_title": "Test", "tournament_key": 1, "tournament_name": "Test",
+                         "edition": 2026, "start_date": pd.Timestamp("2026-01-01")}])
+    players = pd.DataFrame({"player_key": [1, 2, 3, 4], "player_name": ["Player A", "Player B", "Player C", "Player D"]})
+    strengths = pd.DataFrame({"player_key": [1, 2, 3, 4], "strength": [0.5, 0.2, 0.0, -0.3]})
+    elo_now = pd.DataFrame({"player_key": [1, 2, 3, 4], "elo": [1600, 1550, 1500, 1450]})
+
+    class History:
+        def at(self, _):
+            return strengths, elo_now
+
+    first = overview.draw_outputs(cal, {"Test": draw}, players, strengths, elo_now, History, date(2026, 11, 1))
+
+    def must_not_run():
+        raise AssertionError("a reused backtest must not rebuild the strength history")
+
+    again = overview.draw_outputs(cal, {"Test": draw}, players, strengths, elo_now, must_not_run, date(2026, 11, 2),
+                                  previous=first)
+    for table in overview.BACKTEST_TABLES:
+        pd.testing.assert_frame_equal(first[table].reset_index(drop=True), again[table].reset_index(drop=True))

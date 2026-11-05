@@ -20,10 +20,13 @@ from datetime import date
 import pandas as pd
 
 sys.path.append(os.path.abspath(".."))  # src/, for the shared analytics package
-from analytics import pipeline, registry
+from analytics import elo, pipeline, registry
 
 dbutils.widgets.text("catalog", "workspace")
+dbutils.widgets.text("refit", "auto")  # auto: refit when the active model is older than REFIT_DAYS; force: always
 catalog = dbutils.widgets.get("catalog")
+refit = dbutils.widgets.get("refit")
+REFIT_DAYS = 28
 spark.sql(f"USE CATALOG {catalog}")
 version = f"v{date.today().isoformat()}"
 
@@ -37,6 +40,25 @@ player_matches = spark.sql("""
 """).toPandas()
 matches = spark.sql("SELECT match_key, match_date, round, winner_key, loser_key, is_major FROM darts_silver.matches").toPandas()
 rankings = spark.sql("SELECT snapshot_date, player_key, rank FROM darts_silver.rankings").toPandas()
+
+# Refitting (selection, bootstrap, walk-forward) takes most of the job's compute and the weights barely move
+# from day to day. Between refits only the active model's Elo is brought up to date with the new matches,
+# which is all the Performance Index needs.
+REGISTRY = "darts_gold.pi_model_registry"
+current_model = (spark.sql(f"SELECT version, elo_k, elo_major_multiplier, decided_at FROM {REGISTRY} "
+                           "WHERE status = 'active' ORDER BY decided_at DESC LIMIT 1").collect()
+                 if spark.catalog.tableExists(REGISTRY) else [])
+if refit == "auto" and current_model:
+    m = current_model[0]
+    age = (pd.Timestamp.now(tz="UTC") - pd.Timestamp(m.decided_at).tz_convert("UTC")).days
+    if age < REFIT_DAYS:
+        history = elo.run_elo(matches.assign(match_date=pd.to_datetime(matches["match_date"])),
+                              elo.EloParams(float(m.elo_k), float(m.elo_major_multiplier)))
+        history = history.assign(match_date=pd.to_datetime(history["match_date"]).dt.date, version=m.version)
+        spark.sql(f"DELETE FROM darts_gold.elo_history WHERE version = '{m.version}'")
+        spark.createDataFrame(history).write.mode("append").saveAsTable("darts_gold.elo_history")
+        dbutils.notebook.exit(f"no refit: active model {m.version} is {age} days old (refit every {REFIT_DAYS} days); "
+                              f"Elo updated with {len(history)} matches")
 
 run = pipeline.fit(player_matches, matches, version, rankings=rankings)
 print(f"model {version}: {run.n_pairs} matches between tracked players, Elo {run.elo_params}")
@@ -75,7 +97,6 @@ if run.benchmark is not None:
 
 # COMMAND ----------
 
-REGISTRY = "darts_gold.pi_model_registry"
 test_ll = float(run.metrics.query("model == 'selected' and dataset == 'test'")["log_loss"].iloc[0])
 active = None
 if spark.catalog.tableExists(REGISTRY):

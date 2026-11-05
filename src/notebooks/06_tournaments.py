@@ -93,10 +93,17 @@ player_matches = spark.sql("""
 matches = spark.sql("SELECT match_key, match_date, round, winner_key, loser_key, is_major FROM darts_silver.matches").toPandas()
 rankings = spark.sql("SELECT snapshot_date, player_key, rank FROM darts_silver.rankings").toPandas()
 
+# Backtests of finished majors only change with the model: reuse the ones of the active version.
+previous = {}
+for table in overview.BACKTEST_TABLES:
+    full = f"darts_gold.{table}"
+    if spark.catalog.tableExists(full) and "model_version" in spark.table(full).columns:
+        previous[table] = (spark.table(full).where(f"model_version = '{version}'")
+                           .drop("computed_at", "model_version").toPandas())
 outputs = overview.draw_outputs(
     cal, draws, players, current, elo_latest,
     strength_history=lambda: pipeline.StrengthHistory(player_matches, matches, predictors, elo_params, rankings=rankings),
-    today=today)
+    today=today, previous=previous)
 for table, df in outputs.items():
     save(df, table)
 if "tournament_backtest_summary" in outputs:
