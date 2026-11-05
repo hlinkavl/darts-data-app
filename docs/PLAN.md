@@ -66,7 +66,7 @@ An end-to-end data app about PDC darts with two core features:
 | Day 1 | Data foundation: sources, ingestion, bronze → silver | ✅ done (2026-10-25) |
 | Day 2 | Analytics: Performance Index, prediction model, backtests | ✅ done (2026-10-28) |
 | Day 3 | Source switch (Orakel blocked → Mastercaller + Wikipedia), health report, model promotion, GitHub Actions, key test vs PDC ranking | ✅ done (verified in Databricks 2026-11-01) |
-| Day 4 | Streamlit app, Genie, deploy (ready for the Grand Slam, 14 Nov) | ⏳ app live on Databricks (2026-11-01); Day B operations and Day C AI + Genie left |
+| Day 4 | Streamlit app, Genie, deploy (ready for the Grand Slam, 14 Nov) | ⏳ everything outside Databricks done (2026-11-05); Day D (deploy, AI model, Genie, screenshots) left |
 
 ---
 
@@ -202,6 +202,13 @@ Bundle deployed; ingestion (Mastercaller, Wikipedia with parser 2 and matcher 2,
 - 3.6 **PDC news per player** (`analytics/news.py`, tested): full-name matching, round-ups such as entry lists are not relevant unless the player is in the headline; `gold.player_news`; "Form & news" section in the Player Profile (works locally).
 - 3.5 **AI form summaries** prepared (`analytics/narratives.py`, notebook `08_narratives`, job task before health): prompt only from the player's numbers, last matches and news; regenerated only when inputs or the model change, max 40 per run; model in `config/ai.yml` (empty = skipped); compare mode via `compare_models`.
 - 4.3 **Genie** prepared: space definition `config/genie/space.yml` (6 tables, instructions, 5 sample questions, 3 example SQLs), `scripts/genie_space.py` (create or update), chat on the "Ask the data" page via the Conversation API (shows the answer, the table and the SQL).
+
+- Tournament Overview → Predictions reworked (2026-11-05, user-approved): picker as one timeline newest first
+  (`✅ European Championship 2026 (Ross Smith)  |  22–25 Oct 2026`, upcoming placed by last year's dates when not
+  confirmed); compact header card (name, status pill, dates in blue, three facts, champion with "(95.9 final avg)");
+  full list of title chances in an expander under the top-16 chart; **Beat the odds** for finished majors (outsiders
+  outside the model's top 8 who reached at least the quarter-finals with < 25 % chance, least likely first);
+  **On the rise** cards for upcoming and live majors.
 
 **Day D: Databricks only (when the quota is back)**
 1. `make deploy` (job with the narratives task, app with the GitHub token) and check the next refresh's run time.
