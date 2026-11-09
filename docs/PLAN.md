@@ -218,7 +218,13 @@ the tracked players stay the same; fingerprint column `tracked_hash`). Fixed on 
 timestamp without time zone. CI waits at most 45 min (workflow timeout 60). Note: GitHub starts the 03:23 UTC
 schedule around 10:30–12:00 UTC; fine for majors (matches are in the evening).
 
-**Day E (last): AI and Genie**
+Also on 2026-11-09: Data & Health reworked (status card, issues as cards with the recommended action, all checks
+in an expander). Decided: the new Grand Slam format (16 groups of 3) is **not** simulated; predictions start with
+the last 16 once Wikipedia has the knockout bracket. Revisit if more events use group stages.
+**The app is fully usable now.** Tokens to renew: Databricks PAT (GitHub secret `DATABRICKS_TOKEN`) and the GitHub
+token for the Refresh button (secret scope `darts`, key `github_token`; restart the app after changing it).
+
+**Day E (optional, any time): AI and Genie**
 1. AI summaries: list the available foundation models, compare 2–3 on 20 players (`compare_models`), set the winner in `config/ai.yml`, run once.
 2. Genie: check the 3 example SQLs on the warehouse (design approved by the user), create the space (`scripts/genie_space.py`), add the genie-space resource to the app (`GENIE_SPACE_ID`, CAN RUN), test a few questions.
 3. Screenshots for the README; final check before the Grand Slam (draw a few days before 14 Nov).
