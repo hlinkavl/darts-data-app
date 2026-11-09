@@ -9,7 +9,7 @@ from databricks.sdk import WorkspaceClient
 from start_app import start_app
 
 JOB_SUFFIX = "darts_refresh"
-WAIT_MINUTES = 80  # a full run takes ~50 min on serverless (2026-11-01); speeding it up is planned
+WAIT_MINUTES = 45  # a run takes ~6 min (~25 min with a monthly refit); measured 2026-11-09
 
 
 def main() -> None:

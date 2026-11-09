@@ -11,6 +11,7 @@
 
 # COMMAND ----------
 
+import hashlib
 import os
 import sys
 
@@ -53,12 +54,36 @@ print(f"model {version}, {len(players)} players, {len(as_of_dates)} snapshots, c
 # COMMAND ----------
 
 rankings = spark.sql("SELECT snapshot_date, player_key, rank FROM darts_silver.rankings").toPandas()
-index = pipeline.score(player_matches, elo_history, coefficients, players["player_key"].tolist(), as_of_dates,
+
+# Monthly snapshots of the past do not change while the model and the tracked players stay the same (each uses
+# only matches before its date), so they are reused; the current one and the last RECENT_DAYS days (late results)
+# are computed again. A new model version or a change in the tracked players recomputes everything, because the
+# reference player (mean of the top 32 in each snapshot) depends on who is scored.
+RECENT_DAYS = 7
+# Fingerprint of who is scored (players without data drop out of a snapshot, so the table alone can't tell).
+tracked_hash = hashlib.sha1(",".join(map(str, sorted(players["player_key"]))).encode()).hexdigest()
+reused = pd.DataFrame()
+table = "darts_gold.performance_index"
+if spark.catalog.tableExists(table) and "tracked_hash" in spark.table(table).columns:
+    old_index = spark.sql(f"SELECT * FROM {table} WHERE model_version = '{version}' AND tracked_hash = '{tracked_hash}' "
+                          "AND NOT is_current").toPandas()
+    if len(old_index):
+        keep_before = (current - pd.Timedelta(days=RECENT_DAYS)).normalize()
+        reused = old_index[pd.to_datetime(old_index["as_of_date"]) < keep_before]
+done = set(pd.to_datetime(reused["as_of_date"])) if len(reused) else set()
+to_score = [d for d in as_of_dates if d not in done]
+print(f"reusing {len(done)} snapshots, scoring {len(to_score)}")
+
+index = pipeline.score(player_matches, elo_history, coefficients, players["player_key"].tolist(), to_score,
                        rankings=rankings)
 index = index.merge(players, on="player_key", how="left")
 index["is_current"] = index["as_of_date"] == current.normalize()
 index["as_of_date"] = pd.to_datetime(index["as_of_date"]).dt.date
 index["model_version"] = version
+index["tracked_hash"] = tracked_hash
+if len(reused):
+    reused = reused.assign(as_of_date=pd.to_datetime(reused["as_of_date"]).dt.date)
+    index = pd.concat([reused[[c for c in index.columns if c in reused.columns]], index], ignore_index=True)
 
 lead = ["as_of_date", "is_current", "player_key", "player_name", "rank", "pi", "rank_major", "pi_major",
         "effective_average", "effective_average_major"]

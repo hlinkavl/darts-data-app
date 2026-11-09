@@ -210,12 +210,18 @@ Bundle deployed; ingestion (Mastercaller, Wikipedia with parser 2 and matcher 2,
   outside the model's top 8 who reached at least the quarter-finals with < 25 % chance, least likely first);
   **On the rise** cards for upcoming and live majors.
 
-**Day D: Databricks only (when the quota is back)**
-1. `make deploy` (job with the narratives task, app with the GitHub token) and check the next refresh's run time.
-2. Refresh button: test from the app (also shows whether the app reaches api.github.com).
-3. AI summaries: list the available foundation models, compare 2–3 on 20 players (`compare_models`), set the winner in `config/ai.yml`, run once.
-4. Genie: check the 3 example SQLs on the warehouse, review the space design with the user, create it (`scripts/genie_space.py`), add the genie-space resource to the app (`GENIE_SPACE_ID`, CAN RUN), test a few questions.
-5. Screenshots for the README; final check before the Grand Slam (draw a few days before 14 Nov).
+**Day D: operations on Databricks ✅ (2026-11-09)**
+Quota back. App deployed with the new code; **Refresh button works** (the app reaches the GitHub API and starts the
+workflow). Run time of a daily refresh **~50 min → ~6 min**: pi_model 20 → 0.6 min (monthly refit), tournaments
+21 → 0.7 min (backtests reused), performance_index 7 → 1.2 min (past monthly snapshots reused while the model and
+the tracked players stay the same; fingerprint column `tracked_hash`). Fixed on the way: pi_model failed on a
+timestamp without time zone. CI waits at most 45 min (workflow timeout 60). Note: GitHub starts the 03:23 UTC
+schedule around 10:30–12:00 UTC; fine for majors (matches are in the evening).
+
+**Day E (last): AI and Genie**
+1. AI summaries: list the available foundation models, compare 2–3 on 20 players (`compare_models`), set the winner in `config/ai.yml`, run once.
+2. Genie: check the 3 example SQLs on the warehouse (design approved by the user), create the space (`scripts/genie_space.py`), add the genie-space resource to the app (`GENIE_SPACE_ID`, CAN RUN), test a few questions.
+3. Screenshots for the README; final check before the Grand Slam (draw a few days before 14 Nov).
 
 **Free Edition quota:** a full run is ~7 tasks. Avoid repeated full runs on the same day: use `--only <task>` while developing and test locally first.
 
