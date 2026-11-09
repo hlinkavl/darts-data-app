@@ -50,7 +50,9 @@ current_model = (spark.sql(f"SELECT version, elo_k, elo_major_multiplier, decide
                  if spark.catalog.tableExists(REGISTRY) else [])
 if refit == "auto" and current_model:
     m = current_model[0]
-    age = (pd.Timestamp.now(tz="UTC") - pd.Timestamp(m.decided_at).tz_convert("UTC")).days
+    decided = pd.Timestamp(m.decided_at)  # Spark returns it without a time zone (session time zone: UTC)
+    decided = decided.tz_localize("UTC") if decided.tzinfo is None else decided.tz_convert("UTC")
+    age = (pd.Timestamp.now(tz="UTC") - decided).days
     if age < REFIT_DAYS:
         history = elo.run_elo(matches.assign(match_date=pd.to_datetime(matches["match_date"])),
                               elo.EloParams(float(m.elo_k), float(m.elo_major_multiplier)))
