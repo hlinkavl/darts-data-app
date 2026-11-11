@@ -2,7 +2,7 @@ resources:
   jobs:
     darts_refresh:
       name: darts_refresh
-      description: Monthly (and on-demand) refresh of darts data, Performance Index and predictions.
+      description: Refresh of darts data, Performance Index, predictions and AI summaries (daily during majors, else on demand).
       # 1st of every month at 06:00 Prague time. Development mode keeps schedules paused.
       schedule:
         quartz_cron_expression: "0 0 6 1 * ?"
@@ -22,8 +22,8 @@ resources:
         - name: compare_models
           default: ""
       # Serverless compute: notebook tasks need no cluster definition.
-      # Raw files are uploaded to the Volume by `python -m ingestion.run --upload` (Darts Orakel blocks
-      # Databricks IPs; since 30 Oct 2026 Mastercaller + Wikipedia, see docs/PLAN.md). AI tasks follow on Day 3.
+      # Raw files are uploaded to the Volume by `python -m ingestion.run --upload` on GitHub Actions
+      # (docs/MAINTENANCE.md, section 1).
       tasks:
         - task_key: bronze
           notebook_task:

@@ -1,4 +1,4 @@
-"""Performance Index model: predictor selection, weights and the 0-10 scale (docs/PERFORMANCE_INDEX.md).
+"""Performance Index model: predictor selection, weights and the 0-10 scale (docs/METHODOLOGY.md).
 
 Each match becomes one observation: y = 1 if player A won, X = predictor(A) - predictor(B). Players are
 assigned to A/B at random, and the logistic regression has no intercept, so the model is symmetric:

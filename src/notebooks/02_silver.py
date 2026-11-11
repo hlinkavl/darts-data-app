@@ -2,7 +2,7 @@
 # MAGIC %md
 # MAGIC # Silver: clean, typed, one row per entity, all sources unified
 # MAGIC - **Results:** Darts Orakel until 28 Oct 2026 (exact points and darts, detailed stats), Mastercaller from then
-# MAGIC   on (3-dart averages; darts estimated from legs, see docs/DESIGN.md). Matches present in both come from Orakel.
+# MAGIC   on (3-dart averages; darts estimated from legs, see docs/MAINTENANCE.md, section 8). Matches present in both come from Orakel.
 # MAGIC - **Players:** one `player_key` across sources. Orakel keys are kept; Mastercaller and Wikipedia names are
 # MAGIC   matched to them in `player_crosswalk` (manual fixes: config/player_aliases.yml); new players get a stable new key.
 # MAGIC - **Tracked players and rankings:** the official PDC Order of Merit (Wikipedia data module), top 150.
@@ -34,7 +34,7 @@ if os.path.exists("../../config/player_aliases.yml"):
 MAJOR_KEYS = "(" + ", ".join(str(k) for k in MAJORS) + ")"
 TRACKED_PLAYERS = 150
 ESTIMATED_LEGS_PER_SET = 4.0        # sets are first to 3 legs
-DARTS_PER_LEG_AT_AVG = 1503.0       # darts per leg ~ 3 * 501 / average (validated on Orakel data, docs/DESIGN.md)
+DARTS_PER_LEG_AT_AVG = 1503.0       # darts per leg ~ 3 * 501 / average (validated on Orakel data, docs/MAINTENANCE.md, section 8)
 NEW_KEY_BASE = 900_000_000          # keys for players unknown to Orakel
 MC_KEY_BASE = 1_000_000_000_000     # match/event keys for Mastercaller rows (Orakel keys are < 10^7)
 

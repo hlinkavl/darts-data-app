@@ -1,6 +1,6 @@
 """Model promotion policy: every refit creates a candidate; only a safe candidate replaces the active model.
 
-Rules (docs/PERFORMANCE_INDEX.md, "Model versions"):
+Rules (docs/METHODOLOGY.md, "Model versions"):
 1. No active model yet: the candidate becomes active.
 2. The selected predictors changed: the candidate is NOT activated. A change in what the index is made of is
    a methodology change and needs a human decision (the health report flags it).

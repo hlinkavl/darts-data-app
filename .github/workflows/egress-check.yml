@@ -1,4 +1,4 @@
-# Checks whether data sources accept requests from GitHub-hosted runners (see docs/PLAN.md, step 3.4).
+# Checks whether data sources accept requests from GitHub-hosted runners (see docs/MAINTENANCE.md, section 8).
 # One job per source, so each result is visible as a job conclusion.
 name: egress-check
 

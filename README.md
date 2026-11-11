@@ -11,7 +11,12 @@ Inspired by the workflow in [I Built a Real Data App with Claude Code (and It Co
 Outside majors the app is stopped to save compute: start it for 24 h with the
 [start-app workflow](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml) → **Run workflow**.
 
-<!-- Screenshots: Tournament Overview, Player Profile, PI Leaderboard (added before the Grand Slam 2026) -->
+## Documentation
+
+| Document | Read it when |
+|---|---|
+| **[docs/MAINTENANCE.md](docs/MAINTENANCE.md)** | something broke, a token expires, you deploy a change, or you set the project up from scratch: how the refresh works, the failure runbook, common fixes, tokens, data model, decisions and known limits |
+| **[docs/METHODOLOGY.md](docs/METHODOLOGY.md)** | you want to know how the numbers are made: the Performance Index (all tested predictors, the key test against the Order of Merit) and the tournament simulations with backtests |
 
 ## What it does
 
@@ -19,9 +24,12 @@ Outside majors the app is stopped to save compute: start it for 24 h with the
   bracket with each match's pre-match chance (undecided spots show the most likely player), players on the rise,
   upcoming matches. Finished events show what the model predicted before the first dart (backtest).
 - **Player Profile**: current PDC Order of Merit rank and PI, the **PI breakdown** (the player against an average
-  top-32 player in each input), PI over time, last 5 matches, background from Wikipedia, titles.
+  top-32 player in each input), an AI form summary with the latest PDC news, PI over time, last 5 matches,
+  background from Wikipedia, titles.
 - **PI Leaderboard**: rank by PI or by the Order of Merit, head-to-head chances in any format (legs or sets).
-- **Methodology** and **Data & Health**: the model's weights and tests, data freshness and a health report.
+- **Ask the data**: questions in plain English, answered by a Databricks Genie space with the SQL behind the answer.
+- **Methodology** and **Data & Health**: the model's weights and tests, data freshness, the health report and a
+  Refresh button.
 
 ## The Performance Index in one paragraph
 
@@ -31,8 +39,7 @@ the 3-dart average over the last 30 matches, form (last 10 vs last 30), an oppon
 Order of Merit rank. Weights come from a logistic regression on matches between tracked players, with no
 look-ahead. In a walk-forward test on 1,825 major matches the model predicts winners significantly better than the
 PDC Order of Merit (log loss 0.628 vs 0.652, p < 0.001). Every tested and rejected predictor, and why, is in
-[docs/PERFORMANCE_INDEX.md](docs/PERFORMANCE_INDEX.md); tournament simulations in
-[docs/TOURNAMENT_PREDICTIONS.md](docs/TOURNAMENT_PREDICTIONS.md).
+[docs/METHODOLOGY.md](docs/METHODOLOGY.md), together with the tournament simulations.
 
 ## Architecture
 
@@ -42,11 +49,12 @@ GitHub Actions (daily during majors, or by hand / from the app)
         │ upload
         ▼
 Unity Catalog Volume ──► Databricks Job darts_refresh (serverless)
-                         bronze → silver → quality → PI model → Performance Index → tournaments → health
+                         bronze → silver → quality → PI model → Performance Index
+                                → tournaments + AI summaries (ai_query) → health
                                                                          │
                                                        darts_gold (Delta) │ SQL warehouse
                                                                          ▼
-                                              Streamlit app (Databricks App)
+                                              Streamlit app (Databricks App) + Genie space
 ```
 
 Why ingestion runs on GitHub Actions: Free Edition limits outbound internet from Databricks compute, and the
@@ -60,6 +68,17 @@ scrapers are polite (one request every few seconds, identified User-Agent), whic
   the daily "is a major running?" check reads Wikipedia instead of the warehouse, and the app runs only during
   majors.
 
+### Running without anyone watching
+
+- **Automatic during majors:** a daily GitHub Actions check reads Wikipedia; while a major runs it ingests, runs the
+  job (~6 min) and starts the app. Outside majors nothing runs and the app is stopped (start it with the
+  start-app workflow).
+- **Fails loudly, never shows wrong numbers:** sources are fetched independently, hard quality checks stop the job
+  before the gold tables, a refit is activated only if it passes the test, and a red health report (a source failed,
+  or no new result for 4+ days during a major) fails the job and sends an e-mail. The app keeps the last good data.
+- **Needs a person** only when the outside world changes (a source changes its page, a new tournament format) and
+  for the yearly token renewal (next: Databricks token on 9 Nov 2027). Runbook: [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
+
 ## Data sources
 
 | Source | Used for | How |
@@ -67,7 +86,7 @@ scrapers are polite (one request every few seconds, identified User-Agent), whic
 | [Mastercaller](https://mastercaller.com) (stats by iDarts) | Results and 3-dart averages since Oct 2026 | Public pages, 1 request / 3 s |
 | Darts Orakel | Results and match stats until 28 Oct 2026 | Free public API; access ended when the site blocked our client, its earlier data is kept |
 | Wikipedia / Wikidata | Order of Merit (current and monthly history), majors' dates and draws, player background and free photos | Official APIs, CC BY-SA |
-| PDC news (RSS) | News for AI summaries (planned) | Official feed |
+| PDC news (RSS) | Latest news per player, input for the AI form summaries | Official feed |
 
 Non-commercial project. No betting odds: no free and legal source was available.
 
@@ -81,14 +100,14 @@ Non-commercial project. No betting odds: no free and legal source was available.
 | `app/` | Streamlit app (deployed as a Databricks App) |
 | `databricks.yml`, `resources/` | Databricks Asset Bundle: job, app, secret scope |
 | `.github/workflows/` | `refresh` (daily gate + refresh), `start-app`, `egress-check` |
-| `config/` | Majors and Mastercaller series |
+| `config/` | Majors, Mastercaller series, AI model, Genie space definition |
 | `scripts/` | Local snapshot for app development, smoke tests, CI helpers |
-| `docs/` | Plan, design, methodology, setup |
+| `docs/` | Maintenance (runbook) and methodology |
 | `tests/` | Unit tests (`pytest`) |
 
 ## Getting started
 
-Setup (Databricks CLI profile, bundle, GitHub secrets) is in [docs/SETUP.md](docs/SETUP.md). The short version:
+Full setup, deploy and test steps: [docs/MAINTENANCE.md](docs/MAINTENANCE.md#5-develop-test-deploy). The short version:
 
 ```bash
 make setup                                   # local venv

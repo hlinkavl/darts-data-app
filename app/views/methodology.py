@@ -6,7 +6,7 @@ import streamlit as st
 import data
 import ui
 
-DOCS = "https://github.com/hlinkavl/darts-data-app/blob/main/docs/PERFORMANCE_INDEX.md"
+DOCS = "https://github.com/hlinkavl/darts-data-app/blob/main/docs/METHODOLOGY.md"
 
 
 def _weights_chart(coef) -> go.Figure:
@@ -98,4 +98,4 @@ The index is built in three transparent steps: **select** only predictors that p
         log = data.versioned("pi_selection_log")
         st.dataframe(log[["predictor", "step", "decision", "reason"]].assign(predictor=log["predictor"].map(ui.predictor_name)),
                      hide_index=True, width="stretch")
-    st.markdown(f"Full methodology, data and limitations: [docs/PERFORMANCE_INDEX.md]({DOCS})")
+    st.markdown(f"Full methodology, data and limitations: [docs/METHODOLOGY.md]({DOCS})")

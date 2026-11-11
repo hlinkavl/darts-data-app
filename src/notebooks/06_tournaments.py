@@ -7,7 +7,7 @@
 # MAGIC   a Monte Carlo of the draw, with played matches fixed (live bracket).
 # MAGIC - **Upcoming matches** from the Mastercaller match center: PI vs PI, win probability, head-to-head.
 # MAGIC The logic lives in src/analytics/overview.py (also used for the local app snapshot).
-# MAGIC Methodology: docs/TOURNAMENT_PREDICTIONS.md.
+# MAGIC Methodology: docs/METHODOLOGY.md.
 
 # COMMAND ----------
 

@@ -6,7 +6,7 @@ winning a single leg from that, then build any longer or shorter format from leg
     P(win a race to n) = sum_{k=0}^{n-1} C(n-1+k, k) * p^n * (1-p)^k      (opponent wins k < n units first)
 
 A set is a race to 3 legs (World Championship, World Grand Prix). Simplifications, documented in
-docs/TOURNAMENT_PREDICTIONS.md: legs are independent with the same p (the advantage of throwing first is
+docs/METHODOLOGY.md: legs are independent with the same p (the advantage of throwing first is
 averaged out) and "win by two clear legs" in deciding sets/legs is ignored.
 """
 

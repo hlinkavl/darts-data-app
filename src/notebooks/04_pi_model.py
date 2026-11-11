@@ -3,7 +3,7 @@
 # MAGIC # Gold: Performance Index model (steps 1 and 2)
 # MAGIC Tunes the Opponent-Weighted Elo, selects predictors (correlation filter, significance + out-of-sample check,
 # MAGIC bootstrap stability) and fits the weights. Every decision is written to gold tables under a model version,
-# MAGIC so the app's Methodology page always shows the current model. Methodology: docs/PERFORMANCE_INDEX.md.
+# MAGIC so the app's Methodology page always shows the current model. Methodology: docs/METHODOLOGY.md.
 # MAGIC Also runs the key test against the PDC Order of Merit and applies the promotion policy: the new fit is a
 # MAGIC candidate and only becomes the active model if analytics.registry allows it.
 
