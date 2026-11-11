@@ -128,6 +128,8 @@ Rules that save quota and trouble:
 - Databricks Apps run Python 3.11 (no backslashes or quotes inside f-string expressions); the warehouse returns
   time-zone-aware timestamps and Decimals (`app/data.py` converts them).
 - The app is stopped outside majors; `bundle run darts_app` starts it.
+- `app/requirements.txt` pins `databricks-sdk`: the Apps runtime preinstalls an old one (0.33), which keeps an
+  unpinned requirement and lacks newer APIs (Genie broke on that). Local tests use the pinned version too.
 
 ## 6. Setup from scratch
 

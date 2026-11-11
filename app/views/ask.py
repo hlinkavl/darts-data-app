@@ -37,8 +37,10 @@ def _ask(question: str) -> dict:
         if att.query:
             answer["sql"] = att.query.query
             answer["text"] = answer["text"] or att.query.description
-            res = w.genie.get_message_attachment_query_result(SPACE_ID, msg.conversation_id, msg.message_id or msg.id,
-                                                              att.attachment_id)
+            # newer SDKs name it get_message_attachment_query_result; older ones ..._query_result_by_attachment
+            fetch = (getattr(w.genie, "get_message_attachment_query_result", None)
+                     or w.genie.get_message_query_result_by_attachment)
+            res = fetch(SPACE_ID, msg.conversation_id, msg.message_id or msg.id, att.attachment_id)
             sr = res.statement_response
             if sr and sr.manifest and sr.result:
                 cols = [c.name for c in sr.manifest.schema.columns]

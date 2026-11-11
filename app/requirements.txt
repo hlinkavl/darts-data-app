@@ -1,5 +1,5 @@
 streamlit==1.66.1
-databricks-sdk
+databricks-sdk==0.157.0  # pinned: the Apps runtime's preinstalled SDK is older (no Genie attachment results)
 databricks-sql-connector
 pandas
 plotly
