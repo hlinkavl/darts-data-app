@@ -12,7 +12,7 @@ import pandas as pd
 NEWS_DAYS = 60          # news older than this is not used
 NEWS_PER_PLAYER = 3
 TOP_N = 32              # summaries for the PI top 32, plus every tracked player with recent news
-MAX_PER_RUN = 40        # cap per refresh (cost)
+MAX_PER_RUN = 60        # cap per refresh (candidates: PI top 32 + players with news, ~40); only changed inputs are regenerated
 
 INSTRUCTIONS = """You write a short form summary for a darts player's profile page.
 Use only the facts below. Do not add results, titles, ages, nicknames or opinions that are not in the facts.

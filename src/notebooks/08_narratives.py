@@ -66,7 +66,7 @@ def generate(todo: pd.DataFrame, model: str) -> pd.DataFrame:
                ai_query('{model}', prompt, failOnError => false,
                         modelParameters => named_struct('max_tokens', 220, 'temperature', 0.2)) AS r
         FROM narrative_todo
-    """).selectExpr("player_key", "r.response AS narrative", "r.errorMessage AS error").toPandas()
+    """).selectExpr("player_key", "r.result AS narrative", "r.errorMessage AS error").toPandas()
     return todo.merge(res, on="player_key").assign(model=model, generated_at=pd.Timestamp.now(tz="UTC"))
 
 

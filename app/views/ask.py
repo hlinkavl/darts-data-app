@@ -55,8 +55,10 @@ def _show(a: dict) -> None:
             return
         if a["text"]:
             st.markdown(a["text"])
-        if a["table"] is not None:
+        if a["table"] is not None and len(a["table"]):
             st.dataframe(a["table"], hide_index=True, width="stretch")
+        elif a["sql"]:
+            st.caption("The query returned no rows.")
         if a["sql"]:
             with st.expander("SQL behind the answer"):
                 st.code(a["sql"], language="sql")

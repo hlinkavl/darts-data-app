@@ -136,7 +136,8 @@ def main() -> None:
     recent["average"] = (3 * recent.points / recent.darts).round(2)
     recent["first9_average"] = (3 * recent.first9_points / recent.first9_darts).round(2)
     recent["checkout_pct"] = (100 * recent.checkouts_hit / recent.checkout_attempts).round(2)
-    recent = recent.sort_values(["player_key", "match_date", "match_key"], ascending=[True, False, False])
+    recent = (recent.assign(_left=recent["round"].map(players_left))  # within a day the later round first
+              .sort_values(["player_key", "match_date", "_left", "match_key"], ascending=[True, False, True, False]))
     recent["recency"] = recent.groupby("player_key").cumcount() + 1
     recent["result"] = np.where(recent.won, "W", "L")
     recent["score"] = recent.score_for.astype(str) + "-" + recent.score_against.astype(str)

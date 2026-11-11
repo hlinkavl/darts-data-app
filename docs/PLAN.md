@@ -177,7 +177,7 @@ An end-to-end data app about PDC darts with two core features:
    - Tournament backtests recomputed: 388 matches, favourite won 68.8 %, log loss 0.579.
    - Docs: PERFORMANCE_INDEX.md rewritten (all 16 predictors with reasons, key test, correction note), TOURNAMENT_PREDICTIONS.md updated.
    - **Big-stage ability, 3 more predictors** (Stage Delta, Long-Format Delta, Results over Expectation, all majors-only): none passes the rule. Stage Delta misses by 1 pp (79 % vs 80 % in the bootstrap; walk-forward gain on majors +0.0026, p = 0.055; majors-only regression p = 0.001). Decision: rule unchanged; **Stage Delta replaces Big-Stage Delta as the information-only indicator** in the app (Day 4), re-tested on every refit.
-3.5 [ ] **AI narratives** with `ai_query`: short player assessments from form + stats → `gold.player_ai_summary`. Compare 2–3 foundation models on 20 players first (as in the video). *Needs Databricks.*
+3.5 [x] **AI narratives** with `ai_query` → `gold.player_narratives` (2026-11-11). Compared Llama 3.3 70B, Llama 4 Maverick and Qwen3 Next 80B on 20 players: **Qwen3 Next 80B** chosen (most concrete: event, round, opponent, date; stuck to the facts). 39 summaries (PI top 32 + players with news), 0 errors, ~1 min. Fixes on the way: `ai_query` with `failOnError => false` returns `result`, not `response`; recent matches within a day are now ordered by round (the prompt and the profile's last-5 cards showed a Last 128 match as newer than the semi-final).
 3.6 [ ] **News and interviews**: ingestion done (`pdc_news`, kept forever in bronze); still to do: silver (players mentioned per article), AI summaries per player, news-gap check in the health report. *AI part needs Databricks.*
 3.7 [ ] Improve Wikidata matching for player backgrounds.
 3.8 [x] **Odds: left out for good** (decided 2026-10-28). Nothing meets the conditions "free, legal from the Czech Republic, no manual work": Betfair and Smarkets are geo-blocked for CZ (403), odds-api.io is paid, The Odds API has no darts, Livesport/Tipsport/Betano forbid scraping (Livesport terms art. 2.9/2.10), and no free historical darts odds dataset exists. Re-check only if a free darts odds API reachable from CZ appears.
@@ -200,7 +200,7 @@ Bundle deployed; ingestion (Mastercaller, Wikipedia with parser 2 and matcher 2,
 - `start-app` GitHub workflow: open the app for 24 h outside majors (Actions → start-app → Run workflow).
 - README rewritten (features, PI summary, architecture, Free Edition limits, sources); screenshots still to add.
 - 3.6 **PDC news per player** (`analytics/news.py`, tested): full-name matching, round-ups such as entry lists are not relevant unless the player is in the headline; `gold.player_news`; "Form & news" section in the Player Profile (works locally).
-- 3.5 **AI form summaries** prepared (`analytics/narratives.py`, notebook `08_narratives`, job task before health): prompt only from the player's numbers, last matches and news; regenerated only when inputs or the model change, max 40 per run; model in `config/ai.yml` (empty = skipped); compare mode via `compare_models`.
+- 3.5 **AI form summaries** prepared (`analytics/narratives.py`, notebook `08_narratives`, job task before health): prompt only from the player's numbers, last matches and news; regenerated only when inputs or the model change, max 60 per run; model in `config/ai.yml` (empty = skipped); compare mode via `compare_models`.
 - 4.3 **Genie** prepared: space definition `config/genie/space.yml` (6 tables, instructions, 5 sample questions, 3 example SQLs), `scripts/genie_space.py` (create or update), chat on the "Ask the data" page via the Conversation API (shows the answer, the table and the SQL).
 
 - Tournament Overview → Predictions reworked (2026-11-05, user-approved): picker as one timeline newest first
@@ -224,10 +224,11 @@ the last 16 once Wikipedia has the knockout bracket. Revisit if more events use 
 **The app is fully usable now.** Tokens to renew: Databricks PAT (GitHub secret `DATABRICKS_TOKEN`) and the GitHub
 token for the Refresh button (secret scope `darts`, key `github_token`; restart the app after changing it).
 
-**Day E (optional, any time): AI and Genie**
-1. AI summaries: list the available foundation models, compare 2–3 on 20 players (`compare_models`), set the winner in `config/ai.yml`, run once.
-2. Genie: check the 3 example SQLs on the warehouse (design approved by the user), create the space (`scripts/genie_space.py`), add the genie-space resource to the app (`GENIE_SPACE_ID`, CAN RUN), test a few questions.
-3. Screenshots for the README; final check before the Grand Slam (draw a few days before 14 Nov).
+**Day E: AI and Genie** ✅ (2026-11-11)
+1. [x] AI summaries: list the available foundation models, compare 2–3 on 20 players (`compare_models`), set the winner in `config/ai.yml`, run once.
+2. [x] Genie: check the 3 example SQLs on the warehouse (design approved by the user), create the space (`scripts/genie_space.py`), add the genie-space resource to the app (`GENIE_SPACE_ID`, CAN RUN), test a few questions.
+- [x] Alerting (2026-11-11): no new result for 4+ days during a major is red (job fails, e-mail); during a major the app starts even when the job failed; failure runbook in SETUP.md section 8.
+3. [ ] Screenshots for the README; final check before the Grand Slam (draw a few days before 14 Nov).
 
 **Free Edition quota:** a full run is ~7 tasks. Avoid repeated full runs on the same day: use `--only <task>` while developing and test locally first.
 
@@ -243,9 +244,9 @@ How fixes happen: config-only issues (e.g. a new major) can be fixed by editing 
    - Feedback rounds 7+ (2026-10-31 evening): **Players to watch = players on the rise** (biggest PI gain over the 3 months before the event with positive form, favourites included; in the 10 backtested majors 11 of 30 picks reached at least the QF) with their result in brackets (Out in 2nd round, 🏆 Champion, seed before the event); the bracket of upcoming and live events fills undecided spots with the most likely player and the chance to get there; tournament picker with ✅ / 🔴 / 🗓️ and upcoming majors without a draw (info note until it is published); PI breakdown as one comparison table with the Effective Average as the highlighted total, the conversion explained in Methodology; balanced season calendar columns.
    - **Photos:** Wikidata matching rewritten (search only among items with occupation darts player, exact name match on labels and aliases, special letters such as ł). Photo fallbacks, all freely licensed: Wikidata P18 → English Wikipedia lead image → the player's Commons category. Players in the majors' draws are covered too. Players with no free photo anywhere get an initials avatar; records without a photo are retried monthly.
    - **Bug fix:** the Order of Merit parser also read the module's previous table (`data.rankingsold`), so ~220 players appeared twice per snapshot and silver could pick the older rank. Fixed (parser 2), the history is fetched again once, silver prefers parser-2 rows.
-4.2 [ ] **Refresh button + health badge**: dispatches the GitHub Actions refresh, shows the last refresh time and the health status with warnings.
-4.3 [ ] **Genie space** over the gold tables with instructions and sample questions, embedded via the Conversation API.
-4.4 [ ] **Deploy** as a Databricks App via the bundle (the app's service principal gets the permissions it needs), end-to-end test.
+4.2 [x] **Refresh button + health badge**: dispatches the GitHub Actions refresh, shows the last refresh time and the health status with warnings.
+4.3 [x] **Genie space** over the gold tables with instructions and sample questions, embedded via the Conversation API (space `01f1ddf6938b1cb19ccfe38d51512b61`, app resource `genie-space`, CAN RUN; created 2026-11-11, the 3 example SQLs verified). Update it after editing `config/genie/space.yml`: `DATABRICKS_CONFIG_PROFILE=darts python scripts/genie_space.py`.
+4.4 [x] **Deploy** as a Databricks App via the bundle (the app's service principal gets the permissions it needs), end-to-end test.
 4.5 [ ] **README**: link to the video, infrastructure overview, Free Edition limits, screenshots.
 
 ## After Day 4

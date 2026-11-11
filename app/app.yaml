@@ -11,3 +11,5 @@ env:
     valueFrom: sql-warehouse
   - name: GITHUB_TOKEN
     valueFrom: github-token
+  - name: GENIE_SPACE_ID
+    valueFrom: genie-space

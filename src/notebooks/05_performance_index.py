@@ -103,7 +103,15 @@ CREATE OR REPLACE VIEW darts_gold.player_recent_matches AS
 SELECT
   m.player_key,
   p.player_name,
-  row_number() OVER (PARTITION BY m.player_key ORDER BY m.match_date DESC, m.match_key DESC) AS recency,
+  -- within a day the later round first (fewer players left); match ids don't follow the order of play
+  -- (same rule as analytics/rounds.players_left)
+  row_number() OVER (PARTITION BY m.player_key ORDER BY m.match_date DESC, CASE
+      WHEN lower(m.round) RLIKE 'last *[0-9]+' THEN cast(regexp_extract(lower(m.round), 'last *([0-9]+)', 1) AS INT)
+      WHEN lower(m.round) LIKE '%quarter%' THEN 8
+      WHEN lower(m.round) LIKE '%semi%' THEN 4
+      WHEN lower(m.round) LIKE '%final%' THEN 2
+      WHEN lower(m.round) RLIKE '(round|rd) *[0-9]+' THEN 4096 / pow(2, cast(regexp_extract(lower(m.round), '(round|rd) *([0-9]+)', 2) AS INT))
+      ELSE 4096 END ASC, m.match_key DESC) AS recency,
   m.match_date, m.tournament_name, m.round, m.is_major,
   m.opponent_key, m.opponent_name,
   IF(m.won, 'W', 'L') AS result,

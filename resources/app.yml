@@ -17,3 +17,10 @@ resources:
             scope: darts
             key: github_token
             permission: READ
+        # Exposed as GENIE_SPACE_ID (Ask the data). Created by scripts/genie_space.py from config/genie/space.yml.
+        - name: genie-space
+          description: Genie space behind the Ask the data page
+          genie_space:
+            name: Darts Performance Analyzer
+            space_id: 01f1ddf6938b1cb19ccfe38d51512b61
+            permission: CAN_RUN
