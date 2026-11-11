@@ -41,3 +41,9 @@ def test_new_series_and_name_matching():
     assert health.player_matching([str(i) for i in range(8)])[0].status == health.YELLOW
     known_gap = health.player_matching([], [str(i) for i in range(15)])
     assert [c.status for c in known_gap] == [health.GREEN, health.GREEN]
+
+
+def test_results_stuck_during_major_are_red_but_a_short_break_is_not():
+    assert health.freshness(date(2026, 11, 11), TODAY, True).status == health.RED   # 5 days
+    assert health.freshness(date(2026, 11, 12), TODAY, True).status == health.YELLOW  # 4 days (WC Christmas break)
+    assert health.freshness(date(2026, 11, 1), TODAY, False).status == health.GREEN  # no major: no alarm

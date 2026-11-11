@@ -77,3 +77,31 @@ pressing the Refresh button. Renew a week ahead.
    then `databricks apps start darts-performance-analyzer --profile darts`.
 
 **CLI login** (your Mac, profile `darts`) is OAuth and expires after some idle time: `databricks auth login --profile darts`.
+
+## 8. When something breaks
+
+The refresh is built to fail loudly and never to show wrong numbers:
+
+- **Each source on its own.** Mastercaller, Wikipedia and PDC news are fetched separately; one failing does not stop
+  the others. The run's manifest records rows and errors per source.
+- **Quality gate before the gold tables.** Hard checks (duplicates, impossible averages, empty tables) stop the job
+  before any model or prediction is computed, so the app keeps the last good data.
+- **Model promotion gate.** A refit only becomes active if it passes the test; otherwise the previous model stays.
+- **Health report** (app → Data & Health): every problem with a "What to do". **Red fails the job**, which sends two
+  e-mails (Databricks job + GitHub workflow). Red means: a source failed or blocks us, the Order of Merit came back
+  empty, no model, or **no new result for more than 4 days while a major is running** (a source answers "ok" but
+  delivers nothing new, typically after a page change).
+- **Yellow** shows only in the app: e.g. a draw format we don't parse (the 2026 Grand Slam groups), a new series to
+  add to the config, a refit that was not activated.
+- During a major the app is started even when the job failed, so it shows the last good data.
+
+What to do when the e-mail arrives:
+
+1. Open the failed run (link in the e-mail) and Data & Health in the app: the red check says what broke.
+2. A one-off error (timeout, Databricks quota): press Refresh in the app or "Run workflow" on GitHub.
+3. A source changed its page, or a new tournament format: open Claude Code in the repo, paste the error and the health
+   message, fix, run the tests, `databricks bundle deploy -t dev --profile darts`, then Refresh.
+4. A source blocks us (HTTP 401/403): don't work around it; find a replacement source.
+5. An expired token: section 7.
+
+Expect a few such fixes a year, mostly when a season starts or a format changes.

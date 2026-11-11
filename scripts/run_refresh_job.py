@@ -1,5 +1,6 @@
 """Start the darts_refresh job in Databricks and wait for it; exit 1 if it doesn't succeed (CI e-mails on failure).
-With --start-app (scheduled runs, i.e. during a major) it also starts the Databricks App."""
+With --start-app (scheduled runs, i.e. during a major) it also starts the Databricks App, even when the job failed:
+a failed run never overwrites the last good gold tables, so the app still shows correct (if older) data."""
 
 import sys
 from datetime import timedelta
@@ -23,10 +24,10 @@ def main() -> None:
         print(f"  {task.task_key}: {task.state.result_state.value if task.state.result_state else task.state.life_cycle_state.value}")
     state = run.state.result_state.value if run.state.result_state else "UNKNOWN"
     print("result:", state, run.run_page_url)
-    if state != "SUCCESS":
-        sys.exit(1)
     if "--start-app" in sys.argv:
         start_app(w)
+    if state != "SUCCESS":
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -127,5 +127,5 @@ For every major (first live test: World Championship 2027, 11 Dec 2026 – 3 Jan
   - **during majors: daily** ("tournament mode": upcoming-matches feed, the draw page and matches of players still in the event)
   - **otherwise on demand**: the **Refresh** button in the app (next to it: time of the last refresh), `make refresh`, or "Run now" in the UI
 - **Ingestion** runs outside Databricks: GitHub Actions (`.github/workflows/refresh.yml`, daily during majors, manual otherwise) or locally (`make ingest`), then uploads to the Volume and triggers the Job. Each run writes a manifest (rows and errors per source) that the health report reads.
-- **Health report** (`darts_gold.health_report`, task `health`): red fails the job → failure e-mail.
+- **Health report** (`darts_gold.health_report`, task `health`): red fails the job → failure e-mail (incl. no new result for 4+ days during a major). During a major the app is started even when the job failed (it shows the last good data). Runbook: SETUP.md section 8.
 - **Secrets**: locally the OAuth profile `darts` in `~/.databrickscfg` (outside the repo). GitHub secrets in Actions. The app uses its automatically created service principal.

@@ -16,6 +16,10 @@ ORDER = {GREEN: 0, YELLOW: 1, RED: 2}
 STALE_INGESTION_DAYS = 14          # on-demand refresh outside majors
 STALE_INGESTION_DAYS_MAJOR = 2     # daily refresh while a major is running
 STALE_RESULTS_DAYS_MAJOR = 2
+# Older than this during a major means the pipeline is stuck (a source answers "ok" but delivers no new matches,
+# e.g. after a page change): red, so the job fails and an e-mail goes out. 4 days covers the World Championship's
+# Christmas break (last match 23 Dec, play resumes 27 Dec).
+STUCK_RESULTS_DAYS_MAJOR = 4
 NEW_PLAYERS_LIMIT = 5              # tracked players without any match history (likely a name mismatch)
 DRAW_LOOKAHEAD_DAYS = 7
 
@@ -65,6 +69,11 @@ def freshness(last_match: date | None, today: date, major_running: bool) -> Chec
     if last_match is None:
         return Check("data", "latest result", RED, "none", "No match results at all.", "Run the refresh.")
     age = (pd.Timestamp(today) - pd.Timestamp(last_match)).days
+    if major_running and age > STUCK_RESULTS_DAYS_MAJOR:
+        return Check("data", "latest result", RED, f"{last_match} ({age} days)",
+                     f"A major is running but no new result arrived for {age} days: a source probably changed and "
+                     "returns nothing new without an error.",
+                     "Check the Mastercaller results page of the event against the ingestion log. " + FIX_CODE)
     if major_running and age > STALE_RESULTS_DAYS_MAJOR:
         return Check("data", "latest result", YELLOW, f"{last_match} ({age} days)",
                      f"A major is running but the newest result is {age} days old.",
