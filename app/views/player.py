@@ -147,14 +147,13 @@ def _breakdown(row: pd.Series) -> None:
             log = data.versioned("pi_selection_log")
             tested = ([p for p in dict.fromkeys(log["predictor"]) if p not in coef.index] if len(log) else [])
             others = "".join(f"<li>{escape(ui.predictor_name(p))}</li>" for p in tested)
-            right = (f"<div style='flex:1 1 220px;border-left:1px solid {ui.GRID};padding-left:18px'>"
+            right = (f"<div style='border-top:1px solid {ui.GRID};margin-top:10px;padding-top:10px'>"
                      f"<div>Tested, not in the PI:</div><ul style='margin:0 0 6px'>{others}</ul>"
                      "<div>Why each one was left out: see Methodology.</div></div>") if tested else ""
             st.markdown(f"<div style='color:{ui.TEXT_2};font-size:0.88em;line-height:1.55'><ol style='margin:0 0 6px'>"
                         + "".join(f"<li>{t}</li>" for t in steps) + "</ol>"
-                        "<div style='display:flex;flex-wrap:wrap;gap:12px 18px;margin-top:8px'>"
-                        f"<div style='flex:1.6 1 300px'><div>The inputs of the PI:</div><ul style='margin:0 0 6px'>{inputs}</ul></div>"
-                        f"{right}</div>"
+                        f"<div style='margin-top:8px'>The inputs of the PI:</div><ul style='margin:0 0 6px'>{inputs}</ul>"
+                        f"{right}"
                         f"<div style='margin-top:8px'><b>Performance Index</b>: {escape(ui.PI_HELP.split(': ', 1)[1])}</div>"
                         "<div style='margin-top:4px'>How a gap in ranking or momentum is converted into points: see "
                         "Methodology.</div></div>", unsafe_allow_html=True)
