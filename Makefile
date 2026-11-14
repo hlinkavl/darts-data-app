@@ -8,7 +8,7 @@ PY := .venv/bin/python
 setup:  ## create the local venv
 	python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 
-ingest:  ## incremental: new results (Mastercaller) + rankings and pages (Wikipedia) + upload to the Volume
+ingest:  ## Order of Merit, majors' pages (draws, results) and backgrounds (Wikipedia), PDC news + upload to the Volume
 	$(PY) -m ingestion.run --upload --profile $(PROFILE) --catalog $(CATALOG)
 
 pipeline:  ## run bronze -> silver -> quality in Databricks

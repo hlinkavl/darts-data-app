@@ -13,8 +13,9 @@ tables:
       pi: {description: "Performance Index 0-10: 10 x chance to beat an average top-32 player in a typical match", synonyms: [PI, performance index, rating]}
       rank: {description: "Position by PI among tracked players (1 = best)", synonyms: [PI rank]}
       effective_average: {description: "The player's whole strength in 3-dart-average points", synonyms: [EA]}
-      avg_l30: {description: "3-dart average over the last 30 matches", synonyms: [average, 3-dart average]}
-      form: {description: "Average of the last 10 matches minus the last 30"}
+      avg_major: {description: "3-dart average over the last 20 matches on majors (the PI's average input)", synonyms: [average, 3-dart average]}
+      form_major: {description: "Average of the last 6 major matches minus the last 20", synonyms: [form]}
+      avg_l30: {description: "3-dart average over the last 30 matches of any event; frozen since Nov 2026 (only majors are added since then)"}
       elo: {description: "Opponent-Weighted Elo rating", synonyms: [Elo]}
   - identifier: workspace.darts_gold.player_recent_matches
     description: Every match of tracked players (one row per player and match), newest first by recency.
@@ -57,13 +58,13 @@ instructions: |
   ## DISAMBIGUATION
   - "Current", "now", "today" PI or form: performance_index WHERE is_current = true.
   - "Ranking" or "world ranking" means the PDC Order of Merit (players.prize_money_rank), not the PI rank.
-  - "Average" means the 3-dart average. Per match: player_recent_matches.average; recent level: performance_index.avg_l30.
+  - "Average" means the 3-dart average. Per match: player_recent_matches.average; recent level: performance_index.avg_major.
   - "Majors" in match questions: player_recent_matches.is_major = true.
   - "Chance to win" a tournament: tournament_predictions WHERE round_name = 'Winner'; for an event that has
     not finished use mode <> 'backtest'. Show probabilities as percentages.
   - A year means the calendar year of match_date or event_date.
   ## DATA QUALITY NOTES
-  - Match averages since November 2026 are estimated from Mastercaller results (within about 0.3 points).
+  - Since 10 November 2026 only matches on majors are added (from Wikipedia); earlier data covers every PDC event.
   - Only tracked players (Order of Merit top 150) have PI values and full match lists.
   ## CONSTRAINTS
   - No betting advice. Round averages to 2 decimals and PI to 2 decimals.

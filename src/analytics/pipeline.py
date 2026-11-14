@@ -30,15 +30,16 @@ class ModelRun:
 
 
 def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str,
-        rankings: pd.DataFrame | None = None) -> ModelRun:
+        rankings: pd.DataFrame | None = None, candidates: list[str] | None = None) -> ModelRun:
     """Steps 1 and 2 of the methodology: tune Elo, select predictors, fit weights, evaluate. With `rankings`
-    (Order of Merit snapshots: snapshot_date, player_key, rank) also the key test against the PDC ranking."""
+    (Order of Merit snapshots: snapshot_date, player_key, rank) also the key test against the PDC ranking.
+    candidates: the predictors to choose from (default: features.LIVE_CANDIDATES)."""
     matches = matches.assign(match_date=pd.to_datetime(matches["match_date"]))
     elo_params, elo_tuning = elo.tune(matches, ELO_GRID, model.ELO_BURN_IN, pd.Timestamp(VALIDATION_FROM))
     elo_history = elo.run_elo(matches, elo_params)
     major_elo_history = elo.run_elo(matches[matches["is_major"].astype(bool)], elo_params)
 
-    candidates = [c for c in features.CANDIDATES if rankings is not None or c != "oom_rank"]
+    candidates = [c for c in (candidates or features.LIVE_CANDIDATES) if rankings is not None or c != "oom_rank"]
     feats = features.point_in_time_features(player_matches, elo_history, rankings, major_elo_history)
     log = model.SelectionLog()
     # A candidate without any data (e.g. an input column the caller did not pass) would empty every pair in
@@ -59,7 +60,9 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str,
     # From here on only the selected predictors are needed. Matches from sources without detailed stats
     # (Mastercaller: no first-9, checkout, 180s) lack some candidates but have every selected predictor,
     # so weights and evaluation use all matches that have the selected predictors.
-    baselines = sorted(set(selected) | {"avg_l30", "elo"})
+    average = next((c for c in features.AVERAGE_PREDICTORS if c in candidates), "avg_l30")
+    rating = "major_elo" if "major_elo" in candidates else "elo"
+    baselines = sorted(set(selected) | {average, rating})
     pairs = model.build_pairs(feats, baselines)
     split = model.time_split(pairs, VALIDATION_FROM, TEST_FROM)
     scale = split.train[baselines].std()
@@ -67,7 +70,7 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str,
     # Honest evaluation: fit on train + validation, score the untouched test period (2026).
     fit_data = pd.concat([split.train, split.validation])
     rows, calib, bench = [], None, []
-    for name, cols in [("selected", selected), ("avg_l30 only", ["avg_l30"]), ("elo only", ["elo"])]:
+    for name, cols in [("selected", selected), (f"{average} only", [average]), (f"{rating} only", [rating])]:
         r = model.fit_logit(fit_data, cols, scale)
         for subset, df in [("test", split.test), ("test majors", split.test[split.test["is_major"]])]:
             p = model.predict(r, df, cols, scale)

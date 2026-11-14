@@ -15,11 +15,9 @@ ORDER = {GREEN: 0, YELLOW: 1, RED: 2}
 
 STALE_INGESTION_DAYS = 14          # on-demand refresh outside majors
 STALE_INGESTION_DAYS_MAJOR = 2     # daily refresh while a major is running
-STALE_RESULTS_DAYS_MAJOR = 2
-# Older than this during a major means the pipeline is stuck (a source answers "ok" but delivers no new matches,
-# e.g. after a page change): red, so the job fails and an e-mail goes out. 4 days covers the World Championship's
-# Christmas break (last match 23 Dec, play resumes 27 Dec).
-STUCK_RESULTS_DAYS_MAJOR = 4
+# A match of a running major's draw that is still open this many days after its round's date means the results
+# stopped arriving (the Wikipedia page changed or the parser broke): red, so the job fails and an e-mail goes out.
+OVERDUE_DAYS = 2
 NEW_PLAYERS_LIMIT = 5              # tracked players without any match history (likely a name mismatch)
 DRAW_LOOKAHEAD_DAYS = 7
 
@@ -65,20 +63,26 @@ def ingestion(manifest: pd.DataFrame, last_run: pd.Timestamp | None, today: date
     return out
 
 
-def freshness(last_match: date | None, today: date, major_running: bool) -> Check:
+def freshness(last_match: date | None) -> Check:
+    """The newest result. Since Nov 2026 only majors' knockout matches arrive, so weeks without a result are normal;
+    stuck results during a major are caught by overdue_matches."""
     if last_match is None:
         return Check("data", "latest result", RED, "none", "No match results at all.", "Run the refresh.")
-    age = (pd.Timestamp(today) - pd.Timestamp(last_match)).days
-    if major_running and age > STUCK_RESULTS_DAYS_MAJOR:
-        return Check("data", "latest result", RED, f"{last_match} ({age} days)",
-                     f"A major is running but no new result arrived for {age} days: a source probably changed and "
-                     "returns nothing new without an error.",
-                     "Check the Mastercaller results page of the event against the ingestion log. " + FIX_CODE)
-    if major_running and age > STALE_RESULTS_DAYS_MAJOR:
-        return Check("data", "latest result", YELLOW, f"{last_match} ({age} days)",
-                     f"A major is running but the newest result is {age} days old.",
-                     "Refresh; if results still don't arrive, check the Mastercaller results page of the event.")
-    return Check("data", "latest result", GREEN, f"{last_match} ({age} days)", f"Newest result: {last_match}.")
+    return Check("data", "latest result", GREEN, str(last_match), f"Newest result: {last_match}.")
+
+
+def overdue_matches(open_matches: pd.DataFrame, today: date) -> Check:
+    """open_matches: silver.upcoming_matches (event_title, round_name, start_time = the round's date)."""
+    if open_matches is None or open_matches.empty:
+        return Check("data", "overdue results", GREEN, "0", "No open draw match is overdue.")
+    due = open_matches[pd.to_datetime(open_matches["start_time"]) < pd.Timestamp(today) - pd.Timedelta(days=OVERDUE_DAYS)]
+    if due.empty:
+        return Check("data", "overdue results", GREEN, "0", "No open draw match is overdue.")
+    first = due.sort_values("start_time").iloc[0]
+    return Check("data", "overdue results", RED, f"{len(due)} matches",
+                 f"{len(due)} matches of {first['event_title']} (from the {first['round_name']}) have no result more "
+                 f"than {OVERDUE_DAYS} days after their round: the results stopped arriving.",
+                 "Check the event's Wikipedia page: if the results are there, the draw format changed. " + FIX_CODE)
 
 
 def draws(calendar: pd.DataFrame, today: date) -> list[Check]:
@@ -120,16 +124,6 @@ def player_matching(tracked_without_history: list[str], without_stats: list[str]
     return out
 
 
-def new_series(recent_series: set[str], known_series: set[str]) -> list[Check]:
-    unknown = sorted(recent_series - known_series)
-    if not unknown:
-        return [Check("tournaments", "new series", GREEN, "none", "Every recent PDC series is known.")]
-    return [Check("tournaments", "new series", YELLOW, ", ".join(unknown),
-                  f"New Mastercaller series not in the config: {', '.join(unknown)}.",
-                  "If one of them is a new major, add it to config/majors.yml (name, Wikipedia title, Mastercaller "
-                  "slug); a European Tour or World Series event goes to config/mastercaller_series.yml. Edit on GitHub.")]
-
-
 def model(registry_latest: dict | None) -> Check:
     if not registry_latest:
         return Check("model", "promotion", RED, "no model", "No model version registered.", "Run the full refresh.")
@@ -158,13 +152,6 @@ def benchmark(bench: pd.DataFrame | None) -> list[Check]:
                          f"The model is NOT significantly better than the PDC Order of Merit {label}.",
                          "" if ok else "Investigate before trusting the PI: compare predictors and data quality."))
     return out or [Check("model", "beats PDC ranking", YELLOW, "not computed", "No walk-forward result found.")]
-
-
-def upcoming(major_running: bool, n_upcoming: int) -> Check:
-    if major_running and n_upcoming == 0:
-        return Check("tournaments", "upcoming matches", YELLOW, "0", "A major is running but no scheduled matches were found.",
-                     "Check the Mastercaller match center for the next days.")
-    return Check("tournaments", "upcoming matches", GREEN, str(n_upcoming), f"{n_upcoming} scheduled matches.")
 
 
 def report(checks: list[Check]) -> pd.DataFrame:

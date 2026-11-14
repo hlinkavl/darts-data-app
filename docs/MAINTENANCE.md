@@ -24,16 +24,17 @@ Quick facts: Databricks CLI profile `darts`, catalog `workspace`, SQL warehouse 
 1. **GitHub Actions `refresh`** starts every day (cron 03:23 UTC; GitHub actually starts it around 10:30–12:00 UTC).
    The gate `scripts/should_refresh.py` reads the majors' Wikipedia pages: outside a major (or the day before one) the
    run ends in under a minute and uses no Databricks compute.
-2. During a major: `python -m ingestion.run --upload` fetches Mastercaller (results, averages, scheduled matches),
-   Wikipedia (Order of Merit, draws, player background and photos) and the PDC news feed, and uploads JSONL files to the
-   Volume `/Volumes/workspace/darts_bronze/raw`.
+2. During a major: `python -m ingestion.run --upload` fetches, through official APIs only, Wikipedia (Order of Merit,
+   the majors' pages with draws and results incl. 3-dart averages, player background and photos) and the PDC news
+   feed, and uploads JSONL files to the Volume `/Volumes/workspace/darts_bronze/raw`. Silver turns the draws into
+   match results and upcoming matches (`src/analytics/wiki_results.py`).
 3. `scripts/run_refresh_job.py --start-app` runs the Databricks job `darts_refresh` (~6 min) and starts the app for 24 h:
    `bronze → silver → quality → pi_model → performance_index → narratives + tournaments → health`.
 4. Outside majors the app is stopped. Start it with Actions → **start-app** → Run workflow; refresh by hand with
    Actions → **refresh** → Run workflow, or with **Refresh data now** on the app's Data & Health page.
 
 Compute is saved on purpose (Free Edition has a fair-use quota): the PI model refits every 28 days (job parameter
-`refit=force` refits now), otherwise only Elo is updated; backtests of finished majors and past monthly PI snapshots
+`refit=force` refits now; `refit=approve` also activates a refit whose predictors changed), otherwise only Elo is updated; backtests of finished majors and past monthly PI snapshots
 are reused while the model and the tracked players stay the same; AI summaries are regenerated only when their input
 changes.
 
@@ -48,9 +49,9 @@ The refresh is built to fail loudly and never to show wrong numbers:
 - **Model promotion gate.** A refit becomes active only if it passes the test; otherwise the previous model stays.
 - **Health report** (app → Data & Health), every problem with a "What to do". **Red fails the job** and sends two
   e-mails (Databricks job, GitHub workflow). Red means: a source failed or blocks us, the Order of Merit came back
-  empty, no model, or **no new result for more than 4 days while a major is running** (a source answers "ok" but
-  delivers nothing new, typically after a page change). **Yellow** shows only in the app: a draw format we don't
-  parse, a new series for the config, a refit that was not activated, many players without results.
+  empty, no model, or **a match of a running major's draw still has no result 2 days after its round** (the
+  Wikipedia page changed or the parser broke). **Yellow** shows only in the app: a draw format we don't parse (e.g.
+  a group stage), a refit that was not activated, many players without results.
 - During a major the app is started even when the job failed, so it shows the last good data.
 
 What to do when the e-mail arrives:
@@ -70,11 +71,11 @@ workspace: `bundle deploy` overwrites it.
 
 | Symptom (health report) | Fix |
 |---|---|
-| New series in Mastercaller | A new major → `config/majors.yml` (name, Wikipedia title, Mastercaller slug); any other series → `config/mastercaller_series.yml`. Editing on GitHub is enough; the next refresh picks it up after `bundle deploy`. |
-| Tracked players without results (name matching) | A different spelling between sources: create `config/player_aliases.yml` with `names: {"Spelling in source": <player_key>}` or `mastercaller: {<slug>: <player_key>}`. |
+| A new major | Add it to `config/majors.yml` (name, Wikipedia title pattern) and deploy the bundle. |
+| Tracked players without results (name matching) | A different spelling between sources: create `config/player_aliases.yml` with `names: {"Spelling in source": <player_key>}`. |
 | Draw missing for a running major | The Wikipedia bracket format is new: extend `src/analytics/bracket.py` (tests in `tests/test_tournament.py`). Known and accepted: the 2026 Grand Slam group stage (predictions start from the last 16). |
 | Order of Merit empty | Wikipedia's `Module:DartsRankings/data/PDC Rankings` changed: `ingestion/wikipedia.py`. |
-| Mastercaller error or no new results | `ingestion/mastercaller.py`; compare with the event's results page. |
+| Overdue results (red) | Compare the event's Wikipedia page with `darts_silver.upcoming_matches`: scores on the page but not parsed means the bracket format changed (`src/analytics/bracket.py`, `wiki_results.py`). |
 | Refit not activated | Review `darts_gold.pi_selection_log` and `pi_model_registry`; to force a refit: `databricks bundle run darts_refresh -t dev --profile darts --params refit=force`. |
 | AI summary wrong or missing | Model in `config/ai.yml`. Compare models: `--only narratives --params compare_models=<m1>,<m2>` (writes `darts_gold.player_narrative_trials`, 20 players each). |
 | Genie answers badly | Edit `config/genie/space.yml` (instructions, example SQL: run each on the warehouse first), then `DATABRICKS_CONFIG_PROFILE=darts python scripts/genie_space.py`. |
@@ -162,18 +163,30 @@ Saved queries for the workspace: `sql/queries/*.sql` (`scripts/sync_queries.py`)
 
 ## 8. Decisions and known limits
 
-- **Sources.** Darts Orakel blocked our client on 30 Oct 2026: never work around it and don't contact them; its data
-  until 28 Oct 2026 is kept and deleted only if they ask. Since then: Mastercaller (results with 3-dart averages;
-  darts per match estimated from legs, validated against Orakel within ±0.24 points for 95 % of players), Wikipedia /
-  Wikidata, PDC news RSS. Excluded: DartsDatabase (robots.txt disallows AI agents), pdc.tv data API (needs
-  authentication), bookmaker odds (no free legal source reachable from the Czech Republic).
-- **Ingestion runs on GitHub Actions**, not in Databricks: Free Edition restricts outbound internet, and Orakel blocked
-  Databricks IPs. No Airflow: GitHub Actions plus a Databricks job cost nothing.
+- **Sources: history once, then official APIs only (decided 14 Nov 2026).** Scraped sites block automated clients
+  sooner or later, so they serve as one-time history and the ongoing refresh uses official APIs only:
+  - Darts Orakel (2021 – 28 Oct 2026, exact points and darts): blocked our client on 30 Oct 2026. Never work around
+    it and don't contact them; the data is kept and deleted only if they ask.
+  - Mastercaller (Oct – 9 Nov 2026, 3-dart averages, darts estimated from legs, validated against Orakel within ±0.24
+    points for 95 % of players): answers HTTP 418 to GitHub-hosted runners since 11 Nov 2026 (a home connection
+    still gets 200). Not worked around: no proxy, no other host. Kept as history.
+  - Ongoing: Wikipedia via the MediaWiki API (Order of Merit, the majors' draws with scores and 3-dart averages,
+    player background), Wikidata, PDC news RSS. Only the majors' knockout matches are added from now on; Players
+    Championships, European Tour and group stages are not.
+  - Excluded: DartsDatabase (robots.txt disallows AI agents), pdc.tv data API (needs authentication), bookmaker odds
+    (no free legal source reachable from the Czech Republic).
+- **Ingestion runs on GitHub Actions**, not in Databricks: Free Edition restricts outbound internet. No Airflow: GitHub
+  Actions plus a Databricks job cost nothing.
 - **Free Edition limits:** serverless only, one 2X-Small SQL warehouse, up to 3 apps (each stops after 24 h), 5
   concurrent job tasks, a fair-use compute quota (when exceeded, jobs, the warehouse and apps cannot start for a
   while; data is kept), no SLA, non-commercial use.
-- **Model.** Predictor selection requires stability in 80 % of bootstrap samples; Big-Stage and Stage Delta miss it and
-  are shown as information only. Re-tested on every refit.
+- **Model: only inputs that stay fresh (14 Nov 2026).** With only majors added, the old inputs (average and form over
+  the last 30/10 matches of any event, Elo) would go stale and no longer match what the model was trained on. The
+  live model chooses from 11 inputs computed from majors only (3-dart average over the last 20 major matches, the
+  World Grand Prix left out as it is double-in; form; Big-Stage Elo; experience; quarter-finals, results points and
+  titles) and from the Order of Merit (rank, best rank, momentum, time in the top 32). Selected (v2026-11-14): the
+  average on majors, the rank and its 12-month momentum. It still learns from every historical match. Details and the key test: METHODOLOGY. Predictor selection requires
+  stability in 80 % of bootstrap samples; re-tested on every refit. A tracked player needs 5 major matches for a PI.
 - **Tournament formats.** The 2026 Grand Slam group stage (16 groups of 3) is not simulated; predictions start from
   the last 16. Revisit if more events adopt group stages. The 96-player World Championship format (2024, 2025) and
   the PC Finals sections have no parser.

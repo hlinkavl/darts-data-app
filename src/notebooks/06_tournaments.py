@@ -5,7 +5,7 @@
 # MAGIC - **Draws** parsed from Wikipedia. Finished events are **backtested** with strengths as of the start date
 # MAGIC   (weights refitted on earlier matches only). Events with a draw that are not finished get **predictions**:
 # MAGIC   a Monte Carlo of the draw, with played matches fixed (live bracket).
-# MAGIC - **Upcoming matches** from the Mastercaller match center: PI vs PI, win probability, head-to-head.
+# MAGIC - **Upcoming matches**: the open matches of the Wikipedia draws: PI vs PI, win probability, head-to-head.
 # MAGIC The logic lives in src/analytics/overview.py (also used for the local app snapshot).
 # MAGIC Methodology: docs/METHODOLOGY.md.
 
@@ -39,7 +39,7 @@ pages = spark.sql("SELECT title, wikitext FROM darts_silver.tournament_pages WHE
 events = spark.sql("SELECT tournament_key, event_date, winner_name, winner_avg FROM darts_silver.events WHERE is_major").toPandas()
 players = spark.sql("SELECT player_key, player_name FROM darts_silver.players").toPandas()
 current = spark.sql("""
-    SELECT player_key, strength_major AS strength, pi, pi_major, effective_average, avg_l30, form
+    SELECT player_key, strength_major AS strength, pi, pi_major, effective_average, avg_major, form_major
     FROM darts_gold.performance_index WHERE is_current
 """).toPandas()
 def active_version() -> str:
@@ -111,7 +111,7 @@ if "tournament_backtest_summary" in outputs:
 
 # COMMAND ----------
 
-# MAGIC %md ## Upcoming matches (Mastercaller match center)
+# MAGIC %md ## Upcoming matches (open matches of the Wikipedia draws)
 
 # COMMAND ----------
 
@@ -128,7 +128,7 @@ else:
           start_time TIMESTAMP, event_title STRING, round_name STRING, is_major BOOLEAN,
           player_a_key BIGINT, player_a_name STRING, player_b_key BIGINT, player_b_name STRING,
           pi_a DOUBLE, pi_b DOUBLE, pi_major_a DOUBLE, pi_major_b DOUBLE,
-          effective_average_a DOUBLE, effective_average_b DOUBLE, avg_l30_a DOUBLE, avg_l30_b DOUBLE,
-          form_a DOUBLE, form_b DOUBLE, p_a DOUBLE, h2h_wins_a BIGINT, h2h_wins_b BIGINT,
+          effective_average_a DOUBLE, effective_average_b DOUBLE, avg_major_a DOUBLE, avg_major_b DOUBLE,
+          form_major_a DOUBLE, form_major_b DOUBLE, p_a DOUBLE, h2h_wins_a BIGINT, h2h_wins_b BIGINT,
           computed_at TIMESTAMP, model_version STRING)""")
     print("no upcoming matches: darts_gold.upcoming_matches is empty")

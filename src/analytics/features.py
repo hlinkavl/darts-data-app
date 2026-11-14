@@ -8,7 +8,7 @@ by scoring a virtual match on that date (see features_as_of).
 import numpy as np
 import pandas as pd
 
-from .rounds import order_key
+from .rounds import order_key, players_left
 
 # Candidate predictors (step 1 of the methodology). Higher is better for all of them.
 # Big-Stage Delta only enters matches played on a major (see analytics.model.MAJOR_ONLY).
@@ -34,13 +34,41 @@ CANDIDATES = {
     "major_results_oe": "Big-Stage Results over Expectation (majors only)",
     "stage_delta": "Stage Delta (majors only)",
     "long_format_delta": "Long-Format Delta (majors only)",
+    # Added 2026-11-14: computed from major matches only. Since Nov 2026 new results come from Wikipedia, which
+    # covers the majors only, so the live model may use only inputs that stay fresh (decided before testing).
+    "avg_major": "3-Dart Average on Majors (L20)",
+    "form_major": "Form on Majors (L6 vs L20)",
+    # Added 2026-11-14 (recent results on majors and long-term quality, decided before testing):
+    "major_qf_12m": "Major Quarter-finals (12 months)",
+    "major_points_12m": "Major Results Points (12 months)",
+    "major_titles_24m": "Major Titles (24 months)",
+    "top32_share_5y": "Time in the Top 32 (5 years)",
+    "oom_best_3y": "Best Order of Merit Rank (3 years)",
+    "oom_momentum": "Order of Merit Momentum (12 months)",
 }
+# The candidates the live model may choose from: inputs that new data (majors from Wikipedia, the Order of Merit)
+# keeps up to date. The others are kept for the published history of the selection.
+LIVE_CANDIDATES = ["avg_major", "form_major", "major_elo", "major_experience", "oom_rank", "major_qf_12m",
+                   "major_points_12m", "major_titles_24m", "top32_share_5y", "oom_best_3y", "oom_momentum"]
+# The predictor in 3-dart-average points that anchors the Effective Average (first one present wins).
+AVERAGE_PREDICTORS = ["avg_major", "avg_l30"]
 # Pair-specific predictors: they describe a match-up, not a player, so they never enter a player's PI; they
 # adjust the probability of that particular match (see analytics.model.PAIR_ONLY).
 PAIR_ONLY = {"h2h"}
 
 LONG_WINDOW, SHORT_WINDOW = 30, 10
 MIN_LONG, MIN_SHORT = 10, 5
+MAJOR_LONG, MAJOR_SHORT = 20, 6    # majors-only windows (a top player plays ~20-30 major matches a year)
+MIN_MAJOR_LONG, MIN_MAJOR_SHORT = 5, 3
+# Majors whose format lowers the 3-dart average for everyone: the World Grand Prix is double-in (87.4 on average
+# 2021-2026 vs 92.6-97.6 at the other majors). Left out of the majors-only averages; results and Elo still count.
+# Keys as in config/majors.yml.
+DOUBLE_IN_MAJORS = {36}
+# The Premier League is a league with a mini knockout every night: its nightly quarter-finals and finals would count
+# as deep runs, so it is left out of the results-on-majors predictors.
+LEAGUE_MAJORS = {1070}
+EVENT_GAP_DAYS = 20   # major matches of one tournament more than 20 days apart belong to different editions
+TOP_N_QUALITY = 32
 BIG_STAGE_WINDOW = "730D"
 # Big-Stage Delta is shrunk toward 0 by n / (n + BIG_STAGE_SHRINK): with 10 major matches only half counts.
 BIG_STAGE_SHRINK = 10.0
@@ -130,6 +158,92 @@ def _player_features(g: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _major_states(pm: pd.DataFrame) -> pd.DataFrame:
+    """Each player's majors-only averages *after* every major match (date, player_key, avg_major, form_major),
+    double-in majors left out. Joined as of the match date (strictly before it), so a row never sees its own day."""
+    maj = pm[pm["is_major"].astype(bool) & pm["darts"].notna() & ~pm["tournament_key"].isin(DOUBLE_IN_MAJORS)]
+    out = []
+    for key, g in maj.groupby("player_key", sort=False):
+        pts, drt = g["points"].astype(float), g["darts"].astype(float)
+        long_avg = (3 * pts.rolling(MAJOR_LONG, min_periods=MIN_MAJOR_LONG).sum()
+                    / drt.rolling(MAJOR_LONG, min_periods=MIN_MAJOR_LONG).sum())
+        short_avg = (3 * pts.rolling(MAJOR_SHORT, min_periods=MIN_MAJOR_SHORT).sum()
+                     / drt.rolling(MAJOR_SHORT, min_periods=MIN_MAJOR_SHORT).sum())
+        out.append(pd.DataFrame({"date": g["match_date"].to_numpy(), "player_key": key,
+                                 "avg_major": long_avg.to_numpy(), "form_major": (short_avg - long_avg).to_numpy()}))
+    if not out:
+        return pd.DataFrame(columns=["date", "player_key", "avg_major", "form_major"])
+    states = pd.concat(out, ignore_index=True)
+    return states.groupby(["player_key", "date"], sort=False).tail(1)  # the state at the end of each day
+
+
+def _major_runs(pm: pd.DataFrame) -> pd.DataFrame:
+    """One row per (player, major edition) with the edition's last day and how far the player got:
+    end, qf (reached the quarter-finals), points (QF 1, SF 2, final 3, title 4), title. Leagues left out."""
+    cols = ["player_key", "end", "qf", "points", "title"]
+    maj = pm[pm["is_major"].astype(bool) & ~pm["tournament_key"].isin(LEAGUE_MAJORS)]
+    if maj.empty or "round" not in maj.columns:
+        return pd.DataFrame(columns=cols)
+    maj = maj[["player_key", "tournament_key", "match_date", "round", "won"]].copy()
+    days = maj[["tournament_key", "match_date"]].drop_duplicates().sort_values(["tournament_key", "match_date"])
+    gap = days.groupby("tournament_key")["match_date"].diff().dt.days
+    days["edition"] = (gap.isna() | (gap > EVENT_GAP_DAYS)).cumsum()
+    maj = maj.merge(days, on=["tournament_key", "match_date"])
+    maj["left"] = maj["round"].map(players_left)
+    end = maj.groupby("edition")["match_date"].max().rename("end")
+    runs = maj.groupby(["player_key", "edition"]).agg(left=("left", "min")).join(end, on="edition")
+    won_final = maj[(maj["left"] == 2) & maj["won"].astype(bool)].groupby(["player_key", "edition"]).size()
+    runs["title"] = won_final.reindex(runs.index).fillna(0).to_numpy() > 0
+    runs["qf"] = runs["left"] <= 8
+    runs["points"] = np.select([runs["title"], runs["left"] <= 2, runs["left"] <= 4, runs["left"] <= 8], [4, 3, 2, 1], 0)
+    return runs.reset_index()[cols]
+
+
+def _window_total(rows: pd.DataFrame, events: pd.DataFrame, value: str, days: int) -> np.ndarray:
+    """Sum of `value` over each player's events dated in [match_date - days, match_date) (events: player_key, date)."""
+    if events.empty:
+        return np.zeros(len(rows))
+    h = events.sort_values(["player_key", "date"]).copy()
+    h["cum"] = h.groupby("player_key")[value].cumsum().astype(float)
+    h = h.groupby(["player_key", "date"]).tail(1)  # several events can end on one day
+    now = _as_of(rows, h, "cum").fillna(0.0).to_numpy()
+    then = _as_of(rows.assign(match_date=pd.to_datetime(rows["match_date"]) - pd.Timedelta(days=days)), h, "cum")
+    return now - then.fillna(0.0).to_numpy()
+
+
+def _ranking_quality(rows: pd.DataFrame, rankings: pd.DataFrame) -> pd.DataFrame:
+    """Long-term quality from the Order of Merit history (first snapshot of every month), as of each row's date:
+    top32_share_5y (share of the last 60 months spent in the top 32; months before the history starts don't count),
+    oom_best_3y (-ln of the best rank in the last 36 months), oom_momentum (-ln rank now minus 12 months ago)."""
+    r = rankings[["snapshot_date", "player_key", "rank"]].dropna().assign(date=lambda d: pd.to_datetime(d["snapshot_date"]))
+    r["month"] = r["date"].dt.to_period("M")
+    first = r.groupby("month")["date"].transform("min")
+    monthly = r[r["date"] == first]                                   # the month's first snapshot, all players
+    out = pd.DataFrame(index=rows.index)
+    d = pd.to_datetime(rows["match_date"]).to_numpy()
+    month_dates = np.sort(monthly["date"].unique())
+    available = (np.searchsorted(month_dates, d, "left")
+                 - np.searchsorted(month_dates, d - np.timedelta64(5 * 365, "D"), "left"))
+    top = monthly.loc[monthly["rank"] <= TOP_N_QUALITY, ["player_key", "date"]].assign(n=1.0)
+    in_top = _window_total(rows, top, "n", 5 * 365)
+    out["top32_share_5y"] = np.where(available > 0, in_top / np.maximum(available, 1), np.nan)
+
+    best = []
+    for _, g in monthly.sort_values(["player_key", "date"]).groupby("player_key", sort=False):
+        v = -np.log(g.set_index("date")["rank"].astype(float))
+        best.append(pd.DataFrame({"date": g["date"].to_numpy(), "player_key": g["player_key"].to_numpy(),
+                                  "best": v.rolling(f"{3 * 365}D").max().to_numpy()}))
+    best = pd.concat(best, ignore_index=True) if best else pd.DataFrame(columns=["date", "player_key", "best"])
+    out["oom_best_3y"] = _as_of(rows, best, "best").fillna(-np.log(UNRANKED)).to_numpy()
+
+    snaps = r[["date", "player_key", "rank"]]
+    now = -np.log(_as_of(rows, snaps, "rank").fillna(UNRANKED).to_numpy())
+    shifted = rows.assign(match_date=pd.to_datetime(rows["match_date"]) - pd.Timedelta(days=365))
+    then = -np.log(_as_of(shifted, snaps, "rank").fillna(UNRANKED).to_numpy())
+    out["oom_momentum"] = now - then
+    return out
+
+
 def _as_of(rows: pd.DataFrame, history: pd.DataFrame, value: str, by: str = "player_key") -> pd.Series:
     """Latest `value` per player from `history` (player_key, date, value) strictly before each row's match_date."""
     left = rows[["match_date", by]].assign(_i=np.arange(len(rows)), match_date=lambda d: d["match_date"].astype("datetime64[ns]"),
@@ -173,11 +287,23 @@ def point_in_time_features(player_matches: pd.DataFrame, elo_history: pd.DataFra
     out["major_results_oe"] = pd.concat(oe).reindex(out.index).fillna(0.0) if oe else np.nan
     out = out.drop(columns=["_res", "_n", "opp_elo"])
 
+    states = _major_states(pm)
+    for col in ("avg_major", "form_major"):
+        out[col] = _as_of(out, states, col).to_numpy() if len(states) else np.nan
+
     if rankings is not None and len(rankings):
         r = rankings.rename(columns={"snapshot_date": "date"})[["date", "player_key", "rank"]].dropna()
         out["oom_rank"] = -np.log(_as_of(out, r, "rank").fillna(UNRANKED).to_numpy())
     else:
         out["oom_rank"] = np.nan
+    if rankings is not None and len(rankings):
+        out = out.join(_ranking_quality(out, rankings))
+    else:
+        out["top32_share_5y"] = out["oom_best_3y"] = out["oom_momentum"] = np.nan
+    runs = _major_runs(pm).rename(columns={"end": "date"})
+    out["major_qf_12m"] = _window_total(out, runs, "qf", 365)
+    out["major_points_12m"] = _window_total(out, runs, "points", 365)
+    out["major_titles_24m"] = _window_total(out, runs, "title", 2 * 365)
     if major_elo_history is not None and len(major_elo_history):
         h = major_elo_history.assign(major_n=1).sort_values(["match_date", "match_key"])
         h["major_n"] = h.groupby("player_key").cumcount() + 1

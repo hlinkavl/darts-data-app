@@ -151,7 +151,7 @@ def draw_outputs(cal: pd.DataFrame, draws: dict, players: pd.DataFrame, current:
 
 UPCOMING_COLUMNS = ["start_time", "event_title", "round_name", "is_major", "player_a_key", "player_a_name",
                     "player_b_key", "player_b_name", "pi_a", "pi_b", "pi_major_a", "pi_major_b",
-                    "effective_average_a", "effective_average_b", "avg_l30_a", "avg_l30_b", "form_a", "form_b",
+                    "effective_average_a", "effective_average_b", "avg_major_a", "avg_major_b", "form_major_a", "form_major_b",
                     "p_a", "h2h_wins_a", "h2h_wins_b"]
 
 
@@ -159,7 +159,7 @@ def upcoming_cards(upcoming: pd.DataFrame, current: pd.DataFrame, elo_latest: pd
                    results: pd.DataFrame) -> pd.DataFrame:
     """Cards for scheduled matches: PI of both players, P(A wins) in a typical match, head-to-head.
 
-    current: player_key, strength, pi, pi_major, effective_average, avg_l30, form. results: winner_key, loser_key.
+    current: player_key, strength, pi, pi_major, effective_average, avg_major, form_major. results: winner_key, loser_key.
     Untracked players get a strength estimated from their Elo; players without any data the 5th percentile.
     """
     if upcoming.empty:
@@ -185,7 +185,7 @@ def upcoming_cards(upcoming: pd.DataFrame, current: pd.DataFrame, elo_latest: pd
                  "h2h_wins_a": wins.get((u.player_a_key, u.player_b_key), 0),
                  "h2h_wins_b": wins.get((u.player_b_key, u.player_a_key), 0)}
         for side, key in (("a", u.player_a_key), ("b", u.player_b_key)):
-            for col in ("pi", "pi_major", "effective_average", "avg_l30", "form"):
-                card[f"{col}_{side}"] = tracked.at[key, col] if key in tracked.index else None
+            for col in ("pi", "pi_major", "effective_average", "avg_major", "form_major"):
+                card[f"{col}_{side}"] = tracked.at[key, col] if key in tracked.index and col in tracked.columns else None
         cards.append(card)
     return pd.DataFrame(cards)[UPCOMING_COLUMNS]

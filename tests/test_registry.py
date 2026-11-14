@@ -29,3 +29,9 @@ def test_large_weight_shift_needs_review():
     cand = ACTIVE.assign(weight_pct=[38.0, 41.0, 21.0])
     d = registry.decide(cand, 0.630, ACTIVE, 0.640)
     assert not d.promote and "moved" in d.reason
+
+
+def test_approved_change_is_promoted():
+    cand = pd.DataFrame({"predictor": ["avg_major", "oom_rank"], "weight_pct": [57.0, 43.0]})
+    d = registry.decide(cand, 0.66, ACTIVE, 0.64, approved=True)
+    assert d.promote and "approved" in d.reason

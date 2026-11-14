@@ -239,8 +239,10 @@ def coefficient_table(result, predictors: list[str], scale: pd.Series, bootstrap
         "weight_pct": (100 * beta.abs() / beta.abs().sum()).to_numpy(),
         "bootstrap_share": bootstrap_share.reindex(predictors).to_numpy(),
     })
-    if "avg_l30" in predictors:
-        table["avg_points_per_unit"] = (per_unit / per_unit["avg_l30"]).to_numpy()
+    from .features import AVERAGE_PREDICTORS
+    average = next((c for c in AVERAGE_PREDICTORS if c in predictors), None)
+    if average:
+        table["avg_points_per_unit"] = (per_unit / per_unit[average]).to_numpy()
     else:
         table["avg_points_per_unit"] = np.nan
     return table
@@ -262,7 +264,7 @@ def score_players(snapshot: pd.DataFrame, coefficients: pd.DataFrame, top_n: int
     contribution per predictor: beta_i * (x_i - mean_ref_i) / sd_i (in log-odds).
     Two versions: general (typical match, MAJOR_ONLY terms left out) and major (all terms).
     """
-    from .features import PAIR_ONLY
+    from .features import AVERAGE_PREDICTORS, PAIR_ONLY
     preds = [c for c in coefficients["predictor"].tolist() if c not in PAIR_ONLY]   # pair terms are not a player's PI
     general = [c for c in preds if c not in MAJOR_ONLY]
     per_unit = coefficients.set_index("predictor")["beta_per_unit"]
@@ -286,7 +288,8 @@ def score_players(snapshot: pd.DataFrame, coefficients: pd.DataFrame, top_n: int
         s[f"pi{suffix}"] = 10 / (1 + np.exp(-vs_ref))
         s[f"rank{suffix}"] = s[f"pi{suffix}"].rank(ascending=False, method="min").astype(int)
         # Effective Average: the reference 3-dart average plus every term expressed in average points.
-        s[f"effective_average{suffix}"] = (ref["avg_l30"] + vs_ref / per_unit["avg_l30"]) if "avg_l30" in cols else np.nan
+        average = next((c for c in AVERAGE_PREDICTORS if c in cols), None)
+        s[f"effective_average{suffix}"] = (ref[average] + vs_ref / per_unit[average]) if average else np.nan
     return s
 
 

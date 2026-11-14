@@ -10,9 +10,62 @@ The Performance Index rates every tracked PDC player on a **0–10 scale**:
 
 A PI of 7.0 means a 70 % chance against a typical top-32 opponent. A PI of 5.0 means the player *is* a typical top-32 player. A PI of 2.0 means a 20 % chance. Because the scale is a probability, any two PIs can be turned into a head-to-head prediction.
 
-**Does it work?** The PI predicts match winners significantly better than the official PDC Order of Merit, both over all matches and **on majors** (1,825 major matches predicted ahead of time, log loss 0.628 vs 0.652, p < 0.001). See [Key test](#key-test-does-the-pi-beat-the-official-pdc-ranking).
+**Does it work?** The PI predicts match winners significantly better than the official PDC Order of Merit, also **on majors** (1,653 major matches predicted ahead of time, log loss 0.638 vs 0.651, p < 0.001). See [the current model](#the-current-model-inputs-from-the-majors-only-since-14-nov-2026).
 
-All numbers in this document are from model run *2026-10-31* (data until 28 Oct 2026). They are recomputed on every refresh and stored in Databricks (tables at the end); the app's *Methodology* page reads those tables.
+The current model and its numbers are in the next section. The sections after it document the full study of 19 candidate predictors from 31 Oct 2026 (data until 28 Oct 2026, inputs from every event): it still explains why each statistic was kept or dropped, but its weights and test results describe the previous model. All numbers are recomputed on every refit and stored in Databricks (tables at the end); the app's *Methodology* page reads those tables.
+
+---
+
+### The current model: inputs from the majors only (since 14 Nov 2026)
+
+**Why it changed.** Since 10 November 2026 new results come only from the majors, through the official Wikipedia API (scraped sites blocked automated clients: Darts Orakel on 30 Oct, Mastercaller on 11 Nov 2026; their data stays as history). The previous inputs, the 3-dart average and form over a player's last 30 and 10 matches of *any* event and an Elo from all matches, would slowly turn into "the last 30 matches over a year or two" and no longer mean what the model was trained on. So the model may only use inputs that new data keeps fresh, and it is trained with the inputs computed exactly that way over the whole history:
+
+All eleven candidates were fixed before testing (the last six added on 14 Nov 2026: recent results on majors and long-term quality).
+
+| Candidate | Definition |
+|---|---|
+| `avg_major` – 3-Dart Average on Majors (L20) | Points ÷ darts × 3 over the last 20 matches on majors (at least 5). The World Grand Prix is left out: it is double-in, which lowers everyone's average (87.4 there vs 92.6–97.6 at the other majors, 2021–2026) |
+| `form_major` – Form on Majors (L6 vs L20) | Average of the last 6 major matches (at least 3) − the L20 average above |
+| `major_elo` – Big-Stage Elo | Elo from matches on majors only |
+| `major_experience` – Big-Stage Experience | log(1 + major matches played) |
+| `oom_rank` – PDC Order of Merit | −ln(rank) before the match; the ranking reflects every event through prize money and stays current |
+| `major_qf_12m` – Major Quarter-finals (12 months) | Majors in the last 12 months where the player reached at least the quarter-finals. The Premier League is left out (every night has its own quarter-finals and final) |
+| `major_points_12m` – Major Results Points (12 months) | The same runs weighted by depth: quarter-final 1, semi-final 2, final 3, title 4 |
+| `major_titles_24m` – Major Titles (24 months) | Major titles in the last 24 months (Premier League left out) |
+| `top32_share_5y` – Time in the Top 32 | Share of the last 60 months spent in the Order of Merit top 32 (months before the ranking history starts in 2021 don't count) |
+| `oom_best_3y` – Best Order of Merit Rank (3 years) | −ln(best rank) in the monthly rankings of the last 36 months |
+| `oom_momentum` – Order of Merit Momentum (12 months) | ln(rank a year ago) − ln(rank now): positive for a climbing player, +0.69 = the rank number halved |
+
+The targets are still **all matches** between tracked players since 2021 (Players Championships included): the outcome of any match says something about the two players, only the inputs come from the majors. A player needs 5 major matches with averages to get a PI, so roughly 110 of the 150 tracked players have one.
+
+**Selection** (same rules as below: correlation filter, significance with an out-of-sample check, 80 % of bootstrap samples):
+
+| Candidate | Result |
+|---|---|
+| **3-Dart Average on Majors (L20)** | **kept**, weight 55 %, significant in 100 % of bootstrap samples |
+| **PDC Order of Merit** | **kept**, weight 35 %, 100 % |
+| **Order of Merit Momentum** | **kept**, weight 10 %, 94 % |
+| Big-Stage Elo | dropped: r = 0.82 with Major Results Points |
+| Big-Stage Experience | dropped: r = 0.84 with the Order of Merit |
+| Major Results Points | dropped: r = 0.93 with Major Quarter-finals |
+| Best Order of Merit Rank | dropped: r = 0.91 with the Order of Merit |
+| Form on Majors | dropped: p = 0.26 |
+| Major Quarter-finals | dropped: p = 0.15 |
+| Major Titles, Time in the Top 32 | dropped: negative weight next to the others |
+
+**Key test against the PDC Order of Merit** (walk-forward: quarterly refits since July 2023, every major match predicted out of sample):
+
+| Model | Major matches | Log loss | Gain vs Order of Merit [95 % CI] | p |
+|---|---|---|---|---|
+| **PI model** (avg on majors, Order of Merit, momentum) | 1,653 | **0.638** | **+0.013** [+0.007, +0.019] | < 0.001 |
+| PDC Order of Merit | 1,653 | 0.651 | – | – |
+| *Previous model, inputs from every event (31 Oct 2026)* | *1,825* | *0.628* | *+0.024* | *< 0.001* |
+
+Over all matches (12,785) the gain is +0.009 (p < 0.001); on the 2026 test period's 399 major matches alone it is +0.005 (p = 0.19, too few matches for significance). Model version `v2026-11-14`, data until 5 Nov 2026.
+
+**What the selection says.** Results on majors (quarter-finals, points, titles) predict wins on their own, but add nothing once the 3-dart average and the ranking are known. *Time in the top 32* and *titles* even get a **negative** weight next to the current rank: at the same rank and average, a long-established player is weaker than a newcomer. The ranking is a two-year rolling total, so it lags: it overrates players on the way down and underrates players on the way up. *Order of Merit Momentum* captures exactly that and is kept.
+
+The edge over the official ranking is smaller than the previous model's with inputs from every event (gain +0.024). That is the price of using only data that keeps coming; the model is still significantly better than the ranking on majors.
 
 ---
 
@@ -74,6 +127,7 @@ In longer formats luck evens out more and the favourite's chance rises; in short
 - **Until 28 Oct 2026: Darts Orakel** (exact points and darts, plus first-9, checkout and 180s). Orakel blocked our client on 30 Oct 2026.
 - **From then on: Mastercaller** (3-dart averages, stats by iDarts). Mastercaller has no dart counts, so darts are estimated as `legs × 1503 / average` (sets × 4 legs). Checked on Orakel data, where the exact numbers are known: the 3-Dart Average (L30) moves by −0.06 points on average, 95 % within ±0.24, which is negligible next to a spread of ~4.5 points between players. Matches present in both sources come from Orakel.
 - **The official PDC Order of Merit** (tracked players, the Order of Merit predictor and the key test) comes from the Wikipedia data module `Module:DartsRankings/data/PDC Rankings`, current and as of any past date.
+- **Since 10 Nov 2026: the majors from Wikipedia.** Every knockout match in a major's draw (score and both 3-dart averages, as shown in the bracket), dated by its round; darts estimated from legs like Mastercaller. Group stages, Players Championships and the European Tour are no longer added.
 
 The selected predictors need only results, averages and the ranking, so the model keeps learning from new matches. First-9, checkout and 180s can only be tested as candidates on data until 28 Oct 2026.
 

@@ -19,13 +19,18 @@ def main() -> None:
     if job is None:
         sys.exit(f"no job named *{JOB_SUFFIX} found: deploy the bundle first")
     print(f"starting {job.settings.name} ({job.job_id})")
-    run = w.jobs.run_now(job.job_id).result(timeout=timedelta(minutes=WAIT_MINUTES))
-    for task in sorted(run.tasks, key=lambda t: t.start_time or 0):
+    waiter = w.jobs.run_now(job.job_id)
+    try:
+        waiter.result(timeout=timedelta(minutes=WAIT_MINUTES))
+    except Exception as exc:  # a failed run raises here; report it, but still start the app below
+        print("job did not succeed:", str(exc).splitlines()[0][:300])
+    run = w.jobs.get_run(waiter.run_id)
+    for task in sorted(run.tasks or [], key=lambda t: t.start_time or 0):
         print(f"  {task.task_key}: {task.state.result_state.value if task.state.result_state else task.state.life_cycle_state.value}")
-    state = run.state.result_state.value if run.state.result_state else "UNKNOWN"
+    state = run.state.result_state.value if run.state and run.state.result_state else "UNKNOWN"
     print("result:", state, run.run_page_url)
     if "--start-app" in sys.argv:
-        start_app(w)
+        start_app(w)  # also after a failure: the gold tables keep the last good data
     if state != "SUCCESS":
         sys.exit(1)
 

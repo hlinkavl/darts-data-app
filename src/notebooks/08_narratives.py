@@ -51,7 +51,7 @@ print(f"{len(articles.drop_duplicates('link'))} articles, {len(mentions)} mentio
 # COMMAND ----------
 
 current = spark.sql("""
-    SELECT player_key, player_name, rank, pi, avg_l30, form, effective_average
+    SELECT player_key, player_name, rank, pi, avg_major, form_major, effective_average
     FROM darts_gold.performance_index WHERE is_current
 """).toPandas().merge(tracked[["player_key", "oom"]], on="player_key", how="left")
 recent = spark.sql("SELECT * FROM darts_gold.player_recent_matches WHERE recency <= 5").toPandas()
@@ -85,6 +85,11 @@ if not MODEL:
     dbutils.notebook.exit("no AI model set in config/ai.yml: summaries skipped")
 
 existing = spark.table(TABLE).toPandas() if spark.catalog.tableExists(TABLE) else None
+if existing is not None and len(existing):
+    # Spark returns timestamps without a time zone (session time zone UTC); new rows carry UTC. A mix would be
+    # written as TIMESTAMP_NTZ, which the existing Delta table does not support.
+    ts = pd.to_datetime(existing["generated_at"])
+    existing["generated_at"] = ts.dt.tz_localize("UTC") if ts.dt.tz is None else ts.dt.tz_convert("UTC")
 todo = narratives.to_generate(prompts, existing, MODEL)
 print(f"{len(prompts)} candidates, {len(todo)} to generate with {MODEL}")
 if len(todo):

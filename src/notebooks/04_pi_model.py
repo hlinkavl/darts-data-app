@@ -23,7 +23,8 @@ sys.path.append(os.path.abspath(".."))  # src/, for the shared analytics package
 from analytics import elo, pipeline, registry
 
 dbutils.widgets.text("catalog", "workspace")
-dbutils.widgets.text("refit", "auto")  # auto: refit when the active model is older than REFIT_DAYS; force: always
+dbutils.widgets.text("refit", "auto")  # auto: refit when the active model is older than REFIT_DAYS; force: always;
+# approve: refit and activate even if the selected predictors changed (a person reviewed the methodology change)
 catalog = dbutils.widgets.get("catalog")
 refit = dbutils.widgets.get("refit")
 REFIT_DAYS = 28
@@ -107,7 +108,8 @@ if spark.catalog.tableExists(REGISTRY):
     active = rows[0].asDict() if rows else None
 active_coefs = (spark.sql(f"SELECT predictor, weight_pct FROM darts_gold.pi_coefficients WHERE version = '{active['version']}'").toPandas()
                 if active else None)
-decision = registry.decide(run.coefficients, test_ll, active_coefs, active["test_log_loss"] if active else None)
+decision = registry.decide(run.coefficients, test_ll, active_coefs, active["test_log_loss"] if active else None,
+                           approved=(refit == "approve"))
 print("promote" if decision.promote else "keep active", "-", decision.reason)
 
 if decision.promote and active:

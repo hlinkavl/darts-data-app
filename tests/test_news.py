@@ -45,7 +45,7 @@ def test_narrative_prompts_and_regeneration_only_on_change():
 
     today = pd.Timestamp("2026-11-05")
     current = pd.DataFrame({"player_key": [3, 1], "player_name": ["Luke Littler", "Ross Smith"], "rank": [1, 5],
-                            "pi": [7.29, 5.75], "avg_l30": [98.2, 95.1], "form": [1.4, 0.8],
+                            "pi": [7.29, 5.75], "avg_major": [98.2, 95.1], "form_major": [1.4, 0.8],
                             "effective_average": [104.6, 97.9], "oom": [1, 6]})
     recent = pd.DataFrame({"player_key": [1], "recency": [1], "match_date": ["2026-10-25"],
                            "tournament_name": ["European Championship"], "round": ["Final"], "opponent_name": ["Martin Schindler"],

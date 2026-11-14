@@ -34,18 +34,19 @@ Outside majors the app is stopped to save compute: start it for 24 h with the
 ## The Performance Index in one paragraph
 
 PI = 10 × the chance to beat an average top-32 player in a typical match (first to 6 legs); 5 is a typical top-32
-player. Four inputs survived a strict selection (correlation filter, significance, 80 % of bootstrap samples):
-the 3-dart average over the last 30 matches, form (last 10 vs last 30), an opponent-weighted Elo rating and the
-Order of Merit rank. Weights come from a logistic regression on matches between tracked players, with no
-look-ahead. In a walk-forward test on 1,825 major matches the model predicts winners significantly better than the
-PDC Order of Merit (log loss 0.628 vs 0.652, p < 0.001). Every tested and rejected predictor, and why, is in
-[docs/METHODOLOGY.md](docs/METHODOLOGY.md), together with the tournament simulations.
+player. New results come only from the majors (official APIs, see below), so the model may only use inputs that
+stay fresh: computed from major matches, plus the Order of Merit. Of 11 candidates, three survived a strict selection
+(correlation filter, significance, 80 % of bootstrap samples): the **3-dart average over the last 20 major
+matches**, the **Order of Merit rank** and its **momentum** over 12 months. Weights come from a logistic regression on 2021–2026 matches between tracked players, with
+no look-ahead. In a walk-forward test on 1,653 major matches the model predicts winners significantly better than
+the PDC Order of Merit (log loss 0.638 vs 0.651, p < 0.001). Every tested and rejected predictor, and why,
+is in [docs/METHODOLOGY.md](docs/METHODOLOGY.md), together with the tournament simulations.
 
 ## Architecture
 
 ```
 GitHub Actions (daily during majors, or by hand / from the app)
-  ingestion/: Mastercaller results · Wikipedia (Order of Merit, draws, players) · PDC news RSS
+  ingestion/ (official APIs): Wikipedia (Order of Merit, majors' draws + results, players) · PDC news RSS
         │ upload
         ▼
 Unity Catalog Volume ──► Databricks Job darts_refresh (serverless)
@@ -57,8 +58,8 @@ Unity Catalog Volume ──► Databricks Job darts_refresh (serverless)
                                               Streamlit app (Databricks App) + Genie space
 ```
 
-Why ingestion runs on GitHub Actions: Free Edition limits outbound internet from Databricks compute, and the
-scrapers are polite (one request every few seconds, identified User-Agent), which suits a small runner.
+Why ingestion runs on GitHub Actions: Free Edition limits outbound internet from Databricks compute. The clients
+are polite (identified User-Agent, one request per second or slower), which suits a small runner.
 
 ### Free Edition limits that shaped the design
 
@@ -75,18 +76,21 @@ scrapers are polite (one request every few seconds, identified User-Agent), whic
   start-app workflow).
 - **Fails loudly, never shows wrong numbers:** sources are fetched independently, hard quality checks stop the job
   before the gold tables, a refit is activated only if it passes the test, and a red health report (a source failed,
-  or no new result for 4+ days during a major) fails the job and sends an e-mail. The app keeps the last good data.
+  or a draw match still without a result 2 days after its round) fails the job and sends an e-mail. The app keeps
+  the last good data and is started anyway.
 - **Needs a person** only when the outside world changes (a source changes its page, a new tournament format) and
   for the yearly token renewal (next: Databricks token on 9 Nov 2027). Runbook: [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
 
 ## Data sources
 
+Historical data was collected once; the ongoing refresh uses official APIs only.
+
 | Source | Used for | How |
 |---|---|---|
-| [Mastercaller](https://mastercaller.com) (stats by iDarts) | Results and 3-dart averages since Oct 2026 | Public pages, 1 request / 3 s |
-| Darts Orakel | Results and match stats until 28 Oct 2026 | Free public API; access ended when the site blocked our client, its earlier data is kept |
-| Wikipedia / Wikidata | Order of Merit (current and monthly history), majors' dates and draws, player background and free photos | Official APIs, CC BY-SA |
-| PDC news (RSS) | Latest news per player, input for the AI form summaries | Official feed |
+| Wikipedia / Wikidata | **Ongoing:** Order of Merit (current and monthly history), majors' dates, draws and results with 3-dart averages, player background and free photos | Official MediaWiki / Wikidata APIs, CC BY-SA |
+| PDC news (RSS) | **Ongoing:** latest news per player, input for the AI form summaries | Official feed |
+| Darts Orakel | **History:** every PDC result with match stats, 2021 – 28 Oct 2026 | Free public API; ended when the site blocked our client, its earlier data is kept |
+| [Mastercaller](https://mastercaller.com) (stats by iDarts) | **History:** results and 3-dart averages, Oct – 9 Nov 2026 | Public pages; ended when the site started refusing our cloud runners, not worked around |
 
 Non-commercial project. No betting odds: no free and legal source was available.
 
@@ -100,7 +104,7 @@ Non-commercial project. No betting odds: no free and legal source was available.
 | `app/` | Streamlit app (deployed as a Databricks App) |
 | `databricks.yml`, `resources/` | Databricks Asset Bundle: job, app, secret scope |
 | `.github/workflows/` | `refresh` (daily gate + refresh), `start-app`, `egress-check` |
-| `config/` | Majors, Mastercaller series, AI model, Genie space definition |
+| `config/` | Majors, Mastercaller series (history), AI model, Genie space definition |
 | `scripts/` | Local snapshot for app development, smoke tests, CI helpers |
 | `docs/` | Maintenance (runbook) and methodology |
 | `tests/` | Unit tests (`pytest`) |

@@ -13,7 +13,7 @@ OPEN_ICON = "↗"
 JUMP_CONTEXT = 4  # rows shown above a searched player
 HIGHLIGHT = "background-color: rgba(57, 135, 229, 0.30); font-weight: 700"
 TABLE_FORMATS = {"oom": "{:.0f}", "rank": "{:.0f}", "pi": "{:.2f}", "change": "{:+.2f}", "effective_average": "{:.1f}",
-                 "avg_l30": "{:.2f}", "form": "{:+.2f}", "elo": "{:.0f}"}
+                 "avg_major": "{:.2f}", "form_major": "{:+.2f}"}
 # Ranking choice -> (first column = sort key, second column shown next to the name)
 ORDERS = {"PDC Order of Merit": ("oom", "rank"), "Performance Index": ("rank", "oom")}
 FORMATS = {"Typical match (first to 6 legs)": (6, "legs")} | {f"First to {n} legs": (n, "legs") for n in (3, 4, 5, 7, 8, 10, 11, 16, 18)} \
@@ -66,7 +66,7 @@ def render() -> None:
     first, second = ORDERS[order]
     board = board.sort_values([first, second], na_position="last").reset_index(drop=True)
     board["open"] = OPEN_ICON
-    columns = ["open", first, "player_name", second, "pi", "change", "effective_average", "avg_l30", "form", "elo"]
+    columns = ["open", first, "player_name", second, "pi", "change", "effective_average", "avg_major", "form_major"]
     shown = board
     if pick:
         # A table cannot be scrolled from code, so it starts a few rows above the player instead.
@@ -86,9 +86,10 @@ def render() -> None:
             "change": st.column_config.NumberColumn("PI vs last month", format="%+.2f"),
             "pi": st.column_config.ProgressColumn("PI", min_value=0.0, max_value=10.0, format="%.2f", help=ui.PI_HELP),
             "effective_average": st.column_config.NumberColumn("Effective Average", format="%.1f", help=ui.EFFECTIVE_AVERAGE_HELP),
-            "avg_l30": st.column_config.NumberColumn("3-Dart Avg (L30)", format="%.2f"),
-            "form": st.column_config.NumberColumn("Form", format="%+.2f"),
-            "elo": st.column_config.NumberColumn("Elo", format="%.0f")},
+            "avg_major": st.column_config.NumberColumn("3-Dart Avg on majors (L20)", format="%.2f",
+                                                       help="3-dart average over the last 20 matches on majors"),
+            "form_major": st.column_config.NumberColumn("Form on majors", format="%+.2f",
+                                                        help="Last 6 major matches minus the last 20")},
         on_select="rerun", selection_mode="single-cell", key="lb_table")
     cells = picked.selection.cells if picked else []
     if cells and cells[0][1] in ("open", "player_name"):
@@ -118,10 +119,10 @@ def render() -> None:
     photos = dict(zip(data.players()["player_key"], data.players()["image_file"]))
     st.markdown(_h2h_card(ra, rb, p, fmt, photos, _oom), unsafe_allow_html=True)
     comp = pd.DataFrame({
-        "": ["PI", "Effective Average", "3-Dart Average (L30)", "Form", "Elo", "Order of Merit"],
-        a: [ui.num(ra["pi"], 2), ui.num(ra["effective_average"]), ui.num(ra["avg_l30"], 2), f"{ra['form']:+.2f}",
-            ui.num(ra["elo"], 0), _oom(ra)],
-        b: [ui.num(rb["pi"], 2), ui.num(rb["effective_average"]), ui.num(rb["avg_l30"], 2), f"{rb['form']:+.2f}",
-            ui.num(rb["elo"], 0), _oom(rb)]})
+        "": ["PI", "Effective Average", "3-Dart Average on majors (L20)", "Form on majors", "Order of Merit"],
+        a: [ui.num(ra["pi"], 2), ui.num(ra["effective_average"]), ui.num(ra["avg_major"], 2), ui.signed(ra["form_major"]),
+            _oom(ra)],
+        b: [ui.num(rb["pi"], 2), ui.num(rb["effective_average"]), ui.num(rb["avg_major"], 2), ui.signed(rb["form_major"]),
+            _oom(rb)]})
     st.dataframe(comp, hide_index=True, width="stretch")
     st.caption("Longer formats favour the stronger player: luck evens out over more legs.")

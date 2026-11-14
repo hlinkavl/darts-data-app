@@ -56,19 +56,19 @@ The index is built in three transparent steps: **select** only predictors that p
         st.plotly_chart(_weights_chart(coef), width="stretch", config={"displayModeBar": False})
     with right:
         st.subheader("In 3-dart-average points")
-        rows = {"avg_l30": "1 point = 1 point", "elo": "100 Elo points = {v:.2f} average points",
-                "form": "1 point of form = {v:.2f} average points",
-                "oom_rank": "halving your rank number (e.g. #20 → #10) = {v:.2f} average points"}
+        rows = {"avg_major": "1 point = 1 point", "avg_l30": "1 point = 1 point",
+                "elo": "100 Elo points = {v:.2f} average points", "major_elo": "100 Elo points = {v:.2f} average points",
+                "form": "1 point of form = {v:.2f} average points", "form_major": "1 point of form = {v:.2f} average points",
+                "oom_rank": "halving your rank number (e.g. #20 → #10) = {v:.2f} average points",
+                "oom_momentum": "halving your rank number within a year = {v:.2f} average points"}
         for r in coef.itertuples():
-            factor = r.avg_points_per_unit * (100 if r.predictor == "elo" else 0.693 if r.predictor == "oom_rank" else 1)
+            factor = r.avg_points_per_unit * (100 if r.predictor in ("elo", "major_elo")
+                                              else 0.693 if r.predictor in ("oom_rank", "oom_momentum") else 1)
             st.markdown(f"- **{ui.predictor_name(r.predictor)}**: {rows.get(r.predictor, '{v:.2f}').format(v=factor)}")
         st.markdown(
             "**Reading the PI breakdown in a player profile.** Each input is compared with an average top-32 player "
             "(the mean of the 32 strongest players on the same day) and the gap is converted with the rates above. "
-            "Example: a form of +1.41 against a top-32 average of −0.49 is a gap of 1.90 form points, worth "
-            f"1.90 × {coef.set_index('predictor')['avg_points_per_unit'].get('form', float('nan')):.2f} average points. "
-            "The top-32 average plus all the gaps is the **Effective Average**, which sets the PI. A negative top-32 "
-            "form simply means the top players are, on average, a little below their 30-match level right now.")
+            "The top-32 average plus all the gaps is the **Effective Average**, which sets the PI.")
 
     st.subheader("Does it beat the official PDC ranking?")
     bench = data.versioned("pi_benchmark")

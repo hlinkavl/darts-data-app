@@ -17,8 +17,8 @@ POSITIVE, NEGATIVE = "#3987e5", "#e66767"
 # Status palette, always shown with an icon and a label
 STATUS = {"green": ("🟢", "OK", "#0ca30c"), "yellow": ("🟡", "Attention", "#fab219"), "red": ("🔴", "Problem", "#d03b3b")}
 
-CREDITS = ("Data: Mastercaller / iDarts · Darts Orakel (until Oct 2026) · Wikipedia & Wikidata (CC BY-SA) · "
-           "PDC Order of Merit. Non-commercial project.")
+CREDITS = ("Data: Wikipedia & Wikidata (CC BY-SA) · PDC Order of Merit · history: Darts Orakel (until Oct 2026), "
+           "Mastercaller / iDarts (until Nov 2026). Non-commercial project.")
 
 
 def layout(fig: go.Figure, height: int = 320, **kwargs) -> go.Figure:
@@ -65,6 +65,10 @@ def num(x, digits: int = 1) -> str:
     return "–" if x is None or pd.isna(x) else f"{x:.{digits}f}"
 
 
+def signed(x, digits: int = 2) -> str:
+    return "–" if x is None or pd.isna(x) else f"{x:+.{digits}f}"
+
+
 def oom_rank(log_rank_value) -> str:
     """The model stores the Order of Merit as -ln(rank)."""
     if log_rank_value is None or pd.isna(log_rank_value):
@@ -85,7 +89,11 @@ def form_chips(results: list[str]) -> str:
 DISPLAY_NAMES = {
     "avg_l30": "3-Dart Average (L30)", "form": "Form (L10 vs L30)", "elo": "Opponent-Weighted Elo",
     "oom_rank": "PDC Order of Merit", "experience": "Experience", "big_stage_delta": "Big-Stage Delta",
-    "stage_delta": "Stage Delta",
+    "stage_delta": "Stage Delta", "avg_major": "3-Dart Average on Majors (L20)", "form_major": "Form on Majors",
+    "major_elo": "Big-Stage Elo", "major_experience": "Big-Stage Experience",
+    "oom_momentum": "Order of Merit Momentum", "major_qf_12m": "Major Quarter-finals (12 months)",
+    "major_points_12m": "Major Results Points", "major_titles_24m": "Major Titles (24 months)",
+    "top32_share_5y": "Time in the Top 32", "oom_best_3y": "Best Order of Merit Rank (3 years)",
 }
 
 

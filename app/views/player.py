@@ -20,13 +20,25 @@ COUNTRY = {"ENG": "England", "SCO": "Scotland", "WAL": "Wales", "NIR": "Northern
 
 # How each PI input is shown in the breakdown: label, value format, one-line explanation.
 INPUTS = {
+    "avg_major": ("3-Dart Average on majors (L20)", lambda v: f"{v:.2f}", "Points per 3 darts over the last 20 matches on majors"),
+    "form_major": ("Form on majors (L6 vs L20)", lambda v: f"{v:+.2f}",
+                   "Average of the last 6 major matches minus the last 20"),
+    "major_elo": ("Big-Stage Elo", lambda v: f"{v:.0f}", "Elo rating from matches on majors only"),
     "avg_l30": ("3-Dart Average (L30)", lambda v: f"{v:.2f}", "Points per 3 darts over the last 30 matches"),
     "form": ("Form (L10 vs L30)", lambda v: f"{v:+.2f}",
              "Average of the last 10 matches minus the last 30; below zero = currently under the usual level"),
     "elo": ("Opponent-Weighted Elo", lambda v: f"{v:.0f}", "Rating from results: wins over strong players count more"),
     "oom_rank": ("PDC Order of Merit", lambda v: ui.oom_rank(v), "Official ranking (2-year prize money)"),
+    "oom_momentum": ("Order of Merit momentum (12 months)", lambda v: f"{v:+.2f}",
+                     "ln(rank a year ago) − ln(rank now): +0.69 = the rank number halved in a year, 0 = no change"),
 }
 TOTAL_COLOR = "#8cb8ee"  # soft blue for the Effective Average total
+AVERAGE_INPUTS = ["avg_major", "avg_l30"]  # the model's 3-dart-average input anchors the Effective Average
+
+
+def _ref_average(row: pd.Series):
+    """The average top-32 player's 3-dart average in the model's average input."""
+    return next((row.get(f"ref_{p}") for p in AVERAGE_INPUTS if pd.notna(row.get(f"ref_{p}"))), None)
 LABEL = f"color:{ui.TEXT_2};font-size:0.78em;text-transform:uppercase;letter-spacing:.04em"
 
 
@@ -70,7 +82,7 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
             f"<div style='font-size:2.6em;font-weight:700;color:{ui.TEXT};line-height:1.1'>{ui.num(row['pi'], 2)}</div>"
             f"<div style='color:{ui.TEXT_2};font-size:0.85em'>#{int(row['rank'])} by PI</div></div>",
             unsafe_allow_html=True)
-        base = row.get("ref_avg_l30")
+        base = _ref_average(row)
         effective.markdown(
             f"<div style='text-align:center'>"
             f"<div style='{LABEL}'>Effective Average</div>"
@@ -84,7 +96,8 @@ def _breakdown(row: pd.Series) -> None:
     """The player next to an average top-32 player in each PI input; the gap in 3-dart-average points. The last
     row adds them up: Effective Average vs the top-32 average. How gaps are converted is on the Methodology page."""
     coef = data.versioned("pi_coefficients").set_index("predictor")
-    per_point = coef["beta_per_unit"].get("avg_l30")
+    average = next((p for p in AVERAGE_INPUTS if p in coef.index), None)
+    per_point = coef["beta_per_unit"].get(average) if average else None
     rows = []
     for p in [p for p in INPUTS if p in coef.index]:
         label, fmt, _ = INPUTS[p]
@@ -93,7 +106,7 @@ def _breakdown(row: pd.Series) -> None:
             continue
         ref_txt = (ui.oom_rank(ref) if p == "oom_rank" else fmt(ref)) if ref is not None and pd.notna(ref) else "–"
         rows.append((label, fmt(value), ref_txt, contrib / per_point, False))
-    base = row.get("ref_avg_l30")
+    base = _ref_average(row)
     if rows and base is not None and pd.notna(base):
         # Shown to one decimal, the gaps must add up to the total as displayed: round the total from the displayed
         # numbers and give the rounding remainder to the largest gap.

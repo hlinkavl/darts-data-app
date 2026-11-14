@@ -13,7 +13,6 @@ import sys
 from datetime import date
 
 import pandas as pd
-import yaml
 
 sys.path.append(os.path.abspath(".."))
 from analytics import health
@@ -50,18 +49,6 @@ no_rows = spark.sql("""
 tracked_without_history = no_rows.loc[~no_rows["has_results"], "player_name"].tolist()
 tracked_without_stats = no_rows.loc[no_rows["has_results"], "player_name"].tolist()
 
-with open("../../config/majors.yml") as f:
-    majors = yaml.safe_load(f)["majors"]
-with open("../../config/mastercaller_series.yml") as f:
-    groups = yaml.safe_load(f)
-known = {m["mastercaller"] for m in majors.values() if m.get("mastercaller")} | {s for g in groups.values() for s in g}
-recent_series = set()
-if spark.catalog.tableExists("darts_bronze.mastercaller_results"):
-    recent_series = set(spark.sql("""
-        SELECT DISTINCT series FROM darts_bronze.mastercaller_results
-        WHERE to_date(match_date) >= date_sub(current_date(), 30) AND series NOT LIKE 'pdc-%'
-    """).toPandas()["series"])
-
 registry_latest = None
 if spark.catalog.tableExists("darts_gold.pi_model_registry"):
     rows = spark.sql("SELECT * FROM darts_gold.pi_model_registry ORDER BY decided_at DESC LIMIT 1").collect()
@@ -74,17 +61,16 @@ if registry_latest and spark.catalog.tableExists("darts_gold.pi_benchmark"):
     if active:
         bench = spark.sql(f"SELECT * FROM darts_gold.pi_benchmark WHERE version = '{active[0][0]}'").toPandas()
 
-n_upcoming = spark.table("darts_gold.upcoming_matches").count() if spark.catalog.tableExists("darts_gold.upcoming_matches") else 0
+open_matches = table("darts_silver.upcoming_matches")
 
 # COMMAND ----------
 
 checks = (
     health.ingestion(manifest, last_run, today, major_running)
-    + [health.freshness(last_match, today, major_running)]
+    + [health.freshness(last_match), health.overdue_matches(open_matches, today)]
     + (health.draws(calendar, today) if calendar is not None else [])
     + health.player_matching(tracked_without_history, tracked_without_stats)
-    + health.new_series(recent_series, known)
-    + [health.model(registry_latest)] + health.benchmark(bench) + [health.upcoming(major_running, n_upcoming)]
+    + [health.model(registry_latest)] + health.benchmark(bench)
 )
 report = health.report(checks).assign(checked_at=pd.Timestamp.now(tz="UTC"))
 overall = health.overall(report)

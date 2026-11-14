@@ -15,7 +15,8 @@ resources:
       parameters:
         - name: catalog
           default: ${var.catalog}
-        # auto: refit the PI model only when the active one is 28+ days old; force: refit now
+        # auto: refit the PI model only when the active one is 28+ days old; force: refit now;
+        # approve: refit and activate even if the selected predictors changed (after a person reviewed it)
         - name: refit
           default: auto
         # comma-separated models: write trial summaries of 20 players per model instead of the real ones

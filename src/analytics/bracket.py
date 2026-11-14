@@ -9,10 +9,14 @@ import html
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import date
 
 MIN_DRAW_SIZE = 16  # smaller brackets (e.g. only semi-finals and final) are not a tournament draw
 BLOCK_START = re.compile(r"\{\{\s*(?:#invoke:\s*[Bb]racket\s*\|\s*)?(\d+)TeamBracket(-Byes)?\s*\|")
 FORMAT = re.compile(r"best of (\d+) (sets|legs)", re.I)
+MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+          "november", "december"]
+DAY_MONTH = re.compile(r"(\d{1,2})\s+(" + "|".join(MONTHS) + r")", re.I)
 
 
 @dataclass
@@ -45,6 +49,21 @@ class Round:
     first_to: int | None
     unit: str | None
     matches: list[Match] = field(default_factory=list)
+    last_day: tuple[int, int] | None = None   # (day, month) of the round's last day, from the header
+
+    def date_in(self, start: date | None, end: date | None) -> date | None:
+        """The round's last day, with the year taken from the event dates (an event may span New Year)."""
+        if not self.last_day or not (start or end):
+            return None
+        day, month = self.last_day
+        for year in sorted({d.year for d in (start, end) if d}):
+            try:
+                d = date(year, month, day)
+            except ValueError:
+                continue
+            if (not start or (d - start).days >= -3) and (not end or (d - end).days <= 3):
+                return d
+        return None
 
 
 @dataclass
@@ -158,8 +177,10 @@ def parse_blocks(wikitext: str) -> list[dict]:
             header = _clean(params.get(f"RD{r}", f"Round {r}"))
             fmt = FORMAT.search(header)
             name = re.split(r"\(best of|\d{1,2}[–-]\d{1,2} \w+|\d{1,2} \w+$", header)[0].strip() or f"Round {r}"
+            days = DAY_MONTH.findall(header)
             rnd = Round(name=name, first_to=(int(fmt.group(1)) + 1) // 2 if fmt else None,
-                        unit=fmt.group(2).lower() if fmt else None)
+                        unit=fmt.group(2).lower() if fmt else None,
+                        last_day=(int(days[-1][0]), MONTHS.index(days[-1][1].lower()) + 1) if days else None)
             n_matches = size >> r
             for k in range(n_matches):
                 a, b = 2 * k + 1, 2 * k + 2
@@ -201,7 +222,7 @@ def build_draw(title: str, wikitext: str) -> Draw | None:
     rounds = []
     for r in range(len(sections[0]["rounds"])):
         first = sections[0]["rounds"][r]
-        merged = Round(first.name, first.first_to, first.unit)
+        merged = Round(first.name, first.first_to, first.unit, last_day=first.last_day)
         for s in sections:
             merged.matches.extend(s["rounds"][r].matches)
         for k, match in enumerate(merged.matches):

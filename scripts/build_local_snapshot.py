@@ -24,6 +24,7 @@ import yaml
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 from analytics import elo, health, news, overview, pipeline, titles  # noqa: E402
+from analytics.rounds import players_left  # noqa: E402
 
 RAW = REPO / "data" / "raw"
 OUT = REPO / "data" / "app_snapshot"
@@ -160,7 +161,7 @@ def main() -> None:
     events = events[events.tournament_key.isin(majors)][["tournament_key", "event_date", "winner_name", "winner_avg"]]
     events["event_date"] = pd.to_datetime(events["event_date"].str[:10])
     cal, draws = overview.season_calendar(pages[["title", "wikitext"]], events, majors, TODAY)
-    current = index[index.is_current][["player_key", "strength_major", "pi", "pi_major", "effective_average", "avg_l30", "form"]] \
+    current = index[index.is_current][["player_key", "strength_major", "pi", "pi_major", "effective_average", "avg_major", "form_major"]] \
         .rename(columns={"strength_major": "strength"})
     elo_latest = run.elo_history.sort_values(["match_date", "match_key"]).groupby("player_key")["elo_post"].last().rename("elo").reset_index()
     outputs = overview.draw_outputs(
@@ -175,9 +176,8 @@ def main() -> None:
 
     manifest = pd.DataFrame(jsonl("ingestion/*/manifest.jsonl", latest_only=True))
     last_run = pd.Timestamp(manifest["run_id"].iloc[0][:10]) if len(manifest) else None
-    checks = (health.ingestion(manifest, last_run, TODAY, False) + [health.freshness(pm.match_date.max().date(), TODAY, False)]
-              + health.draws(cal, TODAY) + [health.model(registry.iloc[0].to_dict())] + health.benchmark(run.benchmark)
-              + [health.upcoming(False, 0)])
+    checks = (health.ingestion(manifest, last_run, TODAY, False) + [health.freshness(pm.match_date.max().date())]
+              + health.draws(cal, TODAY) + [health.model(registry.iloc[0].to_dict())] + health.benchmark(run.benchmark))
     health_report = health.report(checks).assign(checked_at=pd.Timestamp.now(tz="UTC"))
 
     tables = {

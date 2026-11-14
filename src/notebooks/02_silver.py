@@ -1,8 +1,9 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # Silver: clean, typed, one row per entity, all sources unified
-# MAGIC - **Results:** Darts Orakel until 28 Oct 2026 (exact points and darts, detailed stats), Mastercaller from then
-# MAGIC   on (3-dart averages; darts estimated from legs, see docs/MAINTENANCE.md, section 8). Matches present in both come from Orakel.
+# MAGIC - **Results:** Darts Orakel until 28 Oct 2026 (exact points and darts, detailed stats), Mastercaller until
+# MAGIC   9 Nov 2026 (3-dart averages; darts estimated from legs), both kept as history. Since then the majors from the
+# MAGIC   Wikipedia draws (score and 3-dart averages per match). Matches present in two sources come from the older one.
 # MAGIC - **Players:** one `player_key` across sources. Orakel keys are kept; Mastercaller and Wikipedia names are
 # MAGIC   matched to them in `player_crosswalk` (manual fixes: config/player_aliases.yml); new players get a stable new key.
 # MAGIC - **Tracked players and rankings:** the official PDC Order of Merit (Wikipedia data module), top 150.
@@ -17,10 +18,14 @@ spark.sql(f"USE CATALOG {catalog}")
 import hashlib
 import os
 import re
+import sys
 import unicodedata
 
 import pandas as pd
 import yaml
+
+sys.path.append(os.path.abspath(".."))  # src/, for the shared analytics package
+from analytics import wiki_results
 
 with open("../../config/majors.yml") as f:
     MAJORS = yaml.safe_load(f)["majors"]  # {tournament_key: {name, wiki, mastercaller}}
@@ -37,6 +42,7 @@ ESTIMATED_LEGS_PER_SET = 4.0        # sets are first to 3 legs
 DARTS_PER_LEG_AT_AVG = 1503.0       # darts per leg ~ 3 * 501 / average (validated on Orakel data, docs/MAINTENANCE.md, section 8)
 NEW_KEY_BASE = 900_000_000          # keys for players unknown to Orakel
 MC_KEY_BASE = 1_000_000_000_000     # match/event keys for Mastercaller rows (Orakel keys are < 10^7)
+WIKI_KEY_BASE = 2_000_000_000_000   # match/event keys for results from Wikipedia draws
 
 def has(table: str) -> bool:
     return spark.catalog.tableExists(f"darts_bronze.{table}")
@@ -138,6 +144,20 @@ print("Orakel data until", ORAKEL_LAST_DATE)
 
 # COMMAND ----------
 
+# MAGIC %md ## Wikipedia draws of the majors (results since the historical sources end)
+
+# COMMAND ----------
+
+HISTORY_END = ORAKEL_LAST_DATE
+if has("mastercaller_results"):
+    HISTORY_END = max(HISTORY_END, spark.sql("SELECT max(to_date(match_date)) FROM darts_bronze.mastercaller_results").first()[0])
+pages = spark.sql(f"SELECT title, wikitext FROM {dedup('wiki_tournament_pages', 'title')} WHERE error IS NULL").toPandas()
+wk = wiki_results.draw_results(pages, {int(k): v for k, v in MAJORS.items()}, after=HISTORY_END)
+print(f"history until {HISTORY_END}; Wikipedia draws after it: {wk['wiki_title'].nunique()} events, "
+      f"{int(wk['played'].sum())} played and {int((~wk['played']).sum())} open matches")
+
+# COMMAND ----------
+
 # MAGIC %md ## Player crosswalk (one player_key across sources)
 
 # COMMAND ----------
@@ -191,6 +211,7 @@ wiki_names = set()
 for t in ("wiki_rankings", "wiki_rankings_history"):
     if has(t):
         wiki_names |= set(spark.table(f"darts_bronze.{t}").select("player_name").distinct().toPandas()["player_name"])
+wiki_names |= set(wk["player_a"]) | set(wk["player_b"])  # draws include qualifiers outside the Order of Merit
 mc_by_norm = {norm(r[2]): r[3] for r in rows}
 for name in sorted(wiki_names):
     key, method = resolve(name)
@@ -268,12 +289,71 @@ else:
 
 # COMMAND ----------
 
+# MAGIC %md ## Wikipedia results: same shape, darts estimated from legs like Mastercaller
+
+# COMMAND ----------
+
+WK_SCHEMA = ("wiki_title STRING, tournament_key BIGINT, tournament_name STRING, edition INT, event_start DATE, "
+             "event_end DATE, round STRING, round_order INT, first_to INT, unit STRING, match_date DATE, "
+             "player_a STRING, player_b STRING, score_a DOUBLE, score_b DOUBLE, avg_a DOUBLE, avg_b DOUBLE, played BOOLEAN, "
+             "is_final BOOLEAN")
+# plain Python values for Spark (numpy scalars and NaN are not accepted for typed columns)
+wk_records = [{k: (None if v is None or (isinstance(v, float) and v != v) else v.item() if hasattr(v, "item") else v)
+               for k, v in r.items()} for r in wk.astype(object).to_dict("records")]
+spark.createDataFrame(wk_records, WK_SCHEMA).createOrReplaceTempView("wk_all")
+spark.sql(f"""
+CREATE OR REPLACE TEMP VIEW wk AS
+SELECT
+  w.* EXCEPT (score_a, score_b), CAST(w.score_a AS INT) AS score_a, CAST(w.score_b AS INT) AS score_b,
+  {WIKI_KEY_BASE} + pmod(xxhash64(wiki_title, round, player_a, player_b), {MC_KEY_BASE}) AS match_key,
+  {WIKI_KEY_BASE} + pmod(xxhash64(wiki_title), {MC_KEY_BASE}) AS event_key,
+  (w.score_a + w.score_b) * IF(unit = 'sets', {ESTIMATED_LEGS_PER_SET}, 1.0) AS legs,
+  xa.player_key AS key_a, xb.player_key AS key_b
+FROM wk_all w
+JOIN xw xa ON xa.source = 'wikipedia' AND xa.source_id = w.player_a
+JOIN xw xb ON xb.source = 'wikipedia' AND xb.source_id = w.player_b
+""")
+wk_side = lambda me, op: f"""
+  SELECT match_key, key_{me} AS player_key, key_{op} AS opponent_key, player_{op} AS opponent_name,
+    match_date, event_key, tournament_key, tournament_name, round, 'MJ' AS category, true AS is_major,
+    score_{me} > score_{op} AS won, score_{me} AS score_for, score_{op} AS score_against,
+    IF(avg_{me} BETWEEN 30 AND 140, avg_{me} / 3 * legs * {DARTS_PER_LEG_AT_AVG} / avg_{me}, NULL) AS points,
+    IF(avg_{me} BETWEEN 30 AND 140, legs * {DARTS_PER_LEG_AT_AVG} / avg_{me}, NULL) AS darts
+  FROM wk WHERE played"""
+spark.sql(f"""
+CREATE OR REPLACE TEMP VIEW wk_player_matches AS
+SELECT s.match_key, s.player_key, s.opponent_key, s.opponent_name, s.match_date, s.event_key, s.tournament_key,
+       s.tournament_name, s.round, s.category, s.is_major, s.won, s.score_for, s.score_against,
+       CAST(NULL AS DOUBLE) AS first9_points, CAST(NULL AS DOUBLE) AS first9_darts,
+       CAST(NULL AS DOUBLE) AS one_eighties, s.points, s.darts,
+       CAST(NULL AS DOUBLE) AS checkouts_hit, CAST(NULL AS DOUBLE) AS checkout_attempts,
+       'wikipedia' AS source, true AS stats_estimated
+FROM ({wk_side('a', 'b')} UNION ALL {wk_side('b', 'a')}) s
+-- a match an older source already has (same day, same two players) comes from there
+LEFT ANTI JOIN (SELECT match_date, player_key, opponent_key FROM o_player_matches
+                UNION ALL SELECT match_date, player_key, opponent_key FROM mc_player_matches) o
+  ON o.match_date = s.match_date AND o.player_key = s.player_key AND o.opponent_key = s.opponent_key
+""")
+spark.sql("""
+CREATE OR REPLACE TEMP VIEW wk_matches AS
+SELECT match_key, match_date, event_key, tournament_key, tournament_name, round, 'MJ' AS category, true AS is_major,
+       IF(score_a > score_b, key_a, key_b) AS winner_key, IF(score_a > score_b, player_a, player_b) AS winner_name,
+       IF(score_a > score_b, key_b, key_a) AS loser_key, IF(score_a > score_b, player_b, player_a) AS loser_name,
+       greatest(score_a, score_b) AS winner_score, least(score_a, score_b) AS loser_score, 'wikipedia' AS source
+FROM wk
+WHERE played AND match_key IN (SELECT match_key FROM wk_player_matches)
+""")
+
+# COMMAND ----------
+
 # MAGIC %md ## Unified matches, player_matches, events
 
 # COMMAND ----------
 
-spark.sql("CREATE OR REPLACE TABLE darts_silver.player_matches AS SELECT * FROM o_player_matches UNION ALL SELECT * FROM mc_player_matches")
-spark.sql("CREATE OR REPLACE TABLE darts_silver.matches AS SELECT * FROM o_matches UNION ALL SELECT * FROM mc_matches")
+spark.sql("""CREATE OR REPLACE TABLE darts_silver.player_matches AS
+             SELECT * FROM o_player_matches UNION ALL SELECT * FROM mc_player_matches UNION ALL SELECT * FROM wk_player_matches""")
+spark.sql("""CREATE OR REPLACE TABLE darts_silver.matches AS
+             SELECT * FROM o_matches UNION ALL SELECT * FROM mc_matches UNION ALL SELECT * FROM wk_matches""")
 spark.sql("""
 CREATE OR REPLACE VIEW darts_silver.player_matches_v AS
 SELECT
@@ -295,6 +375,14 @@ mc_events = f"""
          tournament_key IS NOT NULL AS is_major, 'mastercaller' AS source
   FROM mc GROUP BY event_key, tournament_key
   HAVING max(m_date) > DATE'{ORAKEL_LAST_DATE}'""" if has("mastercaller_results") else ""
+wk_events = f"""
+  UNION ALL
+  SELECT event_key, tournament_key, any_value(tournament_name), max(match_date), min(event_start), max(event_end), 'MJ',
+         CAST(NULL AS STRING), CAST(NULL AS BIGINT), CAST(NULL AS DOUBLE),
+         max_by(IF(score_a > score_b, avg_a, avg_b), is_final), max_by(IF(score_a > score_b, key_a, key_b), is_final),
+         max_by(IF(score_a > score_b, player_a, player_b), is_final), true, 'wikipedia'
+  FROM wk WHERE played GROUP BY event_key, tournament_key
+  HAVING max(CAST(is_final AS INT)) = 1"""
 spark.sql(f"""
 CREATE OR REPLACE TABLE darts_silver.events AS
 SELECT DISTINCT
@@ -305,6 +393,7 @@ SELECT DISTINCT
   tournament_key IN {MAJOR_KEYS} AS is_major, 'orakel' AS source
 FROM {dedup("orakel_events", "event_key")}
 {mc_events}
+{wk_events}
 """)
 
 # COMMAND ----------
@@ -373,24 +462,20 @@ spark.createDataFrame(
     "tournament_key BIGINT, tournament_name STRING, wiki_title_pattern STRING, mastercaller_series STRING",
 ).write.mode("overwrite").option("overwriteSchema", "true").saveAsTable("darts_silver.majors")
 
-# Upcoming matches: a snapshot of the latest Mastercaller run. An empty list in the latest run must give an
-# empty table, never the matches of an older run. Only matches with at least one tracked player.
-if has("mastercaller_upcoming"):
-    major_names = " OR ".join(f"lower(u.tournament) LIKE '%{m['name'].lower()}%'" for m in MAJORS.values())
-    spark.sql(f"""
-    CREATE OR REPLACE TABLE darts_silver.upcoming_matches AS
-    SELECT DISTINCT
-      u.tournament AS event_title, ({major_names}) AS is_major, u.round AS round_name,
-      to_timestamp(concat(u.match_date, ' ', coalesce(u.start_time, '00:00'))) AS start_time,
-      xa.player_key AS player_a_key, u.player_a_name, xb.player_key AS player_b_key, u.player_b_name,
-      to_timestamp(left(u._run_date, 10)) AS fetched_on
-    FROM darts_bronze.mastercaller_upcoming u
-    JOIN xw xa ON xa.source = 'mastercaller' AND xa.source_id = u.player_a_slug
-    JOIN xw xb ON xb.source = 'mastercaller' AND xb.source_id = u.player_b_slug
-    WHERE u._run_date = (SELECT max(_run_date) FROM darts_bronze.mastercaller_results)
-      AND (xa.player_key IN (SELECT player_key FROM darts_silver.players WHERE is_tracked)
-           OR xb.player_key IN (SELECT player_key FROM darts_silver.players WHERE is_tracked))
-    """)
+# Upcoming matches: the open matches of the Wikipedia draws (both players known, no result yet) in events that are
+# not over. Rebuilt every run, so a match disappears as soon as its result is in. Only matches with a tracked player.
+spark.sql("""
+CREATE OR REPLACE TABLE darts_silver.upcoming_matches AS
+SELECT DISTINCT
+  concat(edition, ' ', tournament_name) AS event_title, true AS is_major, round AS round_name,
+  CAST(match_date AS TIMESTAMP) AS start_time,
+  key_a AS player_a_key, player_a AS player_a_name, key_b AS player_b_key, player_b AS player_b_name,
+  current_timestamp() AS fetched_on
+FROM wk
+WHERE NOT played AND event_end >= current_date()
+  AND (key_a IN (SELECT player_key FROM darts_silver.players WHERE is_tracked)
+       OR key_b IN (SELECT player_key FROM darts_silver.players WHERE is_tracked))
+""")
 
 spark.sql(f"""
 CREATE OR REPLACE TABLE darts_silver.tournament_pages AS

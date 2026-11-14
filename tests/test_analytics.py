@@ -79,3 +79,50 @@ def test_no_leak_from_later_rounds_on_the_same_day():
     assert f.loc[300, "experience"] == 0.0          # first round: no earlier match that day
     assert f.loc[100, "experience"] > f.loc[200, "experience"] > 0
     assert f.loc[300, "elo"] == elo.INITIAL_RATING  # Elo before the first round is untouched by later rounds
+
+
+def test_major_features_come_from_majors_only_and_never_see_the_same_day():
+    pm = _player_matches(n=30)
+    pm["is_major"] = pm.index % 3 == 0                                   # every third match is on a major
+    pm.loc[~pm["is_major"], "points"] = 150.0                           # 50 average away from the majors
+    pm.loc[pm.index[-1], ["points", "is_major"]] = [3000.0, True]       # absurd last major must not leak
+    hist = elo.run_elo(pm.assign(winner_key=1, loser_key=99)[["match_key", "match_date", "winner_key", "loser_key", "is_major"]],
+                       elo.EloParams())
+    f = features.point_in_time_features(pm, hist).set_index("match_key")
+    last = f.loc[pm["match_key"].iloc[-1]]
+    assert np.isclose(last["avg_major"], 100.0)                         # majors only: 100, not the 50s
+    assert np.isclose(last["form_major"], 0.0)
+    assert np.isnan(f.loc[pm["match_key"].iloc[3], "avg_major"])        # fewer than 5 earlier major matches
+
+
+def _major_rows(rows):
+    """rows: (match_key, date, tournament_key, round, won) for player 1 against player 99."""
+    return pd.DataFrame([{"match_key": k, "player_key": 1, "opponent_key": 99, "match_date": pd.Timestamp(d),
+                          "tournament_key": t, "is_major": True, "won": w, "round": r, "points": 300.0, "darts": 9.0,
+                          "first9_points": np.nan, "first9_darts": np.nan, "checkouts_hit": np.nan,
+                          "checkout_attempts": np.nan, "one_eighties": np.nan} for k, d, t, r, w in rows])
+
+
+def test_results_on_majors_count_deep_runs_in_the_window_and_skip_the_league():
+    pm = _major_rows([
+        (1, "2025-07-20", 29, "Quarter-finals", True), (2, "2025-07-21", 29, "Semi-finals", True),
+        (3, "2025-07-22", 29, "Final", True),                                    # Matchplay 2025: title
+        (4, "2025-10-01", 36, "Quarter-finals", False),                          # Grand Prix: out in the QF
+        (5, "2025-11-01", 1070, "Final", True),                                  # Premier League night: ignored
+        (6, "2025-11-20", 40, "Last 16", False),                                 # next event, before its own end
+    ])
+    hist = elo.run_elo(pm.assign(winner_key=1, loser_key=99)[["match_key", "match_date", "winner_key", "loser_key", "is_major"]],
+                       elo.EloParams())
+    f = features.point_in_time_features(pm, hist).set_index("match_key").loc[6]
+    assert f["major_qf_12m"] == 2 and f["major_points_12m"] == 4 + 1 and f["major_titles_24m"] == 1
+
+
+def test_time_in_top32_is_a_share_of_the_months_with_history():
+    months = pd.date_range("2024-01-01", periods=24, freq="MS")
+    rankings = pd.DataFrame({"snapshot_date": months, "player_key": 1, "rank": [10] * 12 + [40] * 12})
+    rows = pd.DataFrame({"match_date": [pd.Timestamp("2026-01-15")], "player_key": [1]})
+    q = features._ranking_quality(rows, rankings).iloc[0]
+    assert np.isclose(q["top32_share_5y"], 0.5)                    # 12 of 24 months with history
+    assert np.isclose(q["oom_best_3y"], -np.log(10))
+    mid = features._ranking_quality(pd.DataFrame({"match_date": [pd.Timestamp("2025-07-15")], "player_key": [1]}), rankings)
+    assert np.isclose(mid["oom_momentum"].iloc[0], -np.log(40) + np.log(10))  # #10 a year ago, #40 now

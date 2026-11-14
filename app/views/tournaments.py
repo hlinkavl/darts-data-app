@@ -216,7 +216,8 @@ def _momentum(as_of) -> pd.DataFrame:
     then_d = when[when <= now_d - pd.DateOffset(months=RISING_MONTHS)].max() if pd.notna(now_d) else pd.NaT
     if pd.isna(now_d) or pd.isna(then_d):
         return pd.DataFrame(columns=["player_key", "pi_change", "form"])
-    now = hist[when == now_d][["player_key", "pi", "form"]]
+    form = "form_major" if "form_major" in hist.columns else "form"  # the model's form input since Nov 2026
+    now = hist[when == now_d][["player_key", "pi", form]].rename(columns={form: "form"})
     then = hist[when == then_d][["player_key", "pi"]].rename(columns={"pi": "pi_then"})
     m = now.merge(then, on="player_key")
     return m.assign(pi_change=m["pi"] - m["pi_then"])[["player_key", "pi_change", "form"]]
@@ -273,8 +274,8 @@ def _on_the_rise(preds: pd.DataFrame, draw: pd.DataFrame, mode: str, photos: dic
                                  ui.WIN if r.pi_change >= 0 else ui.LOSS,
                                  f"Form {r.form:+.2f} · title chance {ui.pct(r.p_reach, 1)}") for r in rising.itertuples())
     st.markdown(cards, unsafe_allow_html=True)
-    st.caption(f"The biggest PI gains over the {RISING_MONTHS} months before the event, with positive recent form "
-               "(last 10 matches vs last 30).")
+    st.caption(f"The biggest PI gains over the {RISING_MONTHS} months before the event, with positive form on majors "
+               "(last 6 major matches vs last 20).")
 
 
 def _beat_the_odds(preds: pd.DataFrame, draw: pd.DataFrame, photos: dict) -> None:
@@ -461,7 +462,8 @@ def _upcoming(up: pd.DataFrame) -> None:
     photos = _photos()
     for m in up.sort_values("start_time").itertuples():
         with st.container(border=True):
-            st.caption(f"{m.event_title} · {m.round_name} · {pd.Timestamp(m.start_time):%a %d %b %H:%M}")
+            when = pd.Timestamp(m.start_time)  # the draw gives the round's day only (time 00:00)
+            st.caption(f"{m.event_title} · {m.round_name} · {when:%a %d %b}" + (f" {when:%H:%M}" if when.hour or when.minute else ""))
             c1, c2, c3 = st.columns([4, 4, 4])
             with c1:
                 st.markdown(f"{_avatar(photos, m.player_a_name, 40)}**{m.player_a_name}**", unsafe_allow_html=True)

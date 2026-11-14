@@ -6,6 +6,9 @@ those days. Pages are large (0.3-1 MB), so a refresh stays at a few requests. Th
 days lists scheduled matches once a draw or order of play is out (our "upcoming matches").
 
 Data: Mastercaller / iDarts.
+
+Historical: fetched until 9 Nov 2026 (Mastercaller refuses GitHub-hosted runners since 11 Nov 2026) and no
+longer run; the data stays in the Volume as training history. Kept for reproducibility.
 """
 
 import html

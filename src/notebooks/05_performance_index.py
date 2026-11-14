@@ -18,7 +18,7 @@ import sys
 import pandas as pd
 
 sys.path.append(os.path.abspath(".."))
-from analytics import pipeline, titles
+from analytics import elo, pipeline, titles
 
 dbutils.widgets.text("catalog", "workspace")
 catalog = dbutils.widgets.get("catalog")
@@ -74,8 +74,15 @@ done = set(pd.to_datetime(reused["as_of_date"])) if len(reused) else set()
 to_score = [d for d in as_of_dates if d not in done]
 print(f"reusing {len(done)} snapshots, scoring {len(to_score)}")
 
+major_elo_history = None
+if "major_elo" in set(coefficients["predictor"]):  # Big-Stage Elo: replayed on the majors with the model's Elo settings
+    m = spark.sql(f"SELECT elo_k, elo_major_multiplier FROM darts_gold.pi_model_registry WHERE version = '{version}'").first()
+    majors = spark.sql("SELECT match_key, match_date, round, winner_key, loser_key, is_major FROM darts_silver.matches "
+                       "WHERE is_major").toPandas()
+    major_elo_history = elo.run_elo(majors.assign(match_date=pd.to_datetime(majors["match_date"])),
+                                    elo.EloParams(float(m.elo_k), float(m.elo_major_multiplier)))
 index = pipeline.score(player_matches, elo_history, coefficients, players["player_key"].tolist(), to_score,
-                       rankings=rankings)
+                       rankings=rankings, major_elo_history=major_elo_history)
 index = index.merge(players, on="player_key", how="left")
 index["is_current"] = index["as_of_date"] == current.normalize()
 index["as_of_date"] = pd.to_datetime(index["as_of_date"]).dt.date
