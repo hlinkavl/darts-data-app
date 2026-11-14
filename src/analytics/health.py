@@ -47,7 +47,7 @@ def ingestion(manifest: pd.DataFrame, last_run: pd.Timestamp | None, today: date
                      f"Last ingestion {age} days ago (limit {limit} days{' during a major' if major_running else ''}).",
                      "" if age <= limit else "Press Refresh in the app or run the refresh workflow."))
     for r in manifest[manifest["status"] == "error"].itertuples():
-        blocked = "403" in str(r.error) or "401" in str(r.error)
+        blocked = any(code in str(r.error) for code in ("401", "403", "418"))  # 418: a common anti-bot answer
         out.append(Check("ingestion", f"source {r.source}", RED, "error", f"{r.source} failed: {r.error}",
                          ("The source blocks our client. Don't work around it: find a replacement source. " + FIX_CODE)
                          if blocked else "Retry the refresh; if it keeps failing, the source changed. " + FIX_CODE))

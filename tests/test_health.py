@@ -47,3 +47,10 @@ def test_results_stuck_during_major_are_red_but_a_short_break_is_not():
     assert health.freshness(date(2026, 11, 11), TODAY, True).status == health.RED   # 5 days
     assert health.freshness(date(2026, 11, 12), TODAY, True).status == health.YELLOW  # 4 days (WC Christmas break)
     assert health.freshness(date(2026, 11, 1), TODAY, False).status == health.GREEN  # no major: no alarm
+
+
+def test_teapot_418_counts_as_blocked():
+    manifest = pd.DataFrame([{"source": "mastercaller", "dataset": None, "rows": 0, "status": "error",
+                              "error": "HTTP 418: 418 Client Error:  for url: https://mastercaller.com/pdc-tournaments"}])
+    red = [c for c in health.ingestion(manifest, pd.Timestamp("2026-11-16"), TODAY, True) if c.status == health.RED]
+    assert len(red) == 1 and "Don't work around it" in red[0].action

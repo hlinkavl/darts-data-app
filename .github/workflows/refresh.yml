@@ -47,10 +47,20 @@ jobs:
           fi
 
       - name: Ingest (Mastercaller, Wikipedia) and upload to the Volume
+        id: ingest
         if: steps.gate.outputs.run == 'true'
+        # A failing source must not stop the rest: what the other sources returned is uploaded, the job still runs
+        # (its health report turns red and names the source) and the app still starts. The run fails at the end.
+        continue-on-error: true
         run: python -m ingestion.run --upload
 
       - name: Run the darts_refresh job (bronze → silver → model → tournaments → health)
         if: steps.gate.outputs.run == 'true'
         # Scheduled runs only happen during a major: then the app is started too (it stays stopped otherwise).
         run: python scripts/run_refresh_job.py ${{ github.event_name == 'schedule' && '--start-app' || '' }}
+
+      - name: Fail the run if ingestion had errors (GitHub e-mails on failure)
+        if: steps.gate.outputs.run == 'true' && steps.ingest.outcome == 'failure'
+        run: |
+          echo "::error::ingestion finished with errors (see the Ingest step and the health report)"
+          exit 1

@@ -60,7 +60,7 @@ What to do when the e-mail arrives:
    "Run workflow" on GitHub.
 3. A source changed its page, or a new tournament format: open Claude Code in the repo, paste the error and the health
    message, fix, test (section 5), deploy, Refresh.
-4. A source blocks us (HTTP 401/403): don't work around it; find a replacement source.
+4. A source blocks us (HTTP 401/403/418): don't work around it; find a replacement source.
 5. An expired token: section 4.
 
 Expect a few fixes a year, mostly when a season starts or a format changes. Never edit code in the Databricks
