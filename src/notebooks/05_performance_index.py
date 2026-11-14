@@ -3,7 +3,7 @@
 # MAGIC # Gold: Performance Index (step 3)
 # MAGIC Scores every tracked player with the active model version: PI (typical match), PI Major (match on a major),
 # MAGIC Effective Average and the contribution of each predictor. Snapshots on the 1st of every month since 2024
-# MAGIC give the history; the snapshot after the latest match is flagged `is_current`.
+# MAGIC give the history; the snapshot after the newest data (match or Order of Merit) is flagged `is_current`.
 
 # COMMAND ----------
 
@@ -46,14 +46,18 @@ player_matches = spark.sql("""
 """).toPandas()
 players = spark.sql("SELECT player_key, player_name FROM darts_silver.players WHERE is_tracked").toPandas()
 
+rankings = spark.sql("SELECT snapshot_date, player_key, rank FROM darts_silver.rankings").toPandas()
+
+# The current snapshot sees everything up to the newest data of either kind. Since Nov 2026 results arrive only
+# from the majors, so weeks can pass without a match while the Order of Merit (rank, momentum) keeps moving.
 last_match = pd.to_datetime(player_matches["match_date"]).max()
-current = last_match + pd.Timedelta(days=1)
+last_ranking = pd.to_datetime(rankings["snapshot_date"]).max()
+current = max(last_match, last_ranking).normalize() + pd.Timedelta(days=1)
 as_of_dates = list(pd.date_range("2024-01-01", current, freq="MS")) + [current]
-print(f"model {version}, {len(players)} players, {len(as_of_dates)} snapshots, current = {current.date()}")
+print(f"model {version}, {len(players)} players, {len(as_of_dates)} snapshots, current = {current.date()} "
+      f"(last match {last_match.date()}, last ranking {last_ranking.date()})")
 
 # COMMAND ----------
-
-rankings = spark.sql("SELECT snapshot_date, player_key, rank FROM darts_silver.rankings").toPandas()
 
 # Monthly snapshots of the past do not change while the model and the tracked players stay the same (each uses
 # only matches before its date), so they are reused; the current one and the last RECENT_DAYS days (late results)

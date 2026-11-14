@@ -109,7 +109,8 @@ def main() -> None:
     coef = run.coefficients
 
     tracked = cur.dropna(subset=["player_key"]).query("rank <= 150").astype({"player_key": "int64"})
-    last = pm["match_date"].max() + pd.Timedelta(days=1)
+    # newest data of either kind (see notebook 05): the ranking keeps moving between majors
+    last = max(pd.to_datetime(pm["match_date"]).max(), pd.to_datetime(rankings["snapshot_date"]).max()).normalize() + pd.Timedelta(days=1)
     as_of = list(pd.date_range("2024-01-01", last, freq="MS")) + [last]
     index = pipeline.score(pm, run.elo_history, coef, tracked["player_key"].tolist(), as_of, rankings=rankings)
     index["player_name"] = index["player_key"].map(display)
