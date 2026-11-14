@@ -71,7 +71,7 @@ The edge over the official ranking is smaller than the previous model's with inp
 
 ### How to read the PI
 
-**1. The PI is measured against one benchmark: the average top-32 player.** The benchmark is the average profile of the 32 strongest players, roughly the level of the 14th-best player. Luke Littler's PI of 7.35 means he beats *that* player in 73.5 % of typical matches. It does **not** mean he beats every top-32 player 73.5 % of the time.
+**1. The PI is measured against one benchmark: the average top-32 player.** The benchmark is the average profile of the 32 strongest players, roughly the level of the 14th-best player. Its Order of Merit rank is about **#13, not #16**: the model reads the rank on a log scale (a step from #1 to #2 counts as much as one from #10 to #20), and on that scale ranks 1 to 32 average to their geometric mean, #12.8. Luke Littler's PI of 7.35 means he beats *that* player in 73.5 % of typical matches. It does **not** mean he beats every top-32 player 73.5 % of the time.
 
 **2. Any specific match-up comes from the two PIs.** Each PI encodes a strength. The chance of A beating B depends on the difference between the two strengths:
 

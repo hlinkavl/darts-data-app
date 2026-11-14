@@ -69,6 +69,10 @@ The index is built in three transparent steps: **select** only predictors that p
             "**Reading the PI breakdown in a player profile.** Each input is compared with an average top-32 player "
             "(the mean of the 32 strongest players on the same day) and the gap is converted with the rates above. "
             "The top-32 average plus all the gaps is the **Effective Average**, which sets the PI.")
+        st.info("**Why is the top-32 average Order of Merit rank about #13, not #16?** The model reads the rank on a "
+                "log scale: a step from #1 to #2 counts as much as one from #10 to #20, because at the top one place "
+                "means a lot and around #30 almost nothing. Averaged on that scale, ranks 1 to 32 give about #13 "
+                "(their geometric mean), while the plain average would be #16.5.", icon="ℹ️")
 
     st.subheader("Does it beat the official PDC ranking?")
     bench = data.versioned("pi_benchmark")
