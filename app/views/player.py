@@ -65,31 +65,30 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
     oom_txt = f"#{int(oom)}" if pd.notna(oom) else ui.oom_rank(row.get("oom_rank"))
     image = info.get("image_file")
 
-    with st.container(border=True):
-        photo, who, score, effective = st.columns([1.2, 3, 1.4, 1.4], vertical_alignment="center")
-        photo.markdown(f"<div style='text-align:center'>{ui.avatar(image, 128, name=name, ring=ui.GRID)}</div>",
-                       unsafe_allow_html=True)
-        who.markdown(
-            f"<div style='font-size:2.1em;font-weight:700;line-height:1.2;color:{ui.TEXT}'>"
-            f"<span style='color:{ui.TEXT_2}'>{oom_txt}</span> "
-            f"{escape(name)}</div>"
-            f"<div style='color:{ui.TEXT_2};margin-top:4px'>{' · '.join(s for s in sub if s)}</div>"
-            f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-top:8px'>{oom_txt} in the PDC Order of Merit</div>",
-            unsafe_allow_html=True)
-        score.markdown(
-            f"<div style='text-align:center'>"
-            f"<div style='{LABEL}'>Performance Index</div>"
-            f"<div style='font-size:2.6em;font-weight:700;color:{ui.TEXT};line-height:1.1'>{ui.num(row['pi'], 2)}</div>"
-            f"<div style='color:{ui.TEXT_2};font-size:0.85em'>#{int(row['rank'])} by PI</div></div>",
-            unsafe_allow_html=True)
-        base = _ref_average(row)
-        effective.markdown(
-            f"<div style='text-align:center'>"
-            f"<div style='{LABEL}'>Effective Average</div>"
-            f"<div style='font-size:2.6em;font-weight:700;color:{ui.TEXT};line-height:1.1'>{ui.num(row['effective_average'])}</div>"
-            f"<div style='color:{ui.TEXT_2};font-size:0.85em'>"
-            f"{f'vs {ui.num(base)} top-32 average' if base is not None and pd.notna(base) else ''}</div></div>",
-            unsafe_allow_html=True)
+    base = _ref_average(row)
+
+    def metric(label: str, value: str, note: str) -> str:
+        return (f"<div style='flex:0 0 auto;min-width:150px;text-align:center;padding:0 22px;"
+                f"border-left:1px solid {ui.GRID}'>"
+                f"<div style='{LABEL}'>{label}</div>"
+                f"<div style='font-size:2.6em;font-weight:700;color:{ui.TEXT};line-height:1.15'>{value}</div>"
+                f"<div style='color:{ui.TEXT_2};font-size:0.85em'>{note}</div></div>")
+
+    # One HTML card (flexbox), so the photo, the name and both numbers share one vertical centre line.
+    st.markdown(
+        f"<div style='display:flex;align-items:center;flex-wrap:wrap;gap:16px 0;border:1px solid {ui.GRID};"
+        f"border-radius:14px;padding:18px 8px 18px 22px;margin:4px 0 18px'>"
+        f"<div style='flex:0 0 auto;display:flex;align-items:center;padding-right:18px'>"
+        f"{ui.avatar(image, 120, name=name, ring=ui.GRID)}</div>"
+        f"<div style='flex:1 1 260px;min-width:220px;padding-right:18px'>"
+        f"<div style='font-size:2.1em;font-weight:700;line-height:1.2;color:{ui.TEXT}'>"
+        f"<span style='color:{ui.TEXT_2}'>{oom_txt}</span> {escape(name)}</div>"
+        f"<div style='color:{ui.TEXT_2};margin-top:4px'>{' · '.join(s for s in sub if s)}</div>"
+        f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-top:8px'>{oom_txt} in the PDC Order of Merit</div></div>"
+        + metric("Performance Index", ui.num(row["pi"], 2), f"#{int(row['rank'])} by PI")
+        + metric("Effective Average", ui.num(row["effective_average"]),
+                 f"vs {ui.num(base)} top-32 average" if base is not None and pd.notna(base) else "")
+        + "</div>", unsafe_allow_html=True)
 
 
 def _breakdown(row: pd.Series) -> None:
