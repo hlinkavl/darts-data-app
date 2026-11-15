@@ -1,6 +1,10 @@
 # Methodology
 
-How the app's numbers are made. [Part 1](#part-1-performance-index-pi): the 0–10 Performance Index. [Part 2](#part-2-tournament-predictions): title chances, the bracket and backtests, built on the PI.
+How the app's numbers are made. One model gives three answers:
+
+1. **How strong is a player?** The 0–10 Performance Index ([Part 1](#part-1-performance-index-pi)).
+2. **Who wins this match?** Two PIs give the head-to-head chance, converted to the match's format in legs or sets ([How to read the PI](#how-to-read-the-pi), [Part 2, section 1](#part-2-tournament-predictions)).
+3. **Who wins the tournament?** 10,000 simulations of the draw, match by match, give every player's chance to reach each round and to win the title, before and during the event; checked on 10 past majors ([Part 2](#part-2-tournament-predictions)).
 
 ## Part 1: Performance Index (PI)
 
@@ -475,42 +479,42 @@ During majors the data is refreshed daily ("tournament mode"); otherwise on dema
 
 ### 5. Backtests
 
-Every finished major with a supported draw is backtested automatically: strengths as of the event's first day, weights refitted on earlier matches only, and the full draw simulated *before* any match was played. Results are stored in `darts_gold.tournament_backtest_summary` and `darts_gold.tournament_backtest_matches` (run 2026-10-31, after the same-day ordering fix described in [No look-ahead](#no-look-ahead)).
+Every finished major with a supported draw is backtested automatically: strengths as of the event's first day, weights refitted on earlier matches only, and the full draw simulated *before* any match was played. Results are stored in `darts_gold.tournament_backtest_summary` and `darts_gold.tournament_backtest_matches`. Numbers below: model `v2026-11-14` (inputs from the majors only), run 15 Nov 2026.
 
 **Ten majors, 388 matches (2025–2026):**
 
 | Event | Matches | Favourite won | Log loss | Champion | Champion's pre-event title chance (rank) | Model's favourite |
 |---|---|---|---|---|---|---|
-| World Championship 2026 | 126 | 71 % | 0.556 | Luke Littler | 67.7 % (1) | Littler 67.7 % |
-| European Championship 2026 | 31 | 58 % | 0.642 | Ross Smith | 6.7 % (4) | Littler 22.0 % |
-| World Grand Prix 2026 | 31 | 74 % | 0.579 | Luke Humphries | 12.8 % (3) | Littler 34.0 % |
-| World Series Finals 2026 | 31 | 71 % | 0.581 | Ross Smith | 2.8 % (8) | Littler 38.4 % |
-| World Matchplay 2026 | 30 | 70 % | 0.599 | Luke Littler | 35.1 % (1) | Littler 35.1 % |
-| Grand Slam 2025 (knockout stage) | 15 | 73 % | 0.565 | Luke Littler | 34.7 % (1) | Littler 34.7 % |
-| European Championship 2025 | 31 | 58 % | 0.668 | Gian van Veen | 6.6 % (3) | Littler 36.3 % |
-| World Series Finals 2025 | 31 | 68 % | 0.561 | Michael van Gerwen | 1.6 % (14) | Littler 26.9 % |
-| World Grand Prix 2025 | 31 | 68 % | 0.562 | Luke Littler | 22.8 % (1) | Littler 22.8 % |
-| World Matchplay 2025 | 31 | 74 % | 0.547 | Luke Littler | 27.5 % (1) | Littler 27.5 % |
+| World Championship 2026 | 126 | 74 % | 0.538 | Luke Littler | 43.3 % (1) | Littler 43.3 % |
+| European Championship 2026 | 31 | 58 % | 0.660 | Ross Smith | 3.6 % (8) | Littler 34.8 % |
+| World Grand Prix 2026 | 31 | 74 % | 0.594 | Luke Humphries | 16.2 % (2) | Littler 35.1 % |
+| World Series Finals 2026 | 31 | 74 % | 0.588 | Ross Smith | 2.0 % (12) | Littler 31.7 % |
+| World Matchplay 2026 | 30 | 77 % | 0.574 | Luke Littler | 23.3 % (1) | Littler 23.3 % |
+| Grand Slam 2025 (knockout stage) | 15 | 73 % | 0.533 | Luke Littler | 38.9 % (1) | Littler 38.9 % |
+| European Championship 2025 | 31 | 58 % | 0.667 | Gian van Veen | 3.8 % (7) | Littler 27.0 % |
+| World Series Finals 2025 | 31 | 68 % | 0.572 | Michael van Gerwen | 3.0 % (10) | Littler 32.5 % |
+| World Grand Prix 2025 | 31 | 68 % | 0.595 | Luke Littler | 30.6 % (1) | Littler 30.6 % |
+| World Matchplay 2025 | 31 | 74 % | 0.594 | Luke Littler | 30.1 % (1) | Littler 30.1 % |
 
 **All 388 matches together:**
 
 | | Round format | As typical matches |
 |---|---|---|
-| Pre-match favourite won | 68.8 % | 68.8 % |
-| Log loss | **0.579** | 0.584 |
-| Brier score | **0.198** | 0.200 |
+| Pre-match favourite won | 70.6 % | 70.6 % |
+| Log loss | **0.581** | 0.593 |
+| Brier score | **0.199** | 0.203 |
 
-Converting each match to its round's format improves both scores.
+Converting each match to its round's format improves both scores. (The previous model, with inputs from every event: favourite won 68.8 %, log loss 0.579.)
 
 **Calibration (388 matches, 5 groups by the favourite's predicted chance):**
 
-| Predicted | 55 % | 61 % | 67 % | 75 % | 88 % |
+| Predicted | 53 % | 59 % | 65 % | 72 % | 83 % |
 |---|---|---|---|---|---|
-| Favourite actually won | 49 % | 61 % | 71 % | 81 % | 83 % |
+| Favourite actually won | 60 % | 58 % | 72 % | 74 % | 89 % |
 
-Each group has about 78 matches, so ±5 points are within chance. The top group (88 % predicted, 83 % observed) suggests that very strong favourites in long formats are rated slightly too high, which fits the limitation below.
+Each group has about 78 matches, so ±5 points are within chance. If anything, the favourites won slightly more often than predicted.
 
-**Titles:** the model's favourite won 5 of the 10 events, against 3.45 expected wins from its title probabilities. So there is no sign of overconfidence at the title level yet, but ten events are too few to judge, and Littler's 67.7 % before the World Championship 2026 is a strong claim.
+**Titles:** the model's favourite won 5 of the 10 events, against 3.27 expected wins from its title probabilities. Ten events are too few to judge title probabilities; every finished major adds one.
 
 ---
 

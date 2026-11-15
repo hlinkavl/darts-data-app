@@ -37,9 +37,16 @@ def _calibration_chart(cal) -> go.Figure:
 def render() -> None:
     st.title("📖 Methodology")
     st.markdown("""
-**Performance Index (PI) = 10 × the probability that the player beats an average top-32 player in a typical match**
-(first to 6 legs). A PI of 7 means a 70 % chance; 5 means the player *is* a typical top-32 player.
-Two PIs give the chance for any match-up, and tournament simulations convert it to each round's format.
+One model gives three answers:
+
+1. **How strong is a player?** The **Performance Index (PI) = 10 × the probability that the player beats an average
+   top-32 player in a typical match** (first to 6 legs). A PI of 7 means a 70 % chance; 5 means the player *is* a
+   typical top-32 player.
+2. **Who wins this match?** Two PIs give the head-to-head chance: each PI is a strength s = ln(PI / (10 − PI)), and
+   P(A beats B) = 1 / (1 + e^−(s_A − s_B)). It is then converted to the match's format (longer matches favour the
+   stronger player): PI 7.0 against 5.0 is 70 % over first to 6 legs, 82 % over first to 18 legs.
+3. **Who wins the tournament?** Every match of the draw gets its chance in that round's format, and 10,000
+   simulations of the whole draw give each player's chance to reach every round and to win the title.
 
 The index is built in three transparent steps: **select** only predictors that predict results on unseen matches,
 **weight** them with a logistic regression, **convert** to the 0–10 scale.

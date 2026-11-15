@@ -1,7 +1,7 @@
 # Darts Performance Analyzer
 
-End-to-end data app for **PDC darts**: title chances for every major, a live bracket, and player profiles with a
-transparent 0–10 **Performance Index (PI)**. Built in Python on **Databricks Free Edition** (Unity Catalog,
+End-to-end data app for **PDC darts**: a transparent 0–10 **Performance Index (PI)** for every top player, and from
+it the chance of any head-to-head match and every player's chance to reach each round or win a major. Built in Python on **Databricks Free Edition** (Unity Catalog,
 serverless Jobs, SQL warehouse, Databricks Apps) with a **Streamlit** front end, refreshed automatically by
 **GitHub Actions**. Total cost: $0.
 
@@ -18,29 +18,48 @@ Outside majors the app is stopped to save compute: start it for 24 h with the
 | **[docs/MAINTENANCE.md](docs/MAINTENANCE.md)** | something broke, a token expires, you deploy a change, or you set the project up from scratch: how the refresh works, the failure runbook, common fixes, tokens, data model, decisions and known limits |
 | **[docs/METHODOLOGY.md](docs/METHODOLOGY.md)** | you want to know how the numbers are made: the Performance Index (all tested predictors, the key test against the Order of Merit) and the tournament simulations with backtests |
 
-## What it does
+## One number, three answers
 
-- **Tournament Overview**: every major of the season. Before and during an event: chance to win the title, the
-  bracket with each match's pre-match chance (undecided spots show the most likely player), players on the rise,
-  upcoming matches. Finished events show what the model predicted before the first dart (backtest).
-- **Player Profile**: current PDC Order of Merit rank and PI, the **PI breakdown** (the player against an average
-  top-32 player in each input), an AI form summary with the latest PDC news, PI over time, last 5 matches,
-  background from Wikipedia, titles.
-- **PI Leaderboard**: rank by PI or by the Order of Merit, head-to-head chances in any format (legs or sets).
-- **Ask the data**: questions in plain English, answered by a Databricks Genie space with the SQL behind the answer.
-- **Methodology** and **Data & Health**: the model's weights and tests, data freshness, the health report and a
-  Refresh button.
+Everything in the app comes from one model. The **Performance Index** says how strong a player is; two PIs give the
+chance of any match; simulating a draw match by match gives every player's chance in a tournament.
 
-## The Performance Index in one paragraph
-
+**1. How strong is a player? The Performance Index (0–10).**
 PI = 10 × the chance to beat an average top-32 player in a typical match (first to 6 legs); 5 is a typical top-32
 player. New results come only from the majors (official APIs, see below), so the model may only use inputs that
-stay fresh: computed from major matches, plus the Order of Merit. Of 11 candidates, three survived a strict selection
-(correlation filter, significance, 80 % of bootstrap samples): the **3-dart average over the last 20 major
-matches**, the **Order of Merit rank** and its **momentum** over 12 months. Weights come from a logistic regression on 2021–2026 matches between tracked players, with
-no look-ahead. In a walk-forward test on 1,653 major matches the model predicts winners significantly better than
-the PDC Order of Merit (log loss 0.638 vs 0.651, p < 0.001). Every tested and rejected predictor, and why,
-is in [docs/METHODOLOGY.md](docs/METHODOLOGY.md), together with the tournament simulations.
+stay fresh: computed from major matches, plus the Order of Merit. Of 11 candidates, three survived a strict
+selection (correlation filter, significance, 80 % of bootstrap samples): the **3-dart average over the last 20 major
+matches**, the **Order of Merit rank** and its **momentum** over 12 months. Weights come from a logistic regression on
+2021–2026 matches between tracked players, with no look-ahead. In a walk-forward test on 1,653 major matches the PI
+predicts winners significantly better than the PDC Order of Merit (log loss 0.638 vs 0.651, p < 0.001).
+
+**2. Who wins this match? Head to head, straight from the two PIs.**
+Each PI is a strength, s = ln(PI / (10 − PI)), and P(A beats B) = 1 / (1 + e^−(s_A − s_B)) in a typical match. The
+chance is then converted to the match's format through the chance to win a single leg: longer matches favour the
+stronger player, because luck evens out. A player with PI 7.0 against one with 5.0:
+
+| Format | First to 6 legs | First to 11 legs | First to 18 legs | First to 4 sets | First to 7 sets |
+|---|---|---|---|---|---|
+| Chance to win | 70 % | 76 % | 82 % | 79 % | 86 % |
+
+**3. Who wins the tournament? 10,000 simulations of the draw.**
+Every match of the bracket gets its chance in that round's format; simulating the whole draw 10,000 times gives
+each player's chance to reach every round and to win the title. Before the event this is the outlook; during it,
+played matches are fixed and only the rest is simulated again (live bracket). Tested on 10 majors of 2025–2026,
+always predicted before the first dart: the favourite won **70.6 %** of 388 matches, the round formats make the
+probabilities more accurate (log loss 0.593 → 0.581), and the title favourite won 5 of the 10 events.
+
+How each step works, and its limits (players without a PI get a strength estimated from their Elo; independent legs
+slightly favour heavy favourites in long formats): [docs/METHODOLOGY.md](docs/METHODOLOGY.md).
+
+### Where to find it in the app
+
+| Page | What it shows |
+|---|---|
+| **Tournament Overview** | Every major of the season: title chances, the bracket with each match's pre-match chance (undecided spots show the most likely player), players on the rise, upcoming matches; finished events show the backtest |
+| **Player Profile** | Order of Merit rank and PI, the PI breakdown (the player against an average top-32 player in each input), an AI form summary with the latest PDC news, PI over time, last 5 matches, background, titles |
+| **PI Leaderboard** | Rank by PI or by the Order of Merit; head to head for any two players in any format |
+| **Ask the data** | Questions in plain English, answered by a Databricks Genie space with the SQL behind the answer |
+| **Methodology**, **Data & Health** | The model's inputs, weights and tests; data freshness, the health report and a Refresh button |
 
 ## Architecture
 
