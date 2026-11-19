@@ -28,10 +28,14 @@ Quick facts: Databricks CLI profile `darts`, catalog `workspace`, SQL warehouse 
    the majors' pages with draws and results incl. 3-dart averages, player background and photos) and the PDC news
    feed, and uploads JSONL files to the Volume `/Volumes/workspace/darts_bronze/raw`. Silver turns the draws into
    match results and upcoming matches (`src/analytics/wiki_results.py`).
-3. `scripts/run_refresh_job.py --start-app` runs the Databricks job `darts_refresh` (~6 min) and starts the app for 24 h:
+3. `scripts/run_refresh_job.py` runs the Databricks job `darts_refresh` (~6 min):
    `bronze → silver → quality → pi_model → performance_index → narratives + tournaments → health`.
-4. Outside majors the app is stopped. Start it with Actions → **start-app** → Run workflow; refresh by hand with
+4. The app is not started automatically: a running app costs Free Edition quota every hour (about 3 DBU a day, twice
+   the daily job; the quota ran out on 19 Nov 2026 with the app running through the Grand Slam). Start it with
+   Actions → **start-app** → Run workflow (or Databricks → Apps → Start); it stops after 24 h. Refresh by hand with
    Actions → **refresh** → Run workflow, or with **Refresh data now** on the app's Data & Health page.
+   Daily usage per product: `SELECT usage_date, billing_origin_product, sum(usage_quantity) FROM system.billing.usage
+   GROUP BY ALL ORDER BY 1`.
 
 Compute is saved on purpose (Free Edition has a fair-use quota): the PI model refits every 28 days (job parameter
 `refit=force` refits now; `refit=approve` also activates a refit whose predictors changed), otherwise only Elo is updated; backtests of finished majors and past monthly PI snapshots
@@ -52,13 +56,14 @@ The refresh is built to fail loudly and never to show wrong numbers:
   empty, no model, or **a match of a running major's draw still has no result 2 days after its round** (the
   Wikipedia page changed or the parser broke). **Yellow** shows only in the app: a draw format we don't parse (e.g.
   a group stage), a refit that was not activated, many players without results.
-- During a major the app is started even when the job failed, so it shows the last good data.
+- A failed job never empties the app: it keeps showing the last good data. (`run_refresh_job.py --start-app` can
+  still start the app after a run, also after a failure; the scheduled run does not use it.)
 
 What to do when the e-mail arrives:
 
 1. Open the failed run (link in the e-mail) and Data & Health in the app: the red check says what broke.
-2. A one-off error (timeout, Databricks quota "please try again later"): wait, then Refresh in the app or
-   "Run workflow" on GitHub.
+2. A one-off error (timeout, Databricks quota: "please try again later" or "Triggering new runs ... is currently
+   disabled temporarily"): wait, then Refresh in the app or "Run workflow" on GitHub. Check the usage (section 1).
 3. A source changed its page, or a new tournament format: open Claude Code in the repo, paste the error and the health
    message, fix, test (section 5), deploy, Refresh.
 4. A source blocks us (HTTP 401/403/418): don't work around it; find a replacement source.

@@ -8,8 +8,8 @@ serverless Jobs, SQL warehouse, Databricks Apps) with a **Streamlit** front end,
 Inspired by the workflow in [I Built a Real Data App with Claude Code (and It Cost $0)](https://www.youtube.com/watch?v=3rgd2Xx5ceg).
 
 **App:** https://darts-performance-analyzer-7474646547340845.aws.databricksapps.com (Databricks sign-in needed).
-Outside majors the app is stopped to save compute: start it for 24 h with the
-[start-app workflow](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml) → **Run workflow**.
+The app is stopped to save compute (a running app costs more quota than the daily refresh): start it for 24 h with
+the [start-app workflow](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml) → **Run workflow**.
 
 ## Documentation
 
@@ -85,18 +85,17 @@ are polite (identified User-Agent, one request per second or slower), which suit
 - Serverless only, one 2X-Small SQL warehouse, up to 3 apps (stopped after 24 h), 5 concurrent job tasks.
 - A **fair-use compute quota**: when it runs out, jobs, the warehouse and apps cannot start for a while. So the
   PI model is refit only every 28 days (otherwise only Elo is updated), backtests of finished majors are reused,
-  the daily "is a major running?" check reads Wikipedia instead of the warehouse, and the app runs only during
-  majors.
+  the daily "is a major running?" check reads Wikipedia instead of the warehouse, and the app runs only when
+  started by hand (running all day it took about 3 DBU a day, twice the daily refresh; measured Nov 2026).
 
 ### Running without anyone watching
 
-- **Automatic during majors:** a daily GitHub Actions check reads Wikipedia; while a major runs it ingests, runs the
-  job (~6 min) and starts the app. Outside majors nothing runs and the app is stopped (start it with the
-  start-app workflow).
+- **Automatic during majors:** a daily GitHub Actions check reads Wikipedia; while a major runs it ingests and runs
+  the job (~6 min). Outside majors nothing runs. The app is started by hand (start-app workflow) when needed.
 - **Fails loudly, never shows wrong numbers:** sources are fetched independently, hard quality checks stop the job
   before the gold tables, a refit is activated only if it passes the test, and a red health report (a source failed,
   or a draw match still without a result 2 days after its round) fails the job and sends an e-mail. The app keeps
-  the last good data and is started anyway.
+  the last good data.
 - **Needs a person** only when the outside world changes (a source changes its page, a new tournament format) and
   for the yearly token renewal (next: Databricks token on 9 Nov 2027). Runbook: [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
 
