@@ -1,5 +1,6 @@
-# Start the Databricks App on demand (outside majors it is stopped to save compute). It runs for 24 h, then
-# Free Edition stops it. Actions → start-app → Run workflow. Secrets: DATABRICKS_HOST, DATABRICKS_TOKEN.
+# Start the Databricks App on demand: it is stopped unless started (a running app costs more Free Edition quota than
+# the daily refresh). It runs for 24 h, then Free Edition stops it. Actions → start-app → Run workflow (linked from
+# the README). Secrets: DATABRICKS_HOST, DATABRICKS_TOKEN.
 name: start-app
 
 on:

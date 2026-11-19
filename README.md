@@ -1,15 +1,24 @@
 # Darts Performance Analyzer
 
 End-to-end data app for **PDC darts**: a transparent 0–10 **Performance Index (PI)** for every top player, and from
-it the chance of any head-to-head match and every player's chance to reach each round or win a major. Built in Python on **Databricks Free Edition** (Unity Catalog,
-serverless Jobs, SQL warehouse, Databricks Apps) with a **Streamlit** front end, refreshed automatically by
-**GitHub Actions**. Total cost: $0.
+it the chance of any head-to-head match and every player's chance to reach each round or win a major. Built in
+Python on **Databricks Free Edition** (Unity Catalog, serverless Jobs, SQL warehouse, Databricks Apps) with a
+**Streamlit** front end, refreshed automatically by **GitHub Actions**. Total cost: $0.
 
 Inspired by the workflow in [I Built a Real Data App with Claude Code (and It Cost $0)](https://www.youtube.com/watch?v=3rgd2Xx5ceg).
 
-**App:** https://darts-performance-analyzer-7474646547340845.aws.databricksapps.com (Databricks sign-in needed).
-The app is stopped to save compute (a running app costs more quota than the daily refresh): start it for 24 h with
-the [start-app workflow](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml) → **Run workflow**.
+## ▶ Start and open the app
+
+| | |
+|---|---|
+| **1. Start it** | **[▶ Start the app](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml)** → **Run workflow** → **Run workflow** (green button). Ready in about 3 minutes, stops by itself after 24 h. |
+| **2. Open it** | **[darts-performance-analyzer](https://darts-performance-analyzer-7474646547340845.aws.databricksapps.com)** (Databricks sign-in) |
+
+[![start-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml/badge.svg)](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml)
+[![refresh](https://github.com/hlinkavl/darts-data-app/actions/workflows/refresh.yml/badge.svg)](https://github.com/hlinkavl/darts-data-app/actions/workflows/refresh.yml)
+
+The app is stopped unless started: a running app costs more Free Edition quota than the daily data refresh, which
+runs on its own during majors. Without GitHub access: Databricks → Compute → Apps → darts-performance-analyzer → Start.
 
 ## Documentation
 

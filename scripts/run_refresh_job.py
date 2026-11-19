@@ -1,6 +1,7 @@
 """Start the darts_refresh job in Databricks and wait for it; exit 1 if it doesn't succeed (CI e-mails on failure).
-With --start-app (scheduled runs, i.e. during a major) it also starts the Databricks App, even when the job failed:
-a failed run never overwrites the last good gold tables, so the app still shows correct (if older) data."""
+With --start-app it also starts the Databricks App, even when the job failed or could not start: a failed run never
+overwrites the last good gold tables, so the app still shows correct (if older) data. The scheduled refresh does not
+pass it (a running app costs more quota than the job); the app is started with the start-app workflow."""
 
 import sys
 from datetime import timedelta

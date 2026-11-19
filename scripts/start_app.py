@@ -1,7 +1,8 @@
 """Start the Databricks App (it runs for 24 h on Free Edition, then stops by itself).
 
-Used by the scheduled refresh during majors and by the "start-app" GitHub workflow, to open the app at any other
-time. Credentials: DATABRICKS_HOST / DATABRICKS_TOKEN (CI) or a CLI profile (DATABRICKS_CONFIG_PROFILE).
+Used by the "start-app" GitHub workflow (the scheduled refresh does not start the app since 19 Nov 2026: it cost
+more quota than the refresh). Credentials: DATABRICKS_HOST / DATABRICKS_TOKEN (CI) or a CLI profile
+(DATABRICKS_CONFIG_PROFILE).
 """
 
 from datetime import timedelta

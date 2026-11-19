@@ -1,4 +1,4 @@
-# Refresh: ingest new data (Mastercaller, Wikipedia) into the Databricks Volume, then run the darts_refresh job.
+# Refresh: ingest new data (Wikipedia, PDC news; official APIs) into the Databricks Volume, then run the darts_refresh job.
 # Scheduled daily, but only does work while a major is running (or starts tomorrow); otherwise run it by hand
 # ("Run workflow") or from the app's Refresh button. It does not start the app (start-app workflow does).
 # Secrets: DATABRICKS_HOST, DATABRICKS_TOKEN.
@@ -47,7 +47,7 @@ jobs:
             python scripts/should_refresh.py
           fi
 
-      - name: Ingest (Mastercaller, Wikipedia) and upload to the Volume
+      - name: Ingest (Wikipedia, PDC news) and upload to the Volume
         id: ingest
         if: steps.gate.outputs.run == 'true'
         # A failing source must not stop the rest: what the other sources returned is uploaded, the job still runs

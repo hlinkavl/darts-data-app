@@ -14,6 +14,9 @@ What the app is and how it is built: [README](../README.md). How the numbers are
 [7. Data model](#7-data-model) ·
 [8. Decisions and known limits](#8-decisions-and-known-limits)
 
+**Start the app:** [Actions → start-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml)
+→ Run workflow (it stops after 24 h; the refresh does not start it, see section 1).
+
 Quick facts: Databricks CLI profile `darts`, catalog `workspace`, SQL warehouse `c7c519d783971c09`, app
 `darts-performance-analyzer`, Genie space `01f1ddf6938b1cb19ccfe38d51512b61`, job `darts_refresh` (bundle target `dev`).
 

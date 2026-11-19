@@ -3,9 +3,9 @@
     python scripts/build_local_snapshot.py          # writes data/app_snapshot/<table>.parquet
 
 Runs the same analytics code as the Databricks job (src/analytics) on the raw files in data/raw: Darts Orakel
-results (until 28 Oct 2026), the Wikipedia Order of Merit, major pages and player background. Mastercaller
-results are not merged here (the unification lives in the silver notebook), so the snapshot ends on
-28 Oct 2026. Start the app on it with DARTS_DATA=local.
+results (until 28 Oct 2026), the Wikipedia Order of Merit, major pages and player background. Mastercaller history
+and the results from the Wikipedia draws are not merged here (the unification lives in the silver notebook), so
+the snapshot's results end on 28 Oct 2026. Start the app on it with DARTS_DATA=local.
 """
 
 import glob
