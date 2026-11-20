@@ -32,8 +32,13 @@ Quick facts: Databricks CLI profile `darts`, catalog `workspace`, SQL warehouse 
    feed, and uploads JSONL files to the Volume `/Volumes/workspace/darts_bronze/raw`. Silver turns the draws into
    match results and upcoming matches (`src/analytics/wiki_results.py`).
 3. `scripts/run_refresh_job.py` runs the Databricks job `darts_refresh` (~6 min):
-   `bronze → silver → quality → pi_model → performance_index → narratives + tournaments → health`.
-4. The app is not started automatically: a running app costs Free Edition quota every hour (about 3 DBU a day, twice
+   `bronze → silver → quality → pi_model → performance_index → narratives + tournaments → health`. The health task
+   ends by exporting the app's tables as parquet to `/Volumes/workspace/darts_bronze/raw/app_snapshot`
+   (`src/analytics/snapshot.py`), red report included.
+4. **GitHub Actions `publish-app`** runs after every refresh (and on app changes in main, and by hand): it downloads
+   the snapshot (Files API, no compute) and force-pushes the app code plus the snapshot to the branch `public-app`
+   (one commit, only if something changed). Streamlit Community Cloud redeploys the public copy on that push.
+5. The Databricks app is not started automatically: a running app costs Free Edition quota every hour (about 3 DBU a day, twice
    the daily job; the quota ran out on 19 Nov 2026 with the app running through the Grand Slam). Start it with
    Actions → **start-app** → Run workflow (or Databricks → Apps → Start); it stops after 24 h. Refresh by hand with
    Actions → **refresh** → Run workflow, or with **Refresh data now** on the app's Data & Health page.
@@ -86,6 +91,7 @@ workspace: `bundle deploy` overwrites it.
 | Overdue results (red) | Compare the event's Wikipedia page with `darts_silver.upcoming_matches`: scores on the page but not parsed means the bracket format changed (`src/analytics/bracket.py`, `wiki_results.py`). |
 | Refit not activated | Review `darts_gold.pi_selection_log` and `pi_model_registry`; to force a refit: `databricks bundle run darts_refresh -t dev --profile darts --params refit=force`. |
 | AI summary wrong or missing | Model in `config/ai.yml`. Compare models: `--only narratives --params compare_models=<m1>,<m2>` (writes `darts_gold.player_narrative_trials`, 20 players each). |
+| Public copy out of date or down | Actions → **publish-app**: a failed run says why (snapshot missing in the Volume: the health task did not run; rerun it with `--only health`). Down on Streamlit's side: share.streamlit.io → the app → Reboot. |
 | Genie answers badly | Edit `config/genie/space.yml` (instructions, example SQL: run each on the warehouse first), then `DATABRICKS_CONFIG_PROFILE=darts python scripts/genie_space.py`. |
 
 ## 4. Tokens and their renewal
@@ -120,6 +126,8 @@ make setup                                          # local venv (.venv)
 .venv/bin/python -m pytest -q                       # unit tests, incl. the Python 3.11 syntax check for the app
 python scripts/build_local_snapshot.py              # local Parquet snapshot of the data
 cd app && DARTS_DATA=local streamlit run app.py     # app on the snapshot, http://localhost:8501
+# or the public copy's exact data (app/snapshot/ is git-ignored; while it exists the app starts in public mode)
+DATABRICKS_CONFIG_PROFILE=darts python scripts/download_snapshot.py app/snapshot
 ```
 
 Deploy:
@@ -137,6 +145,8 @@ Rules that save quota and trouble:
 - Databricks Apps run Python 3.11 (no backslashes or quotes inside f-string expressions); the warehouse returns
   time-zone-aware timestamps and Decimals (`app/data.py` converts them).
 - The app is stopped outside majors; `bundle run darts_app` starts it.
+- The public copy needs no deploy: a push to main that touches `app/` runs `publish-app`, which republishes it
+  within minutes. App code must also work in public mode (`data.MODE == "public"`: no Genie, no refresh button).
 - `app/requirements.txt` pins `databricks-sdk`: the Apps runtime preinstalls an old one (0.33), which keeps an
   unpinned requirement and lacks newer APIs (Genie broke on that). Local tests use the pinned version too.
 
@@ -153,6 +163,11 @@ Rules that save quota and trouble:
 8. Grant the app's service principal `USE CATALOG` on `workspace`, `USE SCHEMA` + `SELECT` on `darts_gold` and
    `SELECT` on `darts_silver.players`; create the Genie space (`scripts/genie_space.py`) and put its id into
    `resources/app.yml`; deploy the app (section 5).
+9. Public copy: run Actions → **publish-app** once (creates the branch `public-app`), then on
+   [share.streamlit.io](https://share.streamlit.io) sign in with GitHub → Create app → "Deploy a public app from
+   GitHub": repository `hlinkavl/darts-data-app`, branch `public-app`, main file `app/app.py`, URL
+   `darts-performance-analyzer`; Advanced settings: Python 3.12. No secrets needed. Community Cloud puts an app to
+   sleep after days without visitors; the first visitor wakes it up in about a minute.
 
 ## 7. Data model
 
@@ -183,6 +198,11 @@ Saved queries for the workspace: `sql/queries/*.sql` (`scripts/sync_queries.py`)
     Championships, European Tour and group stages are not.
   - Excluded: DartsDatabase (robots.txt disallows AI agents), pdc.tv data API (needs authentication), bookmaker odds
     (no free legal source reachable from the Czech Republic).
+- **Public copy on Streamlit Community Cloud (20 Nov 2026).** Databricks Apps always require a workspace sign-in,
+  so the public copy runs on Streamlit Community Cloud ($0) from a parquet snapshot of the gold tables on the
+  `public-app` branch. It needs no Databricks credentials or compute and survives quota blocks; "Ask the data" stays
+  in the Databricks app only (Genie needs the workspace). The snapshot holds only what the app shows (incl. each player's
+  recent matches), not the raw source files (`data/` is never published).
 - **Ingestion runs on GitHub Actions**, not in Databricks: Free Edition restricts outbound internet. No Airflow: GitHub
   Actions plus a Databricks job cost nothing.
 - **Free Edition limits:** serverless only, one 2X-Small SQL warehouse, up to 3 apps (each stops after 24 h), 5

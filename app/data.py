@@ -1,8 +1,10 @@
-"""Data access: gold tables from the Databricks SQL warehouse, or a local snapshot for development.
+"""Data access: gold tables from the Databricks SQL warehouse, or a snapshot of them as parquet files.
 
 DARTS_DATA=databricks (default inside a Databricks App): SQL warehouse via the app's service principal
-(DATABRICKS_WAREHOUSE_ID from the app resource). DARTS_DATA=local: data/app_snapshot/*.parquet built by
-scripts/build_local_snapshot.py.
+(DATABRICKS_WAREHOUSE_ID from the app resource).
+DARTS_DATA=public (default when app/snapshot/ exists): the public copy on Streamlit Community Cloud, reading the
+snapshot the daily job exports (src/analytics/snapshot.py, published by the publish-app workflow).
+DARTS_DATA=local: data/app_snapshot/*.parquet built by scripts/build_local_snapshot.py, for development.
 """
 
 import os
@@ -12,9 +14,12 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-MODE = os.getenv("DARTS_DATA", "databricks" if os.getenv("DATABRICKS_APP_NAME") else "local")
+PUBLIC_SNAPSHOT = Path(__file__).resolve().parent / "snapshot"
+MODE = os.getenv("DARTS_DATA", "databricks" if os.getenv("DATABRICKS_APP_NAME") else
+                 "public" if PUBLIC_SNAPSHOT.is_dir() else "local")
 CATALOG = os.getenv("DARTS_CATALOG", "workspace")
-SNAPSHOT = Path(os.getenv("DARTS_SNAPSHOT", Path(__file__).resolve().parent.parent / "data" / "app_snapshot"))
+SNAPSHOT = Path(os.getenv("DARTS_SNAPSHOT", PUBLIC_SNAPSHOT if MODE == "public" else
+                          Path(__file__).resolve().parent.parent / "data" / "app_snapshot"))
 
 SCHEMA = {"players": "darts_silver"}  # everything else lives in darts_gold
 
@@ -33,7 +38,7 @@ def _connection():
 @st.cache_data(ttl=600, show_spinner=False)
 def table(name: str, where: str | None = None) -> pd.DataFrame:
     """A whole gold table (or silver.players), optionally filtered with a SQL condition."""
-    if MODE == "local":
+    if MODE != "databricks":
         path = SNAPSHOT / f"{name}.parquet"
         if not path.exists():
             return pd.DataFrame()

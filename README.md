@@ -7,18 +7,21 @@ Python on **Databricks Free Edition** (Unity Catalog, serverless Jobs, SQL wareh
 
 Inspired by the workflow in [I Built a Real Data App with Claude Code (and It Cost $0)](https://www.youtube.com/watch?v=3rgd2Xx5ceg).
 
-## ▶ Start and open the app
+## ▶ Open the app
 
 | | |
 |---|---|
-| **1. Start it** | **[▶ Start the app](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml)** → **Run workflow** → **Run workflow** (green button). Ready in about 3 minutes, stops by itself after 24 h. |
-| **2. Open it** | **[darts-performance-analyzer](https://darts-performance-analyzer-7474646547340845.aws.databricksapps.com)** (Databricks sign-in) |
+| **Public copy** | **[darts-performance-analyzer.streamlit.app](https://darts-performance-analyzer.streamlit.app)**: for anyone, no sign-in, always on. Everything except "Ask the data"; updated after every refresh. |
+| **Full app** | **[darts-performance-analyzer](https://darts-performance-analyzer-7474646547340845.aws.databricksapps.com)** (Databricks sign-in), with "Ask the data" (Genie). Start it first: **[▶ Start the app](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml)** → **Run workflow** → **Run workflow** (green button). Ready in about 3 minutes, stops by itself after 24 h. |
 
 [![start-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml/badge.svg)](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml)
 [![refresh](https://github.com/hlinkavl/darts-data-app/actions/workflows/refresh.yml/badge.svg)](https://github.com/hlinkavl/darts-data-app/actions/workflows/refresh.yml)
+[![publish-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/publish-app.yml/badge.svg)](https://github.com/hlinkavl/darts-data-app/actions/workflows/publish-app.yml)
 
-The app is stopped unless started: a running app costs more Free Edition quota than the daily data refresh, which
-runs on its own during majors. Without GitHub access: Databricks → Compute → Apps → darts-performance-analyzer → Start.
+The Databricks app is stopped unless started: a running app costs more Free Edition quota than the daily data
+refresh, which runs on its own during majors. Without GitHub access: Databricks → Compute → Apps →
+darts-performance-analyzer → Start. The public copy runs on Streamlit Community Cloud from a snapshot of the
+gold tables, so it uses no Databricks quota and stays up when the workspace is stopped.
 
 ## Documentation
 
@@ -67,7 +70,7 @@ slightly favour heavy favourites in long formats): [docs/METHODOLOGY.md](docs/ME
 | **Tournament Overview** | Every major of the season: title chances, the bracket with each match's pre-match chance (undecided spots show the most likely player), players on the rise, upcoming matches; finished events show the backtest |
 | **Player Profile** | Order of Merit rank and PI, the PI breakdown (the player against an average top-32 player in each input), an AI form summary with the latest PDC news, PI over time, last 5 matches, background, titles |
 | **PI Leaderboard** | Rank by PI or by the Order of Merit; head to head for any two players in any format |
-| **Ask the data** | Questions in plain English, answered by a Databricks Genie space with the SQL behind the answer |
+| **Ask the data** | Questions in plain English, answered by a Databricks Genie space with the SQL behind the answer (Databricks app only) |
 | **Methodology**, **Data & Health** | The model's inputs, weights and tests; data freshness, the health report and a Refresh button |
 
 ## Architecture
@@ -84,6 +87,9 @@ Unity Catalog Volume ──► Databricks Job darts_refresh (serverless)
                                                        darts_gold (Delta) │ SQL warehouse
                                                                          ▼
                                               Streamlit app (Databricks App) + Genie space
+                                                                         │ health task exports a snapshot (parquet)
+                                                                         ▼
+                              GitHub Actions publish-app → branch public-app → Streamlit Community Cloud (public)
 ```
 
 Why ingestion runs on GitHub Actions: Free Edition limits outbound internet from Databricks compute. The clients
@@ -100,7 +106,8 @@ are polite (identified User-Agent, one request per second or slower), which suit
 ### Running without anyone watching
 
 - **Automatic during majors:** a daily GitHub Actions check reads Wikipedia; while a major runs it ingests and runs
-  the job (~6 min). Outside majors nothing runs. The app is started by hand (start-app workflow) when needed.
+  the job (~6 min), then publishes the new snapshot to the public copy. Outside majors nothing runs. The Databricks
+  app is started by hand (start-app workflow) when needed.
 - **Fails loudly, never shows wrong numbers:** sources are fetched independently, hard quality checks stop the job
   before the gold tables, a refit is activated only if it passes the test, and a red health report (a source failed,
   or a draw match still without a result 2 days after its round) fails the job and sends an e-mail. The app keeps

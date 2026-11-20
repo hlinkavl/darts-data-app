@@ -114,3 +114,17 @@ def test_backtests_of_the_same_model_are_reused():
                                   previous=first)
     for table in overview.BACKTEST_TABLES:
         pd.testing.assert_frame_equal(first[table].reset_index(drop=True), again[table].reset_index(drop=True))
+
+
+def test_snapshot_types_match_the_warehouse():
+    from datetime import date
+    from decimal import Decimal
+
+    from analytics import snapshot
+    raw = pd.DataFrame({"at": pd.to_datetime(["2026-11-20 10:00"]).tz_localize("Europe/Prague"),
+                        "pi": [Decimal("7.25")], "day": [date(2026, 11, 20)], "name": ["Littler"]})
+    raw.attrs["metrics"] = object()  # Spark Connect's plan metrics: not JSON serialisable
+    df = snapshot.normalize(raw)
+    assert not df.attrs
+    assert str(df["at"].dtype).startswith("datetime64[") and df["at"].iloc[0].hour == 9
+    assert df["pi"].dtype == float and str(df["day"].dtype).startswith("datetime64") and df["name"].iloc[0] == "Littler"

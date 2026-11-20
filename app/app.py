@@ -1,4 +1,5 @@
-"""Darts Performance Analyzer: Streamlit app (Databricks App in production, local snapshot for development)."""
+"""Darts Performance Analyzer: Streamlit app (Databricks App; public copy on Streamlit Community Cloud; local snapshot
+for development)."""
 
 import pandas as pd
 import streamlit as st
@@ -17,6 +18,8 @@ PAGES = {
     "methodology": st.Page(methodology.render, title="Methodology", icon="📖", url_path="methodology"),
     "health": st.Page(admin.render, title="Data & Health", icon="⚙️", url_path="health"),
 }
+if data.MODE == "public":  # Genie needs the Databricks workspace
+    PAGES.pop("ask")
 st.session_state["pages"] = PAGES  # lets a page switch to another one (st.switch_page)
 pages = st.navigation(list(PAGES.values()))
 
@@ -30,6 +33,8 @@ with st.sidebar:
         st.caption(f"Last refresh {pd.Timestamp(s['checked_at']):%d %b %Y %H:%M} UTC")
     if s["mode"] == "local":
         st.caption("🧪 Local snapshot")
+    elif s["mode"] == "public":
+        st.caption("Public copy, updated after every refresh (daily during majors).")
     st.caption(ui.CREDITS)
 
 pages.run()

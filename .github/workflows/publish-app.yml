@@ -1,0 +1,67 @@
+# Publish the public copy of the app: the app code plus the snapshot of its tables (exported by the job's health
+# task to the Volume) go to the `public-app` branch, which Streamlit Community Cloud serves and redeploys on push.
+# Runs after every refresh, when the app code changes on main, and by hand. Uses no Databricks compute (Files API).
+# The branch holds a single commit (force-pushed), so the data never piles up in the history.
+# Secrets: DATABRICKS_HOST, DATABRICKS_TOKEN.
+name: publish-app
+
+on:
+  workflow_run:
+    workflows: [refresh]
+    types: [completed]
+  push:
+    branches: [main]
+    paths: ["app/**", "src/analytics/snapshot.py", ".github/workflows/publish-app.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-app
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ingest.txt
+
+      - run: pip install -r requirements-ingest.txt
+
+      - name: Download the snapshot from the Volume
+        run: python scripts/download_snapshot.py app/snapshot
+
+      - name: Push app + snapshot to the public-app branch (only if something changed)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q --orphan public-app-build
+          git rm -rq --cached .
+          mkdir -p .streamlit && cp app/.streamlit/config.toml .streamlit/config.toml  # Community Cloud reads the root
+          git add app .streamlit/config.toml
+          git add -f app/snapshot
+          tree=$(git write-tree)
+          if git ls-remote --exit-code origin public-app >/dev/null; then
+            git fetch -q origin public-app
+            if [ "$tree" = "$(git rev-parse FETCH_HEAD^{tree})" ]; then
+              echo "nothing changed, public-app stays as it is"
+              exit 0
+            fi
+          fi
+          git commit -qm "Public app: $(git rev-parse --short main), data of $(date -u +%F)"
+          git push -fq origin HEAD:public-app
+          echo "::notice::published to public-app (Streamlit Community Cloud redeploys on push)"

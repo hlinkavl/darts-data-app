@@ -4,7 +4,8 @@
 # MAGIC Is the data fresh and complete, did every source work, is the model trustworthy? One row per check with
 # MAGIC status (green / yellow / red), what was measured, a message and the recommended action
 # MAGIC (`darts_gold.health_report`, history in `darts_gold.health_history`). A red check fails this task, so the
-# MAGIC job fails and the failure e-mail goes out. Checks: src/analytics/health.py.
+# MAGIC job fails and the failure e-mail goes out. Checks: src/analytics/health.py. Last, it exports the app's tables for
+# MAGIC the public app.
 
 # COMMAND ----------
 
@@ -15,7 +16,7 @@ from datetime import date
 import pandas as pd
 
 sys.path.append(os.path.abspath(".."))
-from analytics import health
+from analytics import health, snapshot
 
 dbutils.widgets.text("catalog", "workspace")
 catalog = dbutils.widgets.get("catalog")
@@ -79,6 +80,24 @@ spark.createDataFrame(report).write.mode("overwrite").option("overwriteSchema", 
 spark.createDataFrame(report.assign(overall=overall)).write.mode("append").option("mergeSchema", "true") \
     .saveAsTable("darts_gold.health_history")
 display(report)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Snapshot of the app's tables for the public app (src/analytics/snapshot.py). Written before a red report
+# MAGIC fails the task, so the public app shows the same state, red included.
+
+# COMMAND ----------
+
+out = snapshot.APP_SNAPSHOT_DIR.format(catalog=catalog)
+os.makedirs(out, exist_ok=True)
+spark.conf.set("spark.sql.session.timeZone", "UTC")
+for name, schema in snapshot.APP_TABLES.items():
+    if spark.catalog.tableExists(f"{schema}.{name}"):
+        snapshot.normalize(spark.table(f"{schema}.{name}").toPandas()).to_parquet(f"{out}/{name}.parquet", index=False)
+print("snapshot:", sorted(os.listdir(out)))
+
+# COMMAND ----------
 
 if overall == health.RED:
     reds = report[report["status"] == health.RED]

@@ -71,6 +71,9 @@ def _refreshes() -> None:
     st.subheader("Refresh")
     if data.MODE == "local":
         st.caption("Local mode (snapshot). Refresh with `make ingest` and `python scripts/build_local_snapshot.py`.")
+    elif data.MODE == "public":
+        st.caption("This public copy is updated after every refresh: daily while a major is running.")
+        return
     elif refresh.can_trigger():
         if st.button("🔄 Refresh data now", type="primary"):
             ok, msg = refresh.trigger()

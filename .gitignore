@@ -25,3 +25,6 @@ data/*
 .DS_Store
 .vscode/
 .idea/
+
+# Public app snapshot (published only to the public-app branch)
+app/snapshot/
