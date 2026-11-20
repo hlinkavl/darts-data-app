@@ -43,6 +43,31 @@ def test_parse_formats_scores_and_walkover():
     assert final.matches[0].winner is None
 
 
+def _section(n: int) -> str:
+    """An 8-player section whose last round (the semi-final) repeats the first round of the finals."""
+    lines = [f"===Section {n}===", "{{8TeamBracket", "| RD1='''First round''' ''(best of 11 legs)''<br>27 November",
+             "| RD2='''Second round''' ''(best of 11 legs)''<br>28 November",
+             "| RD3='''Semi-finals''' ''(best of 21 legs)''<br>29 November"]
+    players = [f"S{n}P{i}" for i in range(1, 9)]
+    for i, p in enumerate(players, 1):
+        lines += [f"| RD1-team{i} = {{{{PDCFlag|{p}|avg=90.00}}}}", f"| RD1-score{i} = {6 if i % 2 else 2}"]
+    for i, p in enumerate(players[::2], 1):
+        lines += [f"| RD2-team{i} = {{{{PDCFlag|{p}|avg=}}}}"]
+    lines += [f"| RD3-team1 = {{{{PDCFlag|{players[0]}|avg=}}}}"]
+    return "\n".join(lines + ["}}"])
+
+
+def test_sections_repeating_the_finals_first_round_are_merged():
+    finals = "\n".join(["===Finals===", "{{4TeamBracket", "| RD1='''Semi-finals''' ''(best of 21 legs)''<br>29 November",
+                        "| RD2='''Final''' ''(best of 21 legs)''<br>29 November"] + [
+        f"| RD1-team{i} = {{{{PDCFlag|{p}|avg=}}}}" for i, p in enumerate(["S1P1", "S1P5", "S2P1", "S2P5"], 1)] + [
+        "| RD2-team1 = {{PDCFlag||avg=}}", "| RD2-team2 = {{PDCFlag||avg=}}", "}}"])  # unplayed, as on the pages
+    draw = bracket.build_draw("Players Championship Finals", "\n".join(["==Draw==", finals, _section(1), _section(2)]))
+    assert [r.name for r in draw.rounds] == ["First round", "Second round", "Semi-finals", "Final"]
+    assert [len(r.matches) for r in draw.rounds] == [8, 4, 2, 1]
+    assert len(draw.players) == 16 and draw.rounds[2].matches[1].player_a == "S2P1"
+
+
 def test_format_conversion_keeps_typical_and_rewards_favourite_in_longer_matches():
     assert np.isclose(formats.match_probability(0.7, formats.TYPICAL_FIRST_TO), 0.7, atol=1e-6)
     assert formats.match_probability(0.7, 3) < 0.7 < formats.match_probability(0.7, 10)

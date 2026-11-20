@@ -461,7 +461,7 @@ The draw comes from the event's Wikipedia page (parsed from the bracket template
 
 Counting how often each player reaches each round gives **P(reach round)** and **P(title)**. A walkover counts as a win in the draw but is left out of backtests, because no match was played.
 
-**Supported draws:** knockout draws of 2^n players without byes. That covers the World Championship from 2026 (128 players), the World Matchplay, the World Grand Prix, the European Championship, the World Series Finals and the Grand Slam knockout stage. A draw needs at least 16 players. Byes (empty first-round slots) are supported. Not supported yet: the 96-player World Championships up to 2025 (seeds start in round 2), the Grand Slam group stage, the Premier League (a league), the UK Open (Wikipedia only has the semi-finals as a bracket) and the Players Championship Finals sections layout (to be verified once the 2026 draw is out).
+**Supported draws:** knockout draws of 2^n players without byes. That covers the World Championship from 2026 (128 players), the World Matchplay, the World Grand Prix, the European Championship, the World Series Finals, the Grand Slam knockout stage and the Players Championship Finals (64 players in 4 sections; the sections repeat the quarter-finals of the finals bracket, the duplicates are dropped). A draw needs at least 16 players. Byes (empty first-round slots) are supported. Not supported yet: the 96-player World Championships up to 2025 (seeds start in round 2), the Grand Slam group stage, the Premier League (a league) and the UK Open (Wikipedia only has the semi-finals as a bracket).
 
 ---
 

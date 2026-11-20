@@ -1,7 +1,8 @@
 """Parse knockout draws from Wikipedia wikitext ({{#invoke:Bracket|NTeamBracket}} / {{NTeamBracket}} templates).
 
 Supports draws of 2^n players without byes (World Championship since 2026: 8 sections of 16 + finals of 8;
-other knockout majors in one or more blocks). Each round carries its format ("best of 7 sets" -> first to 4
+other knockout majors in one or more blocks; Players Championship Finals: 4 sections of 16 that repeat the
+quarter-finals of the finals bracket). Each round carries its format ("best of 7 sets" -> first to 4
 sets) and, once played, the score, the 3-dart averages and the winner.
 """
 
@@ -216,9 +217,18 @@ def build_draw(title: str, wikitext: str) -> Draw | None:
     sections = [b for b in blocks if b not in finals]
     if len(finals) != 1 or not sections or len({(s["size"], len(s["rounds"])) for s in sections}) != 1:
         return None  # unexpected layout (e.g. a league); better no draw than a wrong one
-    qualifiers = len(sections) * (sections[0]["size"] >> len(sections[0]["rounds"]))
-    if qualifiers != finals[0]["size"]:
+    # Some pages (Players Championship Finals) repeat the finals' first rounds as the last rounds of every
+    # section; those duplicates are dropped when their round names match the finals' first rounds.
+    section_rounds = len(sections[0]["rounds"])
+    final_names = [r.name.lower() for r in finals[0]["rounds"]]
+    for overlap in range(section_rounds):
+        kept = section_rounds - overlap
+        tail = [r.name.lower() for r in sections[0]["rounds"][kept:]]
+        if tail == final_names[:overlap] and len(sections) * (sections[0]["size"] >> kept) == finals[0]["size"]:
+            break
+    else:
         return None
+    sections = [{**s, "rounds": s["rounds"][:kept]} for s in sections]
     rounds = []
     for r in range(len(sections[0]["rounds"])):
         first = sections[0]["rounds"][r]

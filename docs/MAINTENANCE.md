@@ -196,8 +196,9 @@ Saved queries for the workspace: `sql/queries/*.sql` (`scripts/sync_queries.py`)
   average on majors, the rank and its 12-month momentum. It still learns from every historical match. Details and the key test: METHODOLOGY. Predictor selection requires
   stability in 80 % of bootstrap samples; re-tested on every refit. A tracked player needs 5 major matches for a PI.
 - **Tournament formats.** The 2026 Grand Slam group stage (16 groups of 3) is not simulated; predictions start from
-  the last 16. Revisit if more events adopt group stages. The 96-player World Championship format (2024, 2025) and
-  the PC Finals sections have no parser.
+  the last 16. Revisit if more events adopt group stages. The 96-player World Championship format (2024, 2025) has
+  no parser. The PC Finals sections (which repeat the quarter-finals of the finals bracket) are parsed since
+  20 Nov 2026.
 - **AI summaries:** Qwen3 Next 80B (chosen on 11 Nov 2026 over Llama 3.3 70B and Llama 4 Maverick), for the PI top 32
   plus players with recent news.
 - **Ideas:** a "day form" spread in the simulation to temper heavy favourites in long formats.
