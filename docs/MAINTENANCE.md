@@ -176,7 +176,7 @@ Unity Catalog `workspace`. Raw files: `/Volumes/workspace/darts_bronze/raw/<sour
 | Layer | Tables |
 |---|---|
 | bronze | one table per source dataset, loaded 1:1 with `_run_date`, `_source_file`, `_ingested_at` |
-| silver | `players` (`is_tracked` = Order of Merit top 150, background, photo), `player_crosswalk` (one `player_key` across sources), `events`, `majors`, `matches`, `player_matches` + view `player_matches_v` (averages), `rankings` (Order of Merit snapshots), `tournament_pages`, `upcoming_matches` |
+| silver | `players` (`is_tracked` = Order of Merit top 150, background, photo), `player_crosswalk` (one `player_key` across sources), `events`, `majors`, `matches`, `player_matches` (one row per player and match, with both names as in `players`) + view `player_matches_v` (averages), `rankings` (Order of Merit snapshots), `tournament_pages`, `upcoming_matches` |
 | gold: PI | `performance_index` (monthly snapshots, `is_current`), `pi_model_registry`, `pi_coefficients`, `pi_benchmark`, `pi_selection_log`, `elo_history`, `player_recent_matches` (view) |
 | gold: tournaments | `majors_calendar`, `tournament_predictions`, `tournament_draw_matches`, `tournament_backtest_matches`, `tournament_backtest_summary`, `upcoming_matches`, `player_titles` |
 | gold: AI | `player_news`, `player_narratives`, `player_narrative_trials` |

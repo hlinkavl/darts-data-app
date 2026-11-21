@@ -350,19 +350,8 @@ WHERE played AND match_key IN (SELECT match_key FROM wk_player_matches)
 
 # COMMAND ----------
 
-spark.sql("""CREATE OR REPLACE TABLE darts_silver.player_matches AS
-             SELECT * FROM o_player_matches UNION ALL SELECT * FROM mc_player_matches UNION ALL SELECT * FROM wk_player_matches""")
 spark.sql("""CREATE OR REPLACE TABLE darts_silver.matches AS
              SELECT * FROM o_matches UNION ALL SELECT * FROM mc_matches UNION ALL SELECT * FROM wk_matches""")
-spark.sql("""
-CREATE OR REPLACE VIEW darts_silver.player_matches_v AS
-SELECT
-  *,
-  round(3 * points / nullif(darts, 0), 2) AS average,
-  round(3 * first9_points / nullif(first9_darts, 0), 2) AS first9_average,
-  round(100 * checkouts_hit / nullif(checkout_attempts, 0), 2) AS checkout_pct
-FROM darts_silver.player_matches
-""")
 
 mc_events = f"""
   UNION ALL
@@ -449,6 +438,29 @@ FROM names n
 FULL OUTER JOIN current_rank c ON c.player_key = n.player_key
 LEFT JOIN ({orakel_profile}) o ON o.player_key = coalesce(n.player_key, c.player_key)
 LEFT JOIN wiki w ON w.player_key = coalesce(n.player_key, c.player_key)
+""")
+
+# COMMAND ----------
+
+# Player matches of all sources, with both names as in darts_silver.players (one spelling per player, whatever the
+# source wrote). Built after players, which takes its names from the matches.
+spark.sql("""
+CREATE OR REPLACE TABLE darts_silver.player_matches AS
+WITH pm AS (SELECT * FROM o_player_matches UNION ALL SELECT * FROM mc_player_matches UNION ALL SELECT * FROM wk_player_matches)
+SELECT pm.match_key, pm.player_key, p.player_name, pm.opponent_key, coalesce(o.player_name, pm.opponent_name) AS opponent_name,
+       pm.* EXCEPT (match_key, player_key, opponent_key, opponent_name)
+FROM pm
+LEFT JOIN darts_silver.players p ON p.player_key = pm.player_key
+LEFT JOIN darts_silver.players o ON o.player_key = pm.opponent_key
+""")
+spark.sql("""
+CREATE OR REPLACE VIEW darts_silver.player_matches_v AS
+SELECT
+  *,
+  round(3 * points / nullif(darts, 0), 2) AS average,
+  round(3 * first9_points / nullif(first9_darts, 0), 2) AS first9_average,
+  round(100 * checkouts_hit / nullif(checkout_attempts, 0), 2) AS checkout_pct
+FROM darts_silver.player_matches
 """)
 
 # COMMAND ----------
