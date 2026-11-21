@@ -35,16 +35,26 @@ def _connection():
                        credentials_provider=lambda: cfg.authenticate)
 
 
-# The public copy's files change only with a redeploy (which restarts the app), so it caches them for good.
-@st.cache_data(ttl=None if MODE == "public" else 600, show_spinner=False)
 def table(name: str, where: str | None = None) -> pd.DataFrame:
     """A whole gold table (or silver.players), optionally filtered with a SQL condition."""
     if MODE != "databricks":
         path = SNAPSHOT / f"{name}.parquet"
         if not path.exists():
             return pd.DataFrame()
-        df = pd.read_parquet(path)
-        return df.query(_pandas_condition(where)) if where else df
+        return _snapshot_table(str(path), path.stat().st_mtime, where)
+    return _warehouse_table(name, where)
+
+
+# The file's modification time is part of the cache key: Streamlit Community Cloud swaps the snapshot files on a
+# redeploy without restarting the app, and a new file must not be served from the old cache.
+@st.cache_data(show_spinner=False, max_entries=200)
+def _snapshot_table(path: str, mtime: float, where: str | None) -> pd.DataFrame:
+    df = pd.read_parquet(path)
+    return df.query(_pandas_condition(where)) if where else df
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _warehouse_table(name: str, where: str | None) -> pd.DataFrame:
     query = f"SELECT * FROM {CATALOG}.{SCHEMA.get(name, 'darts_gold')}.{name}" + (f" WHERE {where}" if where else "")
     try:
         with _connection().cursor() as cur:
