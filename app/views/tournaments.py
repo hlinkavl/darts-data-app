@@ -328,8 +328,9 @@ def _format(m) -> str:
 
 def _bracket_box(m, short: dict, final: bool = False, projected: tuple = (None, None)) -> str:
     """One match: surname, the model's pre-match chance (small) and the score; the winner's row in green (with a
-    trophy in the final). A spot not decided yet shows the most likely player in grey italics with the chance to
-    get there (`projected` = (name, chance) per side)."""
+    trophy in the final). A spot not decided yet shows the most likely player in grey italics, without a number:
+    their chance to get there is not a match chance, and two of them next to each other would not add up to 100 %
+    (`projected` = (name, chance) per side)."""
     empty = pd.Series({"player_a": None, "player_b": None, "winner": None, "walkover": False, "score_a": None,
                        "score_b": None, "p_a": float("nan"), "seed_a": None, "seed_b": None, "avg_a": None,
                        "avg_b": None, "first_to": float("nan"), "unit": None})
@@ -340,7 +341,7 @@ def _bracket_box(m, short: dict, final: bool = False, projected: tuple = (None, 
     for name, score, p, proj in ((_name(m.player_a), m.score_a, m.p_a, projected[0]),
                                  (_name(m.player_b), m.score_b, 1 - m.p_a, projected[1])):
         if not name and proj:
-            rows.append((short.get(proj[0], proj[0]), ui.pct(proj[1]), "", False, False, True))
+            rows.append((short.get(proj[0], proj[0]), "", "", False, False, True))  # no %: see the docstring
             continue
         won = played and name == winner
         score_txt = ("w/o" if won else "") if m.walkover is True else (ui.num(score, 0) if played else "")
@@ -429,7 +430,7 @@ def _bracket(matches: pd.DataFrame, preds: pd.DataFrame) -> None:
                 f"margin:0 0 8px'>{''.join(legend)}</div>"
                 f"<div style='display:flex;gap:14px;overflow-x:auto;padding-bottom:6px'>{''.join(cols)}</div>",
                 unsafe_allow_html=True)
-    st.caption("The small % is the model's chance before the match; at an open spot, the chance to get there. "
+    st.caption("The small % is the model's chance to win the match, before it is played. "
                "Full names, format and averages of every match are in Match details below."
                + (" On a phone the bracket starts at the current round; swipe for later rounds." if first_shown else ""))
 
