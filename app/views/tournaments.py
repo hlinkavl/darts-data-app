@@ -338,21 +338,33 @@ def _bracket_box(m, short: dict, final: bool = False, projected: tuple = (None, 
         p_txt = ui.pct(p) if name and pd.notna(p) else ""
         label = (short.get(name, name) + (" 🏆" if final and won else "")) if name else "TBD"
         rows.append((label, p_txt, score_txt, won, played, False))
-    html = ""
-    for i, (name, p, score, won, played, proj) in enumerate(rows):
+    # Three looks: played (solid, winner in green), upcoming (both players known: blue frame and a label),
+    # projected (a spot still open: dashed frame, the model's most likely player in grey italics).
+    upcoming = not played and all(not r[5] and r[0] != "TBD" for r in rows)
+    projected_box = any(r[5] for r in rows)
+    html = (f"<div style='font-size:0.68em;font-weight:700;letter-spacing:.06em;color:{ui.SERIES[0]};"
+            f"padding:3px 8px 0'>UPCOMING</div>") if upcoming else ""
+    for i, (name, p, score, won, played_row, proj) in enumerate(rows):
         if won:
             style = f"background:rgba(12,163,12,.16);border-left:3px solid {ui.WIN};color:{ui.TEXT};font-weight:700"
         elif proj:
             style = f"border-left:3px solid transparent;color:{ui.TEXT_2};font-style:italic"
         else:
-            style = f"border-left:3px solid transparent;color:{ui.TEXT_2 if played or name == 'TBD' else ui.TEXT}"
+            style = (f"border-left:3px solid transparent;"
+                     f"color:{ui.TEXT_2 if played_row or name == 'TBD' else ui.TEXT}")
         sep = f"border-top:1px solid {ui.GRID};" if i else ""
         html += (f"<div style='display:flex;align-items:center;gap:6px;padding:4px 8px;{sep}{style}'>"
                  f"<span style='flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>{escape(name)}</span>"
                  f"<span style='font-size:0.75em;color:{ui.TEXT_2};font-weight:400;font-style:normal'>{p}</span>"
                  f"<span style='min-width:22px;text-align:right'>{score}</span></div>")
-    return (f"<div style='border:1px solid {ui.GRID};border-radius:6px;background:#222220;"
-            f"font-size:0.88em;margin:5px 0;overflow:hidden;flex-shrink:0'>{html}</div>")
+    if upcoming:
+        frame = f"border:1.5px solid {ui.SERIES[0]};background:#1f2733"
+    elif projected_box or not played:
+        frame = f"border:1.5px dashed {ui.GRID};background:transparent"
+    else:
+        frame = f"border:1px solid {ui.GRID};background:#222220"
+    return (f"<div style='{frame};border-radius:6px;font-size:0.88em;margin:5px 0;overflow:hidden;"
+            f"flex-shrink:0'>{html}</div>")
 
 
 def _projector(preds: pd.DataFrame):
@@ -379,6 +391,10 @@ def _bracket(matches: pd.DataFrame, preds: pd.DataFrame) -> None:
     short = ui.surnames(pd.concat([matches["player_a"], matches["player_b"], preds["player_name"]]))
     best = _projector(preds)
     height = 2 ** (len(orders) - 1) * BRACKET_SLOT_PX
+    # On a phone only two rounds fit: start at the first round that is not finished (finished event: the last two).
+    open_k = [k for k, o in enumerate(orders)
+              if not matches.loc[matches["round_order"] == o, "winner"].map(_name).notna().all()]
+    first_shown = open_k[0] if open_k else max(0, len(orders) - 2)
     cols, any_projected = [], False
     for k, order in enumerate(orders):
         rnd = matches[matches["round_order"] == order].drop_duplicates("slot").set_index("slot")
@@ -389,17 +405,24 @@ def _bracket(matches: pd.DataFrame, preds: pd.DataFrame) -> None:
                               for side, ab in ((0, "a"), (1, "b")))
             any_projected |= any(projected)
             boxes += _bracket_box(m, short, k == len(orders) - 1, projected)
-        cols.append(f"<div style='flex:1;min-width:165px;display:flex;flex-direction:column'>"
+        cols.append(f"<div class='{'br-early' if k < first_shown else ''}' "
+                    f"style='flex:1;min-width:165px;display:flex;flex-direction:column'>"
                     f"<div style='text-align:center;color:{ui.TEXT_2};font-size:0.8em;margin-bottom:4px'>"
                     f"{escape(matches.loc[matches['round_order'] == order, 'round_name'].iloc[0])}</div>"
                     f"<div style='height:{height}px;display:flex;flex-direction:column;justify-content:space-around'>{boxes}</div></div>")
-    st.markdown(f"<div style='display:flex;gap:14px;overflow-x:auto;padding-bottom:6px'>{''.join(cols)}</div>",
-                unsafe_allow_html=True)
-    note = ("Green = winner. The small % is the model's chance before the match. Full names, format and averages "
-            "of every match are in Match details below.")
+    sw = "display:inline-block;width:14px;height:10px;border-radius:3px;vertical-align:middle;margin-right:5px"
+    legend = [f"<span><span style='{sw};background:rgba(12,163,12,.35);border-left:3px solid {ui.WIN}'></span>Played (winner)</span>",
+              f"<span><span style='{sw};border:1.5px solid {ui.SERIES[0]};background:#1f2733'></span>Upcoming</span>"]
     if any_projected:
-        note += (" Grey italics = not decided yet: the player most likely to get there, with the chance to do so.")
-    st.caption(note)
+        legend.append(f"<span><span style='{sw};border:1.5px dashed {ui.TEXT_2}'></span><i>Not decided yet: the model's "
+                      f"most likely player</i></span>")
+    st.markdown(f"<div style='display:flex;flex-wrap:wrap;gap:6px 18px;color:{ui.TEXT_2};font-size:0.8em;"
+                f"margin:0 0 8px'>{''.join(legend)}</div>"
+                f"<div style='display:flex;gap:14px;overflow-x:auto;padding-bottom:6px'>{''.join(cols)}</div>",
+                unsafe_allow_html=True)
+    st.caption("The small % is the model's chance before the match; at an open spot, the chance to get there. "
+               "Full names, format and averages of every match are in Match details below."
+               + (" On a phone the bracket starts at the current round; swipe for later rounds." if first_shown else ""))
 
 
 def _match_card(m, photos: dict) -> str:

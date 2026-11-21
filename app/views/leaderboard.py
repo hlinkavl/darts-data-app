@@ -1,6 +1,7 @@
 """PI Leaderboard and head-to-head calculator."""
 
 import math
+import time
 from html import escape
 
 import pandas as pd
@@ -66,15 +67,19 @@ def render() -> None:
     first, second = ORDERS[order]
     board = board.sort_values([first, second], na_position="last").reset_index(drop=True)
     board["open"] = OPEN_ICON
-    columns = ["open", first, "player_name", second, "pi", "change", "effective_average", "avg_major", "form_major"]
+    # The ranking, the name and the PI first: that is what fits a phone screen.
+    columns = ["open", first, "player_name", "pi", second, "change", "effective_average", "avg_major", "form_major"]
     shown = board
+    # A click on a name first reruns once with the row highlighted, then opens the profile (see below).
+    opening = st.session_state.pop("lb_opening", None)
+    mark = opening or pick
     if pick:
         # A table cannot be scrolled from code, so it starts a few rows above the player instead.
         pos = int(board.index[board["player_name"] == pick][0])
         shown = board.iloc[max(0, pos - JUMP_CONTEXT):].reset_index(drop=True)
         st.caption(f"Jumped to {pick}. Clear the search to see the table from the top.")
     styled = shown[columns].style.apply(
-        lambda r: [HIGHLIGHT if r["player_name"] == pick else "" for _ in r], axis=1).format(TABLE_FORMATS, na_rep="–")
+        lambda r: [HIGHLIGHT if r["player_name"] == mark else "" for _ in r], axis=1).format(TABLE_FORMATS, na_rep="–")
     picked = st.dataframe(
         styled,
         hide_index=True, width="stretch", height=460,
@@ -84,7 +89,7 @@ def render() -> None:
             "oom": st.column_config.NumberColumn("OoM #", width=54,
                                                  help="Current official PDC Order of Merit (2-year prize money)"),
             "rank": st.column_config.NumberColumn("PI #", width=46, help="Position by Performance Index"),
-            "player_name": st.column_config.TextColumn("Player", width=124),
+            "player_name": st.column_config.TextColumn("Player", width=170),
             "change": st.column_config.NumberColumn("PI vs last month", format="%+.2f"),
             "pi": st.column_config.ProgressColumn("PI", width=94, min_value=0.0, max_value=10.0, format="%.2f",
                                                   help=ui.PI_HELP),
@@ -94,9 +99,13 @@ def render() -> None:
             "form_major": st.column_config.NumberColumn("Form on majors", format="%+.2f",
                                                         help="Last 6 major matches minus the last 20")},
         on_select="rerun", selection_mode="single-cell", key="lb_table")
+    if opening:
+        time.sleep(0.35)  # long enough to see the highlighted row
+        _open_profile(opening)
     cells = picked.selection.cells if picked else []
     if cells and cells[0][1] in ("open", "player_name"):
-        _open_profile(shown["player_name"].iloc[cells[0][0]])
+        st.session_state["lb_opening"] = shown["player_name"].iloc[cells[0][0]]
+        st.rerun()
     st.caption(f"Click {OPEN_ICON} or a name to open the player's profile.")
     top = pi.sort_values("rank")["pi"].tolist()
     if len(top) >= 20:

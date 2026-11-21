@@ -190,7 +190,6 @@ CSS = f"""
 .side-card .pill {{display:inline-block;border-radius:999px;padding:3px 12px;font-size:0.8em;font-weight:600}}
 .side-card .kv {{display:flex;justify-content:space-between;gap:10px;font-size:0.85em;padding:7px 0;
                  border-top:1px solid {GRID}}}
-.side-card .kv:first-of-type {{margin-top:12px}}
 .side-card .kv span {{color:{TEXT_2}}}
 .side-card .kv b {{color:{TEXT};font-weight:600;text-align:right}}
 .side-card .note {{color:{TEXT_2};font-size:0.78em;margin-top:8px;line-height:1.45}}
@@ -211,6 +210,7 @@ CSS = f"""
   [data-testid="stMainBlockContainer"] h2 {{font-size:1.3rem}}
   [data-testid="stMainBlockContainer"] h3 {{font-size:1.15rem}}
   .vs-centre {{min-width:58px}}
+  .br-early {{display:none !important}}
   .ph-card {{padding:14px !important}}
   .ph-photo img, .ph-photo > span {{width:76px !important;height:76px !important}}
   .ph-name {{flex:1 1 0 !important;min-width:0 !important;padding-right:0 !important}}
@@ -240,7 +240,8 @@ def sidebar_status(status: dict) -> str:
     note = {"public": "Public copy, refreshed daily while a major is running.",
             "local": "🧪 Local snapshot (development)."}.get(status["mode"], "")
     return (f"<div class='side-card'><div class='brand'>🎯 Darts Performance Analyzer</div>"
-            f"<span class='pill' style='background:{bg};color:{fg}'>● {label}</span>"
             + "".join(f"<div class='kv'><span>{k}</span><b>{v}</b></div>" for k, v in rows)
             + (f"<div class='note'>{note}</div>" if note else "")
-            + f"</div><div class='side-credits'>{CREDITS}</div>")
+            + f"<div style='text-align:center;margin-top:12px'>"
+            f"<span class='pill' style='background:{bg};color:{fg}'>● {label}</span></div>"
+            f"</div><div class='side-credits'>{CREDITS}</div>")

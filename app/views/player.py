@@ -74,6 +74,13 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
                 f"<div class='val' style='font-size:2.6em;font-weight:700;color:{ui.TEXT};line-height:1.15'>{value}</div>"
                 f"<div style='color:{ui.TEXT_2};font-size:0.85em'>{note}</div></div>")
 
+    def chip(label: str, value: str) -> str:
+        """A ranking as a labelled chip, so the two rankings never read as one number."""
+        return (f"<span style='display:inline-flex;align-items:baseline;gap:6px;border:1px solid {ui.GRID};"
+                f"border-radius:999px;padding:3px 12px;background:#262624'>"
+                f"<span style='color:{ui.TEXT_2};font-size:0.78em'>{label}</span>"
+                f"<b style='color:{ui.TEXT};font-size:1.05em'>{value}</b></span>")
+
     # One HTML card (flexbox), so the photo, the name and both numbers share one vertical centre line. On a phone
     # (ui.CSS) the photo sits next to the name and the two numbers share a row below.
     st.markdown(
@@ -82,12 +89,12 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
         f"<div class='ph-photo' style='flex:0 0 auto;display:flex;align-items:center;padding-right:18px'>"
         f"{ui.avatar(image, 120, name=name, ring=ui.GRID)}</div>"
         f"<div class='ph-name' style='flex:1 1 260px;min-width:220px;padding-right:18px'>"
-        f"<div class='big' style='font-size:2.1em;font-weight:700;line-height:1.2;color:{ui.TEXT}'>"
-        f"<span style='color:{ui.TEXT_2}'>{oom_txt}</span> {escape(name)}</div>"
+        f"<div class='big' style='font-size:2.1em;font-weight:700;line-height:1.2;color:{ui.TEXT}'>{escape(name)}</div>"
         f"<div style='color:{ui.TEXT_2};margin-top:4px'>{' · '.join(s for s in sub if s)}</div>"
-        f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-top:8px'>{oom_txt} in the PDC Order of Merit</div></div>"
+        f"<div style='display:flex;flex-wrap:wrap;gap:8px;margin-top:10px'>"
+        + chip("PDC Order of Merit", oom_txt) + chip("PI ranking", f"#{int(row['rank'])}") + "</div></div>"
         f"<div class='ph-metrics' style='display:flex;flex:0 0 auto'>"
-        + metric("Performance Index", ui.num(row["pi"], 2), f"#{int(row['rank'])} by PI")
+        + metric("Performance Index", ui.num(row["pi"], 2), "5.0 = average top-32 player")
         + metric("Effective Average", ui.num(row["effective_average"]),
                  f"vs {ui.num(base)} top-32 average" if base is not None and pd.notna(base) else "")
         + "</div></div>", unsafe_allow_html=True)
