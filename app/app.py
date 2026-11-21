@@ -1,6 +1,9 @@
 """Darts Performance Analyzer: Streamlit app (Databricks App; public copy on Streamlit Community Cloud; local snapshot
 for development)."""
 
+import importlib
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
@@ -9,6 +12,21 @@ st.set_page_config(page_title="Darts Performance Analyzer", page_icon="🎯", la
 import data  # noqa: E402
 import ui  # noqa: E402
 from views import admin, ask, leaderboard, methodology, player, tournaments  # noqa: E402
+
+import refresh  # noqa: E402
+
+
+def _reload_changed(*modules) -> None:
+    """Streamlit Community Cloud pulls a redeploy into the running process: it reruns this script but keeps the
+    modules imported earlier, so a changed ui.py would stay old. Reload every app module whose file changed."""
+    for m in modules:
+        mtime = Path(m.__file__).stat().st_mtime
+        if mtime > getattr(m, "_loaded_mtime", 0):
+            importlib.reload(m)
+            m._loaded_mtime = mtime
+
+
+_reload_changed(data, ui, refresh, admin, ask, leaderboard, methodology, player, tournaments)
 
 PAGES = {
     "tournaments": st.Page(tournaments.render, title="Tournament Overview", icon="🏆", url_path="tournaments", default=True),
