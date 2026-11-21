@@ -195,8 +195,8 @@ CSS = f"""
 .side-card .note {{color:{TEXT_2};font-size:0.78em;margin-top:8px;line-height:1.45}}
 .side-credits {{color:{TEXT_2};font-size:0.72em;line-height:1.5;margin-top:14px;opacity:0.85}}
 .st-key-mobile_nav_row {{display:none}}
-.mc-grid {{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}}
-.mc-grid-2 {{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}}
+.mc-grid {{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin-bottom:8px}}
+.mc-grid-2 {{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:8px}}
 .mc-row {{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:0.92em}}
 .mc-row img, .mc-row > span:first-child {{margin:0 !important}}
 .mc-name {{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}

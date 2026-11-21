@@ -437,35 +437,36 @@ def _bracket(matches: pd.DataFrame, preds: pd.DataFrame) -> None:
 
 
 def _match_card(m, photos: dict) -> str:
-    """A compact card: one row per player (photo, name, chance or score) and the pre-match chance as a thin bar.
-    The photo's ring has the player's colour in the bar (blue on top, orange below); the winner's score is green."""
+    """A compact card: one row per player (photo, name, the score once played), then the model's pre-match chance
+    as numbers over a thin bar. The photo's ring has the player's colour in the bar (blue on top, orange below)."""
     winner = _name(m.winner)
     played = winner is not None
 
-    def row(name, seed, score, p, ring):
+    def row(name, seed, score, ring):
         name = _name(name)
         if not name:
             return f"<div class='mc-row' style='color:{ui.TEXT_2}'>TBD</div>"
         won = played and name == winner
-        color = ui.TEXT if won or not played else ui.TEXT_2
-        right = (("w/o" if won else "") if m.walkover is True else ui.num(score, 0)) if played else ui.pct(p)
-        return (f"<div class='mc-row' style='color:{color};font-weight:{700 if won else 400}'>"
+        right = (("w/o" if won else "") if m.walkover is True else ui.num(score, 0)) if played else ""
+        return (f"<div class='mc-row' style='color:{ui.TEXT if won or not played else ui.TEXT_2};"
+                f"font-weight:{700 if won else 400}'>"
                 f"{ui.avatar(photos.get(ui.name_key(name)), 26, name=name, ring=ring)}<span class='mc-name'>{escape(name)} "
                 f"<span style='color:{ui.TEXT_2};font-weight:400;font-size:0.82em'>{_seed(seed)}</span></span>"
-                f"<span style='color:{ui.WIN if won else (ui.TEXT_2 if played else ui.TEXT)};font-weight:700'>{right}</span></div>")
+                f"<span style='color:{ui.WIN if won else ui.TEXT_2};font-weight:700'>{right}</span></div>")
 
     p = m.p_a if pd.notna(m.p_a) else None
-    tip = (f"Before the match: {_name(m.player_a)} {ui.pct(p)} · {_name(m.player_b)} {ui.pct(1 - p)}"
-           if p is not None else "")
-    bar = (f"<div title='{escape(tip, quote=True)}' style='display:flex;height:7px;border-radius:4px;"
-           f"overflow:hidden;gap:2px;margin-top:6px;cursor:help'>"
-           f"<div style='width:{round(100 * p)}%;background:{ui.SERIES[0]}'></div>"
-           f"<div style='flex:1;background:{ui.SERIES[1]}'></div></div>") if p is not None else ""
-    return (f"<div title='{escape(tip, quote=True)}' style='border:1px solid {ui.GRID};border-radius:10px;"
-            f"padding:8px 10px;background:#20201f'>"
-            + row(m.player_a, m.seed_a, m.score_a, p, ui.SERIES[0])
-            + row(m.player_b, m.seed_b, m.score_b, 1 - p if p is not None else None, ui.SERIES[1])
-            + bar + "</div>")
+    chance = ""
+    if p is not None:
+        chance = (f"<div style='display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;"
+                  f"font-size:0.85em'><b style='color:{ui.TEXT}'>{ui.pct(p)}</b>"
+                  f"<span style='color:{ui.TEXT_2};font-size:0.85em'>before the match</span>"
+                  f"<b style='color:{ui.TEXT}'>{ui.pct(1 - p)}</b></div>"
+                  f"<div style='display:flex;height:6px;border-radius:3px;overflow:hidden;gap:2px;margin-top:2px'>"
+                  f"<div style='width:{round(100 * p)}%;background:{ui.SERIES[0]}'></div>"
+                  f"<div style='flex:1;background:{ui.SERIES[1]}'></div></div>")
+    return (f"<div style='border:1px solid {ui.GRID};border-radius:10px;padding:8px 10px;background:#20201f'>"
+            + row(m.player_a, m.seed_a, m.score_a, ui.SERIES[0])
+            + row(m.player_b, m.seed_b, m.score_b, ui.SERIES[1]) + chance + "</div>")
 
 
 def _upcoming_info() -> dict:
@@ -512,8 +513,7 @@ def _match_details(matches: pd.DataFrame, photos: dict, event_key: str, info: di
         grid = "mc-grid-2" if len(rnd) <= 4 else "mc-grid"
         st.markdown(f"<div class='{grid}'>{''.join(_match_card(m, photos) for m in shown)}</div>",
                     unsafe_allow_html=True)
-        st.caption("The bar is the model's chance before the match, in this format (hover a card for the numbers); "
-                   "the ring around each photo shows the player's colour.")
+        st.caption("Chances in this round's format. The ring around each photo shows the player's colour in the bar.")
     else:
         st.caption("The players of this round are not known yet; the road to the final below shows who is most likely.")
 
