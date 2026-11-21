@@ -44,19 +44,6 @@ def _format_chart() -> go.Figure:
                      yaxis=dict(title="win chance", tickformat=".0%", range=[0.5, 0.9]))
 
 
-def _calibration_chart(cal: pd.DataFrame) -> go.Figure:
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=[0.2, 0.8], y=[0.2, 0.8], mode="lines", line=dict(color=ui.TEXT_2, width=1, dash="dot"),
-                             hoverinfo="skip"))
-    fig.add_trace(go.Scatter(
-        x=cal["predicted"], y=cal["observed"], mode="markers+lines", line=dict(color=ui.SERIES[0], width=2),
-        marker=dict(size=9, color=ui.SERIES[0], line=dict(color=ui.SURFACE, width=2)), customdata=cal["n"],
-        hovertemplate="predicted %{x:.0%} · won %{y:.0%} (%{customdata} matches)<extra></extra>"))
-    fig.add_annotation(x=0.72, y=0.62, text="perfect", showarrow=False, font=dict(color=ui.TEXT_2, size=12))
-    return ui.layout(fig, height=CHART_HEIGHT, xaxis=dict(title="predicted chance", tickformat=".0%", range=[0.2, 0.8]),
-                     yaxis=dict(title="actually won", tickformat=".0%", range=[0.2, 0.8]))
-
-
 def _benchmark_chart(bench: pd.DataFrame) -> go.Figure:
     """The gain over the Order of Merit with its 95 % interval: right of zero = the PI predicts better."""
     pi = bench[bench["model"] == "PI model"].copy()
@@ -122,19 +109,6 @@ def render() -> None:
 
     left, right = st.columns(2, gap="large")
     with left:
-        st.subheader("Longer matches favour the stronger")
-        st.plotly_chart(_format_chart(), width="stretch", config={"displayModeBar": False})
-        st.caption("PI 7.0 against PI 5.0: 70 % in a typical match, 82 % over first to 18 legs.")
-    with right:
-        st.subheader("Are the chances honest?")
-        cal = data.versioned("pi_calibration")
-        if len(cal):
-            st.plotly_chart(_calibration_chart(cal), width="stretch", config={"displayModeBar": False})
-            st.caption("2026 matches never used for fitting, in 10 groups: on the dotted line, favourites win exactly "
-                       "as often as predicted.")
-
-    left, right = st.columns(2, gap="large")
-    with left:
         st.subheader("Better than the official ranking?")
         bench = data.versioned("pi_benchmark")
         if len(bench):
@@ -150,6 +124,22 @@ def render() -> None:
             st.caption(f"Predicted before the first dart: the favourite won {won:.1f} % of {int(bt['matches'].sum())} "
                        f"matches; the title favourite won {int((bt['champion_rank_by_p_title'] == 1).sum())} of "
                        f"{len(bt)} events.")
+
+    left, right = st.columns(2, gap="large")
+    with left:
+        st.subheader("Match length matters")
+        st.plotly_chart(_format_chart(), width="stretch", config={"displayModeBar": False})
+    with right:
+        st.markdown("<div style='height:3.2rem'></div>", unsafe_allow_html=True)
+        st.markdown(
+            "The PI gives the chance in a typical match, first to 6 legs. Majors are longer, and the longer the "
+            "match, the more luck evens out, so the better player wins more often.\n\n"
+            "A player with **PI 7.0** against one with **5.0**:\n\n"
+            "| Format | Chance |\n|---|---|\n"
+            + "".join(f"| {label} | {ui.pct(ui.match_probability(ui.head_to_head(7.0, 5.0), n, unit))} |\n"
+                      for label, n, unit in [("First to 6 legs (typical)", 6, "legs"), ("First to 11 legs", 11, "legs"),
+                                             ("First to 18 legs", 18, "legs"), ("First to 4 sets", 4, "sets"),
+                                             ("First to 7 sets", 7, "sets")]))
 
     with st.expander("Every tested input and why it is in or out"):
         log = data.versioned("pi_selection_log")
