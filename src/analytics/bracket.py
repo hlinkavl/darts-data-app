@@ -143,10 +143,16 @@ def parse_team(value: str) -> tuple[str | None, float | None]:
     """Player name and (if present) 3-dart average from a bracket team cell."""
     if not value or value.strip() in ("", "&nbsp;"):
         return None, None
-    # {{#invoke:DartsRankings|PDCFlag|Name|avg=..}} or {{PDCFlag|Name|avg=..}}
-    m = re.search(r"PDCFlag\s*\|\s*([^|}]+)(?:\|\s*avg\s*=\s*([\d.]*))?", value)
+    # {{#invoke:DartsRankings|PDCFlag|Name|avg=..}} or {{PDCFlag|Name|txt=(4)|avg=..}}. Named parameters are never
+    # the name: before a match is played editors may pre-fill only the flag ({{PDCFlag|flag=NED}}) when both
+    # possible winners share a country.
+    m = re.search(r"PDCFlag((?:\s*\|[^|}]*)*)\}\}", value)
     if m:
-        return m.group(1).strip(), float(m.group(2)) if m.group(2) else None
+        args = [a.strip() for a in m.group(1).split("|")[1:]]
+        positional = [a for a in args if "=" not in a]
+        named = dict(a.split("=", 1) for a in args if "=" in a)
+        avg = re.match(r"\d+(?:\.\d+)?", named.get("avg", "").strip())
+        return (positional[0] if positional and positional[0] else None), (float(avg.group()) if avg else None)
     avg = re.search(r"\(?\s*(\d{2,3}\.\d{1,2})\s*\)?", re.sub(r"\[\[[^\]]*\]\]", "", value))
     link = re.search(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]", value)
     name = link.group(1) if link else _clean(re.sub(r"\{\{[^{}]*\}\}", "", value))

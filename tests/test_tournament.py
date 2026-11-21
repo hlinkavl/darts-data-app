@@ -43,6 +43,14 @@ def test_parse_formats_scores_and_walkover():
     assert final.matches[0].winner is None
 
 
+def test_team_cell_named_parameters_are_never_the_name():
+    assert bracket.parse_team("{{PDCFlag|flag=NED}}") == (None, None)
+    assert bracket.parse_team("{{PDCFlag|flag=ENG|avg=}}") == (None, None)
+    assert bracket.parse_team("{{PDCFlag||avg=}}") == (None, None)
+    assert bracket.parse_team("{{PDCFlag|Gerwyn Price|txt=(4)|avg=101.5}}") == ("Gerwyn Price", 101.5)
+    assert bracket.parse_team("{{#invoke:DartsRankings|PDCFlag|Player C|avg=|b=1}}") == ("Player C", None)
+
+
 def _section(n: int) -> str:
     """An 8-player section whose last round (the semi-final) repeats the first round of the finals."""
     lines = [f"===Section {n}===", "{{8TeamBracket", "| RD1='''First round''' ''(best of 11 legs)''<br>27 November",
