@@ -90,8 +90,8 @@
   <g stroke="#8a897f" stroke-width="2" fill="none" marker-end="url(#arrow)">
     <path d="M227 260 H271"/>
     <path d="M477 260 H521"/>
-    <path d="M727 250 C750 250 750 171 771 171"/>
-    <path d="M727 300 C750 300 750 351 771 351"/>
+    <path d="M727 240 H749 V171 H771" stroke-linejoin="round"/>
+    <path d="M727 310 H749 V351 H771" stroke-linejoin="round"/>
   </g>
 
   <!-- footer -->

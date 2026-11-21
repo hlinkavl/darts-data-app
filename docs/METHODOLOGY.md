@@ -23,12 +23,20 @@ the average profile of the 32 strongest players on that day.
 
 ### What the model learns from
 
-The model has two parts, and they use different data:
+Two different things, from two different sets of data:
 
-| | Data | Why |
+| | What it is | Data |
 |---|---|---|
-| **The matches it learns from** (who won) | Every match between two tracked players since March 2021, at any PDC event: **15,930 matches**, of which 2,371 (15 %) on majors, about 55 % Players Championships, the rest European Tour, qualifiers and other events | Every result says something about the two players, and more matches give more reliable weights |
-| **The inputs** (what it knows about each player before the match) | Computed from **major matches only**, plus the official Order of Merit | Since November 2026 new results come only from the majors. Inputs computed the same way over the whole history stay comparable with every new match |
+| **The weights** | How much each input matters (the model's coefficients) | **All matches** between two tracked players since March 2021, at any PDC event: **15,930 matches**, of which 2,371 (15 %) on majors, about 55 % Players Championships, the rest European Tour, qualifiers and other events |
+| **A player's numbers** | The inputs the weights are applied to: today for the current PI, and before every historical match for training | **3-dart average from the last 20 major matches**, plus the official **Order of Merit rank** and its change over 12 months |
+
+So the weights are learned from all of history, while a player's current strength comes from major matches and
+the ranking. The ranking itself is two years of prize money from all PDC events, so floor results still count
+through it.
+
+Why it is built this way: since November 2026 new results come only from the majors. Inputs computed from majors
+stay up to date with every new result; inputs from all events would slowly go stale. The outcome of any match still
+says something about the two players, so the weights keep using every match.
 
 Sources: Darts Orakel (all matches, 2021 – 28 Oct 2026), Mastercaller (until 9 Nov 2026), then Wikipedia (majors).
 "Tracked" means the 150 best players in the Order of Merit.
