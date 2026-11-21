@@ -437,36 +437,39 @@ def _bracket(matches: pd.DataFrame, preds: pd.DataFrame) -> None:
 
 
 def _match_card(m, photos: dict) -> str:
-    """A compact card: one row per player (photo, name, the score once played), then the model's pre-match chance
-    as numbers over a thin bar. The photo's ring has the player's colour in the bar (blue on top, orange below)."""
+    """A compact card: one row per player (photo, name, and at the right the chance, or the score once played), then
+    the pre-match chance as a thin bar; a played match shows its pre-match numbers over the bar. The photo's ring
+    has the player's colour in the bar (blue on top, orange below)."""
     winner = _name(m.winner)
     played = winner is not None
 
-    def row(name, seed, score, ring):
+    def row(name, seed, score, chance, ring):
         name = _name(name)
         if not name:
             return f"<div class='mc-row' style='color:{ui.TEXT_2}'>TBD</div>"
         won = played and name == winner
-        right = (("w/o" if won else "") if m.walkover is True else ui.num(score, 0)) if played else ""
+        right = (("w/o" if won else "") if m.walkover is True else ui.num(score, 0)) if played else ui.pct(chance)
         return (f"<div class='mc-row' style='color:{ui.TEXT if won or not played else ui.TEXT_2};"
                 f"font-weight:{700 if won else 400}'>"
                 f"{ui.avatar(photos.get(ui.name_key(name)), 26, name=name, ring=ring)}<span class='mc-name'>{escape(name)} "
                 f"<span style='color:{ui.TEXT_2};font-weight:400;font-size:0.82em'>{_seed(seed)}</span></span>"
-                f"<span style='color:{ui.WIN if won else ui.TEXT_2};font-weight:700'>{right}</span></div>")
+                f"<span style='color:{ui.WIN if won else (ui.TEXT_2 if played else ui.TEXT)};font-weight:700'>"
+                f"{right}</span></div>")
 
     p = m.p_a if pd.notna(m.p_a) else None
     chance = ""
-    if p is not None:
-        chance = (f"<div style='display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;"
-                  f"font-size:0.85em'><b style='color:{ui.TEXT}'>{ui.pct(p)}</b>"
-                  f"<span style='color:{ui.TEXT_2};font-size:0.85em'>before the match</span>"
-                  f"<b style='color:{ui.TEXT}'>{ui.pct(1 - p)}</b></div>"
-                  f"<div style='display:flex;height:6px;border-radius:3px;overflow:hidden;gap:2px;margin-top:2px'>"
+    if p is not None:  # an open match has its chances next to the names; a played one keeps them over the bar
+        chance = ((f"<div style='display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;"
+                   f"font-size:0.85em'><b style='color:{ui.TEXT_2}'>{ui.pct(p)}</b>"
+                   f"<span style='color:{ui.TEXT_2};font-size:0.85em'>before the match</span>"
+                   f"<b style='color:{ui.TEXT_2}'>{ui.pct(1 - p)}</b></div>") if played else "") + (
+                  f"<div style='display:flex;height:6px;border-radius:3px;overflow:hidden;gap:2px;"
+                  f"margin-top:{2 if played else 6}px'>"
                   f"<div style='width:{round(100 * p)}%;background:{ui.SERIES[0]}'></div>"
                   f"<div style='flex:1;background:{ui.SERIES[1]}'></div></div>")
     return (f"<div style='border:1px solid {ui.GRID};border-radius:10px;padding:8px 10px;background:#20201f'>"
-            + row(m.player_a, m.seed_a, m.score_a, ui.SERIES[0])
-            + row(m.player_b, m.seed_b, m.score_b, ui.SERIES[1]) + chance + "</div>")
+            + row(m.player_a, m.seed_a, m.score_a, p, ui.SERIES[0])
+            + row(m.player_b, m.seed_b, m.score_b, 1 - p if p is not None else None, ui.SERIES[1]) + chance + "</div>")
 
 
 def _upcoming_info() -> dict:
