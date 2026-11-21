@@ -438,11 +438,11 @@ def _bracket(matches: pd.DataFrame, preds: pd.DataFrame) -> None:
 
 def _match_card(m, photos: dict) -> str:
     """A compact card: one row per player (photo, name, chance or score) and the pre-match chance as a thin bar.
-    The winner's row is green; at the right a played match shows the score, an open one the chance."""
+    The photo's ring has the player's colour in the bar (blue on top, orange below); the winner's score is green."""
     winner = _name(m.winner)
     played = winner is not None
 
-    def row(name, seed, score, p):
+    def row(name, seed, score, p, ring):
         name = _name(name)
         if not name:
             return f"<div class='mc-row' style='color:{ui.TEXT_2}'>TBD</div>"
@@ -450,7 +450,7 @@ def _match_card(m, photos: dict) -> str:
         color = ui.TEXT if won or not played else ui.TEXT_2
         right = (("w/o" if won else "") if m.walkover is True else ui.num(score, 0)) if played else ui.pct(p)
         return (f"<div class='mc-row' style='color:{color};font-weight:{700 if won else 400}'>"
-                f"{_avatar(photos, name, 26)}<span class='mc-name'>{escape(name)} "
+                f"{ui.avatar(photos.get(ui.name_key(name)), 26, name=name, ring=ring)}<span class='mc-name'>{escape(name)} "
                 f"<span style='color:{ui.TEXT_2};font-weight:400;font-size:0.82em'>{_seed(seed)}</span></span>"
                 f"<span style='color:{ui.WIN if won else (ui.TEXT_2 if played else ui.TEXT)};font-weight:700'>{right}</span></div>")
 
@@ -459,7 +459,8 @@ def _match_card(m, photos: dict) -> str:
            f"<div style='width:{round(100 * p)}%;background:{ui.SERIES[0]}'></div>"
            f"<div style='flex:1;background:{ui.SERIES[1]}'></div></div>") if p is not None else ""
     return (f"<div style='border:1px solid {ui.GRID};border-radius:10px;padding:8px 10px;background:#20201f'>"
-            + row(m.player_a, m.seed_a, m.score_a, p) + row(m.player_b, m.seed_b, m.score_b, 1 - p if p is not None else None)
+            + row(m.player_a, m.seed_a, m.score_a, p, ui.SERIES[0])
+            + row(m.player_b, m.seed_b, m.score_b, 1 - p if p is not None else None, ui.SERIES[1])
             + bar + "</div>")
 
 
@@ -494,11 +495,12 @@ def _match_details(matches: pd.DataFrame, photos: dict, event_key: str, info: di
     shown = [m for m in rnd.itertuples() if _name(m.player_a) and _name(m.player_b)]
     days = sorted({pd.Timestamp(u.start_time).normalize() for m in shown
                    if (u := info.get(frozenset((_name(m.player_a), _name(m.player_b))))) is not None})
-    if shown:  # narrow cards: three or four columns on a wide screen, one or two on a phone
-        st.markdown("<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));"
-                    f"gap:8px'>{''.join(_match_card(m, photos) for m in shown)}</div>", unsafe_allow_html=True)
+    if shown:  # early rounds: narrow cards, three or more per row; the last rounds: two per row; phones: one
+        grid = "mc-grid-2" if len(rnd) <= 4 else "mc-grid"
+        st.markdown(f"<div class='{grid}'>{''.join(_match_card(m, photos) for m in shown)}</div>",
+                    unsafe_allow_html=True)
         when = (", ".join(f"{d:%a %d %b}" for d in days) + ". ") if days else ""
-        st.caption(f"{when}{fmt}Blue and orange bar: the model's chance before the match, in this format.")
+        st.caption(f"{when}{fmt}The bar is the model's chance before the match, in this format; the ring around each photo shows the player's colour.")
     else:
         st.caption("The players of this round are not known yet; the road to the final below shows who is most likely.")
 
