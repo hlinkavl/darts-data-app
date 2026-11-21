@@ -455,10 +455,14 @@ def _match_card(m, photos: dict) -> str:
                 f"<span style='color:{ui.WIN if won else (ui.TEXT_2 if played else ui.TEXT)};font-weight:700'>{right}</span></div>")
 
     p = m.p_a if pd.notna(m.p_a) else None
-    bar = (f"<div style='display:flex;height:5px;border-radius:3px;overflow:hidden;gap:2px;margin-top:6px'>"
+    tip = (f"Before the match: {_name(m.player_a)} {ui.pct(p)} · {_name(m.player_b)} {ui.pct(1 - p)}"
+           if p is not None else "")
+    bar = (f"<div title='{escape(tip, quote=True)}' style='display:flex;height:7px;border-radius:4px;"
+           f"overflow:hidden;gap:2px;margin-top:6px;cursor:help'>"
            f"<div style='width:{round(100 * p)}%;background:{ui.SERIES[0]}'></div>"
            f"<div style='flex:1;background:{ui.SERIES[1]}'></div></div>") if p is not None else ""
-    return (f"<div style='border:1px solid {ui.GRID};border-radius:10px;padding:8px 10px;background:#20201f'>"
+    return (f"<div title='{escape(tip, quote=True)}' style='border:1px solid {ui.GRID};border-radius:10px;"
+            f"padding:8px 10px;background:#20201f'>"
             + row(m.player_a, m.seed_a, m.score_a, p, ui.SERIES[0])
             + row(m.player_b, m.seed_b, m.score_b, 1 - p if p is not None else None, ui.SERIES[1])
             + bar + "</div>")
@@ -481,26 +485,35 @@ def _round_status(rnd: pd.DataFrame) -> str:
 
 def _match_details(matches: pd.DataFrame, photos: dict, event_key: str, info: dict) -> None:
     """One round at a time, in playing order; opens on the round being played (finished events: the final).
-    info: upcoming matches by pair of names; their day goes once into the round's caption."""
+    info: upcoming matches by pair of names; their day goes into the round's chips."""
     rounds = (matches[["round_order", "round_name", "first_to", "unit"]].drop_duplicates("round_order")
               .sort_values("round_order"))
     status = [_round_status(matches[matches["round_order"] == o]) for o in rounds["round_order"]]
-    labels = [f"{r.round_name} · {st_}" for r, st_ in zip(rounds.itertuples(), status)]
+    icon = {"played": "✅"}
+    labels = [f"{icon.get(x, '🔴' if ' of ' in x else '🗓️')} {r.round_name} · {x}"
+              for r, x in zip(rounds.itertuples(), status)]
     current = next((i for i, x in enumerate(status) if x == "next" or " of " in x), len(labels) - 1)
     choice = st.selectbox("Round", range(len(labels)), index=current, format_func=lambda i: labels[i],
                           key=f"draw_round_{event_key}")  # own default per event
     rnd = matches[matches["round_order"] == rounds["round_order"].iloc[choice]].sort_values("slot")
     r = rounds.iloc[choice]
-    fmt = f"{r.round_name}: first to {int(r.first_to)} {r.unit}. " if pd.notna(r.first_to) else ""
     shown = [m for m in rnd.itertuples() if _name(m.player_a) and _name(m.player_b)]
     days = sorted({pd.Timestamp(u.start_time).normalize() for m in shown
                    if (u := info.get(frozenset((_name(m.player_a), _name(m.player_b))))) is not None})
+    # The round's key facts as chips above the cards: when, the format, how far it is.
+    chips = ([f"🗓️ {', '.join(f'{d:%a %d %b}' for d in days)}"] if days else []) \
+        + ([f"🎯 First to {int(r.first_to)} {r.unit}"] if pd.notna(r.first_to) else []) \
+        + [f"{icon.get(status[choice], '🔴' if ' of ' in status[choice] else '⏳')} {status[choice].capitalize()}"]
+    st.markdown("<div style='display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 12px'>" + "".join(
+        f"<span style='border:1px solid {ui.GRID};background:#262624;border-radius:999px;padding:4px 12px;"
+        f"color:{ui.TEXT};font-size:0.9em;font-weight:600'>{escape(c)}</span>" for c in chips) + "</div>",
+        unsafe_allow_html=True)
     if shown:  # early rounds: narrow cards, three or more per row; the last rounds: two per row; phones: one
         grid = "mc-grid-2" if len(rnd) <= 4 else "mc-grid"
         st.markdown(f"<div class='{grid}'>{''.join(_match_card(m, photos) for m in shown)}</div>",
                     unsafe_allow_html=True)
-        when = (", ".join(f"{d:%a %d %b}" for d in days) + ". ") if days else ""
-        st.caption(f"{when}{fmt}The bar is the model's chance before the match, in this format; the ring around each photo shows the player's colour.")
+        st.caption("The bar is the model's chance before the match, in this format (hover a card for the numbers); "
+                   "the ring around each photo shows the player's colour.")
     else:
         st.caption("The players of this round are not known yet; the road to the final below shows who is most likely.")
 

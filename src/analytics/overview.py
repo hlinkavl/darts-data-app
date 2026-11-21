@@ -189,3 +189,20 @@ def upcoming_cards(upcoming: pd.DataFrame, current: pd.DataFrame, elo_latest: pd
                 card[f"{col}_{side}"] = tracked.at[key, col] if key in tracked.index and col in tracked.columns else None
         cards.append(card)
     return pd.DataFrame(cards)[UPCOMING_COLUMNS]
+
+
+def freeze_played(new: pd.DataFrame, old: pd.DataFrame | None) -> pd.DataFrame:
+    """A played match keeps the chance it had while it was still open (stored by an earlier refresh).
+    Recomputed from today's PI it would already include its own result. `old`: the previous
+    darts_gold.tournament_draw_matches; matched by event, round, slot and both players."""
+    if old is None or old.empty or new.empty or "p_a" not in old.columns:
+        return new
+    keys = ["wiki_title", "round_order", "slot", "player_a", "player_b"]
+    prev = (old[old["mode"].isin(["live", "pre-tournament"]) & old["p_a"].notna()]
+            .sort_values("mode")  # 'live' before 'pre-tournament': the later value wins
+            .drop_duplicates(keys)[keys + ["p_a"]].rename(columns={"p_a": "_p_before"}))
+    out = new.merge(prev, on=keys, how="left")
+    played = (out["mode"] == "live") & out["winner"].map(lambda w: isinstance(w, str) and bool(w.strip()))
+    keep = played & out["_p_before"].notna()
+    out.loc[keep, "p_a"] = out.loc[keep, "_p_before"]
+    return out.drop(columns="_p_before")

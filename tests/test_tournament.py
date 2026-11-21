@@ -136,3 +136,15 @@ def test_snapshot_types_match_the_warehouse():
     assert not df.attrs
     assert str(df["at"].dtype).startswith("datetime64[") and df["at"].iloc[0].hour == 9
     assert df["pi"].dtype == float and str(df["day"].dtype).startswith("datetime64") and df["name"].iloc[0] == "Littler"
+
+
+def test_played_match_keeps_its_chance_from_before():
+    from analytics import overview
+    base = {"wiki_title": "GS", "round_order": 2, "player_a": "A", "player_b": "B"}
+    old = pd.DataFrame([{**base, "slot": 0, "mode": "live", "winner": None, "p_a": 0.47},
+                        {**base, "slot": 1, "mode": "live", "winner": None, "p_a": 0.60}])
+    new = pd.DataFrame([{**base, "slot": 0, "mode": "live", "winner": "B", "p_a": 0.50},   # played since: frozen
+                        {**base, "slot": 1, "mode": "live", "winner": None, "p_a": 0.62},  # still open: new value
+                        {**base, "slot": 2, "mode": "live", "winner": "A", "p_a": 0.55}])  # never seen open: as is
+    out = overview.freeze_played(new, old).set_index("slot")["p_a"]
+    assert out.to_dict() == {0: 0.47, 1: 0.62, 2: 0.55}

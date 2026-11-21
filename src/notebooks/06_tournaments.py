@@ -104,6 +104,10 @@ outputs = overview.draw_outputs(
     cal, draws, players, current, elo_latest,
     strength_history=lambda: pipeline.StrengthHistory(player_matches, matches, predictors, elo_params, rankings=rankings),
     today=today, previous=previous)
+# A played match keeps its chance from before it was played (today's PI already includes its result).
+if "tournament_draw_matches" in outputs and spark.catalog.tableExists("darts_gold.tournament_draw_matches"):
+    outputs["tournament_draw_matches"] = overview.freeze_played(
+        outputs["tournament_draw_matches"], spark.table("darts_gold.tournament_draw_matches").toPandas())
 for table, df in outputs.items():
     save(df, table)
 if "tournament_backtest_summary" in outputs:
