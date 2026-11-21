@@ -436,49 +436,31 @@ def _bracket(matches: pd.DataFrame, preds: pd.DataFrame) -> None:
                + (" On a phone the bracket starts at the current round; swipe for later rounds." if first_shown else ""))
 
 
-def _match_card(m, photos: dict, info: dict | None = None) -> str:
-    """Score and winner first; the model's pre-match chance as a bar; averages small. A match still to play also
-    shows its day, both players' PI and their head-to-head record (from the upcoming matches)."""
+def _match_card(m, photos: dict) -> str:
+    """A compact card: one row per player (photo, name, chance or score) and the pre-match chance as a thin bar.
+    The winner's row is green; at the right a played match shows the score, an open one the chance."""
     winner = _name(m.winner)
     played = winner is not None
 
-    def side(name, seed):
+    def row(name, seed, score, p):
         name = _name(name)
         if not name:
-            return f"<div class='vs-side' style='color:{ui.TEXT_2}'>TBD</div>"
+            return f"<div class='mc-row' style='color:{ui.TEXT_2}'>TBD</div>"
         won = played and name == winner
-        color = ui.WIN if won else (ui.TEXT_2 if played else ui.TEXT)
-        label = (f"<span style='color:{color};font-weight:{700 if won else 400}'>{escape(name)}{' ✓' if won else ''}</span>"
-                 f" <span style='color:{ui.TEXT_2};font-size:0.85em'>{_seed(seed)}</span>")
-        return f"<div class='vs-side'>{_avatar(photos, name, 36)}<div class='nm'>{label}</div></div>"
+        color = ui.TEXT if won or not played else ui.TEXT_2
+        right = (("w/o" if won else "") if m.walkover is True else ui.num(score, 0)) if played else ui.pct(p)
+        return (f"<div class='mc-row' style='color:{color};font-weight:{700 if won else 400}'>"
+                f"{_avatar(photos, name, 26)}<span class='mc-name'>{escape(name)} "
+                f"<span style='color:{ui.TEXT_2};font-weight:400;font-size:0.82em'>{_seed(seed)}</span></span>"
+                f"<span style='color:{ui.WIN if won else (ui.TEXT_2 if played else ui.TEXT)};font-weight:700'>{right}</span></div>")
 
-    centre = ("w/o" if m.walkover is True else f"{ui.num(m.score_a, 0)} – {ui.num(m.score_b, 0)}") if played else "vs"
-    centre_style = f"font-size:1.35em;font-weight:700;color:{ui.TEXT}" if played else f"color:{ui.TEXT_2}"
-    html = (f"<div style='display:flex;align-items:center;gap:8px'>{side(m.player_a, m.seed_a)}"
-            f"<div class='vs-centre' style='{centre_style}'>{centre}</div>{side(m.player_b, m.seed_b)}</div>")
-    if pd.notna(m.p_a):
-        upset = played and m.walkover is not True and winner != _name(m.player_a if m.p_a >= 0.5 else m.player_b)
-        html += (f"<div style='max-width:460px;margin:10px auto 0'>"
-                 f"<div style='display:flex;justify-content:space-between;align-items:baseline;font-weight:700;color:{ui.TEXT}'>"
-                 f"<span>{ui.pct(m.p_a)}</span><span style='font-weight:400;color:{ui.TEXT_2};font-size:0.82em'>"
-                 f"model before the match{' · ⚡ upset' if upset else ''}</span><span>{ui.pct(1 - m.p_a)}</span></div>"
-                 f"<div style='display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;margin-top:3px'>"
-                 f"<div style='width:{round(100 * m.p_a)}%;background:{ui.SERIES[0]}'></div>"
-                 f"<div style='flex:1;background:{ui.SERIES[1]}'></div></div></div>")
-    u = (info or {}).get(frozenset((_name(m.player_a), _name(m.player_b)))) if not played else None
-    if u is not None:
-        same = u.player_a_name == _name(m.player_a)
-        pi_a, pi_b = (u.pi_a, u.pi_b) if same else (u.pi_b, u.pi_a)
-        h_a, h_b = (u.h2h_wins_a, u.h2h_wins_b) if same else (u.h2h_wins_b, u.h2h_wins_a)
-        parts = [f"{pd.Timestamp(u.start_time):%a %d %b}", f"PI {ui.num(pi_a, 2)} vs {ui.num(pi_b, 2)}"]
-        if pd.notna(h_a) and pd.notna(h_b) and h_a + h_b > 0:
-            parts.append(f"head to head {int(h_a)}–{int(h_b)}")
-        html += (f"<div style='text-align:center;color:{ui.TEXT_2};font-size:0.8em;margin-top:6px'>"
-                 f"{' · '.join(parts)}</div>")
-    if pd.notna(m.avg_a) and pd.notna(m.avg_b):
-        html += (f"<div style='text-align:center;color:{ui.TEXT_2};font-size:0.8em;margin-top:6px'>"
-                 f"averages {ui.num(m.avg_a, 2)} – {ui.num(m.avg_b, 2)}</div>")
-    return f"<div style='border:1px solid {ui.GRID};border-radius:10px;padding:12px 14px;margin:8px 0'>{html}</div>"
+    p = m.p_a if pd.notna(m.p_a) else None
+    bar = (f"<div style='display:flex;height:5px;border-radius:3px;overflow:hidden;gap:2px;margin-top:6px'>"
+           f"<div style='width:{round(100 * p)}%;background:{ui.SERIES[0]}'></div>"
+           f"<div style='flex:1;background:{ui.SERIES[1]}'></div></div>") if p is not None else ""
+    return (f"<div style='border:1px solid {ui.GRID};border-radius:10px;padding:8px 10px;background:#20201f'>"
+            + row(m.player_a, m.seed_a, m.score_a, p) + row(m.player_b, m.seed_b, m.score_b, 1 - p if p is not None else None)
+            + bar + "</div>")
 
 
 def _upcoming_info() -> dict:
@@ -497,7 +479,8 @@ def _round_status(rnd: pd.DataFrame) -> str:
 
 
 def _match_details(matches: pd.DataFrame, photos: dict, event_key: str, info: dict) -> None:
-    """One round at a time, in playing order; opens on the round being played (finished events: the final)."""
+    """One round at a time, in playing order; opens on the round being played (finished events: the final).
+    info: upcoming matches by pair of names; their day goes once into the round's caption."""
     rounds = (matches[["round_order", "round_name", "first_to", "unit"]].drop_duplicates("round_order")
               .sort_values("round_order"))
     status = [_round_status(matches[matches["round_order"] == o]) for o in rounds["round_order"]]
@@ -508,11 +491,14 @@ def _match_details(matches: pd.DataFrame, photos: dict, event_key: str, info: di
     rnd = matches[matches["round_order"] == rounds["round_order"].iloc[choice]].sort_values("slot")
     r = rounds.iloc[choice]
     fmt = f"{r.round_name}: first to {int(r.first_to)} {r.unit}. " if pd.notna(r.first_to) else ""
-    cards = [_match_card(m, photos, info) for m in rnd.itertuples() if _name(m.player_a) and _name(m.player_b)]
-    if cards:  # two columns on a wide screen, one on a phone
-        st.markdown("<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,430px),1fr));"
-                    f"gap:0 12px'>{''.join(cards)}</div>", unsafe_allow_html=True)
-        st.caption(f"{fmt}The chances use this format: longer matches favour the stronger player (see Methodology).")
+    shown = [m for m in rnd.itertuples() if _name(m.player_a) and _name(m.player_b)]
+    days = sorted({pd.Timestamp(u.start_time).normalize() for m in shown
+                   if (u := info.get(frozenset((_name(m.player_a), _name(m.player_b))))) is not None})
+    if shown:  # narrow cards: three or four columns on a wide screen, one or two on a phone
+        st.markdown("<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));"
+                    f"gap:8px'>{''.join(_match_card(m, photos) for m in shown)}</div>", unsafe_allow_html=True)
+        when = (", ".join(f"{d:%a %d %b}" for d in days) + ". ") if days else ""
+        st.caption(f"{when}{fmt}Blue and orange bar: the model's chance before the match, in this format.")
     else:
         st.caption("The players of this round are not known yet; the road to the final below shows who is most likely.")
 

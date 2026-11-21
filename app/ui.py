@@ -195,6 +195,9 @@ CSS = f"""
 .side-card .note {{color:{TEXT_2};font-size:0.78em;margin-top:8px;line-height:1.45}}
 .side-credits {{color:{TEXT_2};font-size:0.72em;line-height:1.5;margin-top:14px;opacity:0.85}}
 .st-key-mobile_nav_row {{display:none}}
+.mc-row {{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:0.92em}}
+.mc-row img, .mc-row > span:first-child {{margin:0 !important}}
+.mc-name {{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 .vs-side {{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px}}
 .vs-side .nm {{line-height:1.25}}
 .vs-centre {{min-width:84px;text-align:center}}
