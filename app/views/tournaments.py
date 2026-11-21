@@ -149,8 +149,9 @@ def _header(ev: dict, preds: pd.DataFrame, draw: pd.DataFrame, cal: pd.DataFrame
     else:
         days = (pd.Timestamp(ev["start"]).normalize() - pd.Timestamp.now().normalize()).days \
             if ev["start"] is not None and pd.notna(ev["start"]) else None
-        facts = [("Starts", "tomorrow" if days == 1 else (f"in {days} days" if days and days > 1 else "–")),
-                 ("Players", str(preds["player_name"].nunique())), ("Title favourite", favourite)]
+        facts = [("Starts", (f"{pd.Timestamp(ev['start']):%a %d %b}, " if days else "")
+                  + ("tomorrow" if days == 1 else (f"in {days} days" if days and days > 1 else "–"))),
+                 ("Stage", _stage(draw)), ("Title favourite", favourite)]
         note = "Predictions from the players' current form."
     label, bg, fg = STATUS_PILL.get(mode, STATUS_PILL["pre-tournament"])
     cells = "".join(f"<div><div style='color:{ui.TEXT_2};font-size:0.78em'>{escape(k)}</div>"
@@ -430,13 +431,14 @@ def _bracket(matches: pd.DataFrame, preds: pd.DataFrame) -> None:
                 f"margin:0 0 8px'>{''.join(legend)}</div>"
                 f"<div style='display:flex;gap:14px;overflow-x:auto;padding-bottom:6px'>{''.join(cols)}</div>",
                 unsafe_allow_html=True)
-    st.caption("The small % is the model's chance to win the match, before it is played. "
-               "Full names, format and averages of every match are in Match details below."
+    st.caption("The small % is the model's chance to win the match, before it is played. Every match with full "
+               "names, day and averages: Matches above."
                + (" On a phone the bracket starts at the current round; swipe for later rounds." if first_shown else ""))
 
 
-def _match_card(m, photos: dict) -> str:
-    """Score and winner first; the model's pre-match chance as a bar; averages small."""
+def _match_card(m, photos: dict, info: dict | None = None) -> str:
+    """Score and winner first; the model's pre-match chance as a bar; averages small. A match still to play also
+    shows its day, both players' PI and their head-to-head record (from the upcoming matches)."""
     winner = _name(m.winner)
     played = winner is not None
 
@@ -463,54 +465,59 @@ def _match_card(m, photos: dict) -> str:
                  f"<div style='display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;margin-top:3px'>"
                  f"<div style='width:{round(100 * m.p_a)}%;background:{ui.SERIES[0]}'></div>"
                  f"<div style='flex:1;background:{ui.SERIES[1]}'></div></div></div>")
+    u = (info or {}).get(frozenset((_name(m.player_a), _name(m.player_b)))) if not played else None
+    if u is not None:
+        same = u.player_a_name == _name(m.player_a)
+        pi_a, pi_b = (u.pi_a, u.pi_b) if same else (u.pi_b, u.pi_a)
+        h_a, h_b = (u.h2h_wins_a, u.h2h_wins_b) if same else (u.h2h_wins_b, u.h2h_wins_a)
+        parts = [f"{pd.Timestamp(u.start_time):%a %d %b}", f"PI {ui.num(pi_a, 2)} vs {ui.num(pi_b, 2)}"]
+        if pd.notna(h_a) and pd.notna(h_b) and h_a + h_b > 0:
+            parts.append(f"head to head {int(h_a)}–{int(h_b)}")
+        html += (f"<div style='text-align:center;color:{ui.TEXT_2};font-size:0.8em;margin-top:6px'>"
+                 f"{' · '.join(parts)}</div>")
     if pd.notna(m.avg_a) and pd.notna(m.avg_b):
         html += (f"<div style='text-align:center;color:{ui.TEXT_2};font-size:0.8em;margin-top:6px'>"
                  f"averages {ui.num(m.avg_a, 2)} – {ui.num(m.avg_b, 2)}</div>")
     return f"<div style='border:1px solid {ui.GRID};border-radius:10px;padding:12px 14px;margin:8px 0'>{html}</div>"
 
 
-def _match_details(matches: pd.DataFrame, photos: dict, event_key: str) -> None:
-    """Rounds from the final backwards: the latest rounds first, the early rounds one click away."""
+def _upcoming_info() -> dict:
+    """Upcoming matches (date, both PIs, head-to-head record) by the pair of names, for the match cards."""
+    up = data.table("upcoming_matches")
+    return {frozenset((r.player_a_name, r.player_b_name)): r for r in up.itertuples()} if len(up) else {}
+
+
+def _round_status(rnd: pd.DataFrame) -> str:
+    played = int(_known(rnd["winner"]).sum())
+    if played == len(rnd):
+        return "played"
+    if played:
+        return f"{played} of {len(rnd)} played"
+    return "next" if (_known(rnd["player_a"]) & _known(rnd["player_b"])).any() else "not decided yet"
+
+
+def _match_details(matches: pd.DataFrame, photos: dict, event_key: str, info: dict) -> None:
+    """One round at a time, in playing order; opens on the round being played (finished events: the final)."""
     rounds = (matches[["round_order", "round_name", "first_to", "unit"]].drop_duplicates("round_order")
-              .sort_values("round_order", ascending=False))
-    labels = [r.round_name + (f" · first to {int(r.first_to)} {r.unit}" if pd.notna(r.first_to) else "") for r in rounds.itertuples()]
-    # Finished events open on the final; upcoming and live ones on the next round to be played.
-    open_rounds = [i for i, o in enumerate(rounds["round_order"])
-                   if ((matches["round_order"] == o) & _known(matches["player_a"]) & _known(matches["player_b"])
-                       & ~_known(matches["winner"])).any()]
-    choice = st.selectbox("Round", range(len(labels)), index=open_rounds[-1] if open_rounds else 0,
-                          format_func=lambda i: labels[i], key=f"draw_round_{event_key}")  # own default per event
+              .sort_values("round_order"))
+    status = [_round_status(matches[matches["round_order"] == o]) for o in rounds["round_order"]]
+    labels = [f"{r.round_name} · {st_}" for r, st_ in zip(rounds.itertuples(), status)]
+    current = next((i for i, x in enumerate(status) if x == "next" or " of " in x), len(labels) - 1)
+    choice = st.selectbox("Round", range(len(labels)), index=current, format_func=lambda i: labels[i],
+                          key=f"draw_round_{event_key}")  # own default per event
     rnd = matches[matches["round_order"] == rounds["round_order"].iloc[choice]].sort_values("slot")
-    st.markdown("".join(_match_card(m, photos) for m in rnd.itertuples() if _name(m.player_a) or _name(m.player_b)), unsafe_allow_html=True)
+    r = rounds.iloc[choice]
+    fmt = f"{r.round_name}: first to {int(r.first_to)} {r.unit}. " if pd.notna(r.first_to) else ""
+    cards = [_match_card(m, photos, info) for m in rnd.itertuples() if _name(m.player_a) and _name(m.player_b)]
+    if cards:  # two columns on a wide screen, one on a phone
+        st.markdown("<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,430px),1fr));"
+                    f"gap:0 12px'>{''.join(cards)}</div>", unsafe_allow_html=True)
+        st.caption(f"{fmt}The chances use this format: longer matches favour the stronger player (see Methodology).")
+    else:
+        st.caption("The players of this round are not known yet; the road to the final below shows who is most likely.")
 
 
 # ------------------------------------------------------------------------------------- upcoming, season
-
-def _upcoming(up: pd.DataFrame) -> None:
-    if up.empty:
-        st.info("No scheduled matches right now. They appear here as soon as a draw or order of play is published.")
-        return
-    photos = _photos()
-    for m in up.sort_values("start_time").itertuples():
-        with st.container(border=True):
-            when = pd.Timestamp(m.start_time)  # the draw gives the round's day only (time 00:00)
-            st.caption(f"{m.event_title} · {m.round_name} · {when:%a %d %b}" + (f" {when:%H:%M}" if when.hour or when.minute else ""))
-            c1, c2, c3 = st.columns([4, 4, 4])
-            with c1:
-                st.markdown(f"{_avatar(photos, m.player_a_name, 40)}**{m.player_a_name}**", unsafe_allow_html=True)
-                a1, a2 = st.columns(2)
-                a1.metric("PI", ui.num(m.pi_a, 2), help=ui.PI_HELP)
-                a2.metric("Effective Average", ui.num(m.effective_average_a), help=ui.EFFECTIVE_AVERAGE_HELP)
-            with c2:
-                st.progress(float(m.p_a), text=f"{ui.pct(m.p_a)} – {ui.pct(1 - m.p_a)}")
-                st.caption(f"Head-to-head {int(m.h2h_wins_a)}–{int(m.h2h_wins_b)} · typical match (first to 6 legs)")
-            with c3:
-                st.markdown(f"<div style='text-align:right'><b>{escape(m.player_b_name)}</b>{_avatar(photos, m.player_b_name, 40)}</div>",
-                            unsafe_allow_html=True)
-                b1, b2 = st.columns(2)
-                b1.metric("PI", ui.num(m.pi_b, 2), help=ui.PI_HELP)
-                b2.metric("Effective Average", ui.num(m.effective_average_b), help=ui.EFFECTIVE_AVERAGE_HELP)
-
 
 def _season(cal: pd.DataFrame) -> None:
     if cal.empty:
@@ -550,7 +557,7 @@ def render() -> None:
             st.caption(f"{'🔴 Now' if n.status == 'in progress' else '🗓️ Next major'}: **{n.tournament_name}** · {when}"
                        + ("" if n.has_draw else " · predictions appear once the draw is published"))
 
-    tab_pred, tab_season, tab_up = st.tabs(["Predictions", "Season calendar", "Upcoming matches"])
+    tab_pred, tab_season = st.tabs(["Predictions", "Season calendar"])
     with tab_pred:
         events = _events(preds if len(preds) else pd.DataFrame(columns=["wiki_title", "mode"]), cal)
         ev = None
@@ -577,7 +584,8 @@ def render() -> None:
             with left:
                 st.subheader("Chance to win the title")
                 winners = pr[pr["round_name"] == "Winner"]
-                alive = winners[winners["p_reach"] > 0]  # during an event the players already out have 0 %
+                # during an event the players already out have 0 %; before it nobody is out
+                alive = winners[winners["p_reach"] > 0] if ev["mode"] == "live" else winners
                 st.plotly_chart(_title_chart(alive if len(alive) else winners), width="stretch",
                                 config={"displayModeBar": False})
                 if 0 < len(alive) < len(winners):
@@ -588,17 +596,15 @@ def render() -> None:
                     _beat_the_odds(pr, draw, photos)
                 else:
                     _on_the_rise(pr, draw, ev["mode"], photos)
-            st.subheader("The draw")
             if draw.empty:
                 st.info("The draw is not published yet.")
             else:
+                st.subheader("Matches")
+                _match_details(draw, photos, f"{ev['title']}_{ev['mode']}", _upcoming_info())
+                late = draw["round_order"].nunique() > BRACKET_ROUNDS
+                st.subheader("Road to the final" if late else "The draw")
                 _bracket(draw, pr)
-                st.subheader("Match details")
-                _match_details(draw, photos, f"{ev['title']}_{ev['mode']}")
-                st.caption("Probabilities use each round's format (legs or sets); see Methodology.")
             with st.expander("Round by round: every player's chance to reach each round"):
                 _round_table(pr)
     with tab_season:
         _season(cal)
-    with tab_up:
-        _upcoming(data.table("upcoming_matches"))
