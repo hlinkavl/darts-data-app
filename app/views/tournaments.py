@@ -115,6 +115,17 @@ STATUS_PILL = {"backtest": ("Finished", "#2a3a2a", "#8fd18f"), "live": ("Live", 
                "pre-tournament": ("Upcoming", "#22324a", "#8cb8ee")}
 
 
+def _stage(draw: pd.DataFrame) -> str:
+    """Where a running event is: the first round with a match still to play ('Semi-finals · 1 of 2 played')."""
+    for order in sorted(draw["round_order"].unique()):
+        rnd = draw[draw["round_order"] == order]
+        done = int(_known(rnd["winner"]).sum())
+        if done < len(rnd):
+            name = rnd["round_name"].iloc[0]
+            return f"{name} · {done} of {len(rnd)} played" if done else f"{name} next"
+    return "Finished"
+
+
 def _header(ev: dict, preds: pd.DataFrame, draw: pd.DataFrame, cal: pd.DataFrame) -> None:
     """One compact card: event name with a status pill, dates, and up to three facts in normal-size text."""
     mode = ev["mode"]
@@ -133,9 +144,7 @@ def _header(ev: dict, preds: pd.DataFrame, draw: pd.DataFrame, cal: pd.DataFrame
                      ("Pre-match favourite won", f"{ui.num(b.favourite_won_pct, 0)} % of {int(b.matches)} matches")]
         note = "Everything below is what the model predicted before the first match."
     elif mode == "live":
-        known = draw[_known(draw["player_a"]) & _known(draw["player_b"])]
-        facts = [("Matches played", f"{int(_known(known['winner']).sum())} of {len(known)}"),
-                 ("Title favourite now", favourite)]
+        facts = [("Stage", _stage(draw)), ("Title favourite now", favourite)]
         note = "Played matches are fixed; the rest of the draw is simulated again after every refresh."
     else:
         days = (pd.Timestamp(ev["start"]).normalize() - pd.Timestamp.now().normalize()).days \
