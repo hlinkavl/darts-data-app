@@ -407,22 +407,20 @@ def _match_card(m, photos: dict) -> str:
     winner = _name(m.winner)
     played = winner is not None
 
-    def side(name, seed, align):
+    def side(name, seed):
         name = _name(name)
         if not name:
-            return f"<div style='flex:1;text-align:{align};color:{ui.TEXT_2}'>TBD</div>"
+            return f"<div class='vs-side' style='color:{ui.TEXT_2}'>TBD</div>"
         won = played and name == winner
         color = ui.WIN if won else (ui.TEXT_2 if played else ui.TEXT)
         label = (f"<span style='color:{color};font-weight:{700 if won else 400}'>{escape(name)}{' ✓' if won else ''}</span>"
-                 f" <span style='color:{ui.TEXT_2}'>{_seed(seed)}</span>")
-        img = _avatar(photos, name, 36)
-        inner = f"{label}{img}" if align == "right" else f"{img}{label}"
-        return f"<div style='flex:1;text-align:{align}'>{inner}</div>"
+                 f" <span style='color:{ui.TEXT_2};font-size:0.85em'>{_seed(seed)}</span>")
+        return f"<div class='vs-side'>{_avatar(photos, name, 36)}<div class='nm'>{label}</div></div>"
 
     centre = ("w/o" if m.walkover is True else f"{ui.num(m.score_a, 0)} – {ui.num(m.score_b, 0)}") if played else "vs"
     centre_style = f"font-size:1.35em;font-weight:700;color:{ui.TEXT}" if played else f"color:{ui.TEXT_2}"
-    html = (f"<div style='display:flex;align-items:center;gap:10px'>{side(m.player_a, m.seed_a, 'right')}"
-            f"<div style='min-width:90px;text-align:center;{centre_style}'>{centre}</div>{side(m.player_b, m.seed_b, 'left')}</div>")
+    html = (f"<div style='display:flex;align-items:center;gap:8px'>{side(m.player_a, m.seed_a)}"
+            f"<div class='vs-centre' style='{centre_style}'>{centre}</div>{side(m.player_b, m.seed_b)}</div>")
     if pd.notna(m.p_a):
         upset = played and m.walkover is not True and winner != _name(m.player_a if m.p_a >= 0.5 else m.player_b)
         html += (f"<div style='max-width:460px;margin:10px auto 0'>"
@@ -545,7 +543,12 @@ def render() -> None:
             left, right = st.columns([3, 2], gap="large")
             with left:
                 st.subheader("Chance to win the title")
-                st.plotly_chart(_title_chart(pr[pr["round_name"] == "Winner"]), width="stretch", config={"displayModeBar": False})
+                winners = pr[pr["round_name"] == "Winner"]
+                alive = winners[winners["p_reach"] > 0]  # during an event the players already out have 0 %
+                st.plotly_chart(_title_chart(alive if len(alive) else winners), width="stretch",
+                                config={"displayModeBar": False})
+                if 0 < len(alive) < len(winners):
+                    st.caption(f"Players still in the draw; {len(winners) - len(alive)} are already out.")
                 _all_title_chances(pr)
             with right:
                 if ev["mode"] == "backtest":

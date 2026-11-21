@@ -14,8 +14,21 @@ What the app is and how it is built: [README](../README.md). How the numbers are
 [7. Data model](#7-data-model) ·
 [8. Decisions and known limits](#8-decisions-and-known-limits)
 
-**Start the app:** [Actions → start-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml)
-→ Run workflow (it stops after 24 h; the refresh does not start it, see section 1).
+## Quick links
+
+| | |
+|---|---|
+| **Public copy** (anyone, always on) | [darts-performance-analyzer.streamlit.app](https://darts-performance-analyzer.streamlit.app), runs on Streamlit Community Cloud from the `public-app` branch |
+| **Full Databricks app** (with "Ask the data") | [darts-performance-analyzer](https://darts-performance-analyzer-7474646547340845.aws.databricksapps.com), Databricks sign-in. Stopped unless started: [Actions → start-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml) → Run workflow → Run workflow; ready in ~3 min, stops after 24 h. Without GitHub: Databricks → Compute → Apps → darts-performance-analyzer → Start. |
+| **Refresh by hand** | [Actions → refresh](https://github.com/hlinkavl/darts-data-app/actions/workflows/refresh.yml) → Run workflow (runs on its own daily during majors) |
+| **Republish the public copy** | [Actions → publish-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/publish-app.yml) → Run workflow (runs on its own after every refresh) |
+
+[![refresh](https://github.com/hlinkavl/darts-data-app/actions/workflows/refresh.yml/badge.svg)](https://github.com/hlinkavl/darts-data-app/actions/workflows/refresh.yml)
+[![publish-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/publish-app.yml/badge.svg)](https://github.com/hlinkavl/darts-data-app/actions/workflows/publish-app.yml)
+[![start-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml/badge.svg)](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml)
+
+Why the Databricks app is not always on: a running app costs Free Edition quota every hour (about 3 DBU a day, twice
+the daily refresh). The public copy needs no Databricks compute at all.
 
 Quick facts: Databricks CLI profile `darts`, catalog `workspace`, SQL warehouse `c7c519d783971c09`, app
 `darts-performance-analyzer`, Genie space `01f1ddf6938b1cb19ccfe38d51512b61`, job `darts_refresh` (bundle target `dev`).

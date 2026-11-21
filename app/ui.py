@@ -17,16 +17,22 @@ POSITIVE, NEGATIVE = "#3987e5", "#e66767"
 # Status palette, always shown with an icon and a label
 STATUS = {"green": ("🟢", "OK", "#0ca30c"), "yellow": ("🟡", "Attention", "#fab219"), "red": ("🔴", "Problem", "#d03b3b")}
 
+# Overall health as a pill: label, background, text colour (Data & Health page and the sidebar)
+HEADLINE = {"green": ("All checks passed", "#2a3a2a", "#8fd18f"), "yellow": ("Needs attention", "#3d3420", "#f2c46b"),
+            "red": ("Problem", "#4a2323", "#ff8a8a")}
+
 CREDITS = ("Data: Wikipedia & Wikidata (CC BY-SA) · PDC Order of Merit · history: Darts Orakel (until Oct 2026), "
            "Mastercaller / iDarts (until Nov 2026). Non-commercial project.")
 
 
 def layout(fig: go.Figure, height: int = 320, **kwargs) -> go.Figure:
-    """Recessive grid and axes, one y-axis, hover on, dark surface."""
+    """Recessive grid and axes, one y-axis, hover on, no zoom, dark surface."""
     fig.update_layout(
         height=height, margin=dict(l=8, r=8, t=28, b=8), paper_bgcolor=SURFACE, plot_bgcolor=SURFACE,
         font=dict(color=TEXT_2, size=13), hoverlabel=dict(bgcolor="#262624", font_color=TEXT, bordercolor=GRID),
-        showlegend=False, **kwargs)
+        showlegend=False, dragmode=False, **kwargs)  # no drag-zoom: on a phone a drag must scroll the page
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True)
     fig.update_xaxes(gridcolor=GRID, zerolinecolor=GRID, linecolor=GRID, tickfont_color=TEXT_2)
     fig.update_yaxes(gridcolor=GRID, zerolinecolor=GRID, linecolor=GRID, tickfont_color=TEXT_2)
     return fig
@@ -171,3 +177,70 @@ def surnames(names) -> dict[str, str]:
 # ------------------------------------------------------------------------------------------ blocks
 
 WIN, LOSS = STATUS["green"][2], STATUS["red"][2]
+
+
+# ------------------------------------------------------------------------------------------- page styles
+
+# Shared CSS: the sidebar card, the cards built from HTML, and the phone layout (most visitors open the public link
+# on a phone). Classes are used where a phone needs a different layout than inline styles allow.
+CSS = f"""
+<style>
+.side-card {{border:1px solid {GRID};border-radius:12px;padding:14px 16px;background:#20201f}}
+.side-card .brand {{font-weight:700;color:{TEXT};font-size:1.02em;margin-bottom:10px}}
+.side-card .pill {{display:inline-block;border-radius:999px;padding:3px 12px;font-size:0.8em;font-weight:600}}
+.side-card .kv {{display:flex;justify-content:space-between;gap:10px;font-size:0.85em;padding:7px 0;
+                 border-top:1px solid {GRID}}}
+.side-card .kv:first-of-type {{margin-top:12px}}
+.side-card .kv span {{color:{TEXT_2}}}
+.side-card .kv b {{color:{TEXT};font-weight:600;text-align:right}}
+.side-card .note {{color:{TEXT_2};font-size:0.78em;margin-top:8px;line-height:1.45}}
+.side-credits {{color:{TEXT_2};font-size:0.72em;line-height:1.5;margin-top:14px;opacity:0.85}}
+.st-key-mobile_nav_row {{display:none}}
+.vs-side {{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px}}
+.vs-side .nm {{line-height:1.25}}
+.vs-centre {{min-width:84px;text-align:center}}
+@media (max-width: 640px) {{
+  .st-key-mobile_nav_row {{display:block;margin-bottom:-0.4rem}}
+  .st-key-mobile_nav_row [data-testid="stButtonGroup"] > div {{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
+                                                              padding-bottom:2px}}
+  .st-key-mobile_nav_row [data-testid="stButtonGroup"] button {{flex:0 0 auto;max-width:none}}
+  .st-key-mobile_nav_row [data-testid="stButtonGroup"] button * {{white-space:nowrap;overflow:visible;
+                                                                 text-overflow:clip}}
+  [data-testid="stMainBlockContainer"] {{padding-left:0.9rem;padding-right:0.9rem;padding-top:3.2rem}}
+  [data-testid="stMainBlockContainer"] h1 {{font-size:1.7rem}}
+  [data-testid="stMainBlockContainer"] h2 {{font-size:1.3rem}}
+  [data-testid="stMainBlockContainer"] h3 {{font-size:1.15rem}}
+  .vs-centre {{min-width:58px}}
+  .ph-card {{padding:14px !important}}
+  .ph-photo img, .ph-photo > span {{width:76px !important;height:76px !important}}
+  .ph-name {{flex:1 1 0 !important;min-width:0 !important;padding-right:0 !important}}
+  .ph-name .big {{font-size:1.5em !important}}
+  .ph-metrics {{flex:1 1 100% !important;border-top:1px solid {GRID};padding-top:12px}}
+  .ph-metric {{flex:1 1 0 !important;min-width:0 !important;padding:0 6px !important}}
+  .ph-metric:first-child {{border-left:none !important}}
+  .ph-metric .val {{font-size:2em !important}}
+  .bd-table {{font-size:0.9em}}
+  .h2h-side img, .h2h-side > span:first-child {{width:60px !important;height:60px !important}}
+  .h2h-side .chance {{font-size:2em !important}}
+}}
+</style>
+"""
+
+
+def sidebar_status(status: dict) -> str:
+    """The sidebar card: health as a pill, then when the data ends and when it was refreshed."""
+    label, bg, fg = HEADLINE.get(status["status"], HEADLINE["green"])
+
+    def when(ts, fmt):
+        return f"{pd.Timestamp(ts):{fmt}}" if ts is not None and pd.notna(ts) else "–"
+
+    rows = [("Results until", when(status["data_until"], "%d %b %Y")),
+            ("Updated", when(status["checked_at"], "%d %b, %H:%M") + (" UTC" if status["checked_at"] is not None else "")),
+            ("Model", status["model_version"] or "–")]
+    note = {"public": "Public copy, refreshed daily while a major is running.",
+            "local": "🧪 Local snapshot (development)."}.get(status["mode"], "")
+    return (f"<div class='side-card'><div class='brand'>🎯 Darts Performance Analyzer</div>"
+            f"<span class='pill' style='background:{bg};color:{fg}'>● {label}</span>"
+            + "".join(f"<div class='kv'><span>{k}</span><b>{v}</b></div>" for k, v in rows)
+            + (f"<div class='note'>{note}</div>" if note else "")
+            + f"</div><div class='side-credits'>{CREDITS}</div>")

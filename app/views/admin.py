@@ -9,8 +9,7 @@ import data
 import refresh
 import ui
 
-HEADLINE = {"green": ("All checks passed", "#2a3a2a", "#8fd18f"), "yellow": ("Needs attention", "#3d3420", "#f2c46b"),
-            "red": ("Problem", "#4a2323", "#ff8a8a")}
+HEADLINE = ui.HEADLINE
 ORDER = {"red": 0, "yellow": 1, "green": 2}
 
 

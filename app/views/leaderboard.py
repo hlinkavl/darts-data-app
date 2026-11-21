@@ -77,14 +77,17 @@ def render() -> None:
         lambda r: [HIGHLIGHT if r["player_name"] == pick else "" for _ in r], axis=1).format(TABLE_FORMATS, na_rep="–")
     picked = st.dataframe(
         styled,
-        hide_index=True, width="stretch", height=520,
+        hide_index=True, width="stretch", height=460,
         column_config={
-            "open": st.column_config.TextColumn("", width=34, help="Open the player's profile"),
-            "oom": st.column_config.NumberColumn("PDC OoM #", help="Current official PDC Order of Merit (2-year prize money)"),
-            "rank": st.column_config.NumberColumn("PI #", help="Position by Performance Index"),
-            "player_name": "Player",
+            # Narrow first columns: on a phone the rank, the name and the PI bar fit the screen.
+            "open": st.column_config.TextColumn("", width=30, help="Open the player's profile"),
+            "oom": st.column_config.NumberColumn("OoM #", width=54,
+                                                 help="Current official PDC Order of Merit (2-year prize money)"),
+            "rank": st.column_config.NumberColumn("PI #", width=46, help="Position by Performance Index"),
+            "player_name": st.column_config.TextColumn("Player", width=124),
             "change": st.column_config.NumberColumn("PI vs last month", format="%+.2f"),
-            "pi": st.column_config.ProgressColumn("PI", min_value=0.0, max_value=10.0, format="%.2f", help=ui.PI_HELP),
+            "pi": st.column_config.ProgressColumn("PI", width=94, min_value=0.0, max_value=10.0, format="%.2f",
+                                                  help=ui.PI_HELP),
             "effective_average": st.column_config.NumberColumn("Effective Average", format="%.1f", help=ui.EFFECTIVE_AVERAGE_HELP),
             "avg_major": st.column_config.NumberColumn("3-Dart Avg on majors (L20)", format="%.2f",
                                                        help="3-dart average over the last 20 matches on majors"),
@@ -118,11 +121,19 @@ def render() -> None:
     p = ui.match_probability(ui.head_to_head(ra["pi"], rb["pi"]), first_to, unit)
     photos = dict(zip(data.players()["player_key"], data.players()["image_file"]))
     st.markdown(_h2h_card(ra, rb, p, fmt, photos, _oom), unsafe_allow_html=True)
-    comp = pd.DataFrame({
-        "": ["PI", "Effective Average", "3-Dart Average on majors (L20)", "Form on majors", "Order of Merit"],
-        a: [ui.num(ra["pi"], 2), ui.num(ra["effective_average"]), ui.num(ra["avg_major"], 2), ui.signed(ra["form_major"]),
-            _oom(ra)],
-        b: [ui.num(rb["pi"], 2), ui.num(rb["effective_average"]), ui.num(rb["avg_major"], 2), ui.signed(rb["form_major"]),
-            _oom(rb)]})
-    st.dataframe(comp, hide_index=True, width="stretch")
+    # A plain HTML table: three narrow columns fit a phone, where a dataframe would cut off the second player.
+    rows = [("PI", ui.num(ra["pi"], 2), ui.num(rb["pi"], 2)),
+            ("Effective Average", ui.num(ra["effective_average"]), ui.num(rb["effective_average"])),
+            ("3-Dart Average on majors (L20)", ui.num(ra["avg_major"], 2), ui.num(rb["avg_major"], 2)),
+            ("Form on majors", ui.signed(ra["form_major"]), ui.signed(rb["form_major"])),
+            ("Order of Merit", _oom(ra), _oom(rb))]
+    short = ui.surnames([a, b])
+    grid = "display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:8px;padding:8px 4px;align-items:center"
+    head = (f"<div style='{grid};color:{ui.TEXT_2};font-size:0.82em;border-bottom:1px solid {ui.GRID}'><div></div>"
+            f"<div style='text-align:right'><span style='color:{ui.SERIES[0]}'>●</span> {escape(short.get(a, a))}</div>"
+            f"<div style='text-align:right'><span style='color:{ui.SERIES[1]}'>●</span> {escape(short.get(b, b))}</div></div>")
+    body = "".join(f"<div style='{grid};border-bottom:1px solid {ui.GRID}'><div style='color:{ui.TEXT_2}'>{k}</div>"
+                   f"<div style='text-align:right;color:{ui.TEXT};font-weight:600'>{va}</div>"
+                   f"<div style='text-align:right;color:{ui.TEXT};font-weight:600'>{vb}</div></div>" for k, va, vb in rows)
+    st.markdown(f"<div style='max-width:640px;font-size:0.92em;margin-bottom:12px'>{head}{body}</div>", unsafe_allow_html=True)
     st.caption("Longer formats favour the stronger player: luck evens out over more legs.")

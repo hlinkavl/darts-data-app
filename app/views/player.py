@@ -68,27 +68,29 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
     base = _ref_average(row)
 
     def metric(label: str, value: str, note: str) -> str:
-        return (f"<div style='flex:0 0 auto;min-width:150px;text-align:center;padding:0 22px;"
+        return (f"<div class='ph-metric' style='flex:0 0 auto;min-width:150px;text-align:center;padding:0 22px;"
                 f"border-left:1px solid {ui.GRID}'>"
                 f"<div style='{LABEL}'>{label}</div>"
-                f"<div style='font-size:2.6em;font-weight:700;color:{ui.TEXT};line-height:1.15'>{value}</div>"
+                f"<div class='val' style='font-size:2.6em;font-weight:700;color:{ui.TEXT};line-height:1.15'>{value}</div>"
                 f"<div style='color:{ui.TEXT_2};font-size:0.85em'>{note}</div></div>")
 
-    # One HTML card (flexbox), so the photo, the name and both numbers share one vertical centre line.
+    # One HTML card (flexbox), so the photo, the name and both numbers share one vertical centre line. On a phone
+    # (ui.CSS) the photo sits next to the name and the two numbers share a row below.
     st.markdown(
-        f"<div style='display:flex;align-items:center;flex-wrap:wrap;gap:16px 0;border:1px solid {ui.GRID};"
+        f"<div class='ph-card' style='display:flex;align-items:center;flex-wrap:wrap;gap:16px 0;border:1px solid {ui.GRID};"
         f"border-radius:14px;padding:18px 8px 18px 22px;margin:4px 0 18px'>"
-        f"<div style='flex:0 0 auto;display:flex;align-items:center;padding-right:18px'>"
+        f"<div class='ph-photo' style='flex:0 0 auto;display:flex;align-items:center;padding-right:18px'>"
         f"{ui.avatar(image, 120, name=name, ring=ui.GRID)}</div>"
-        f"<div style='flex:1 1 260px;min-width:220px;padding-right:18px'>"
-        f"<div style='font-size:2.1em;font-weight:700;line-height:1.2;color:{ui.TEXT}'>"
+        f"<div class='ph-name' style='flex:1 1 260px;min-width:220px;padding-right:18px'>"
+        f"<div class='big' style='font-size:2.1em;font-weight:700;line-height:1.2;color:{ui.TEXT}'>"
         f"<span style='color:{ui.TEXT_2}'>{oom_txt}</span> {escape(name)}</div>"
         f"<div style='color:{ui.TEXT_2};margin-top:4px'>{' · '.join(s for s in sub if s)}</div>"
         f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-top:8px'>{oom_txt} in the PDC Order of Merit</div></div>"
+        f"<div class='ph-metrics' style='display:flex;flex:0 0 auto'>"
         + metric("Performance Index", ui.num(row["pi"], 2), f"#{int(row['rank'])} by PI")
         + metric("Effective Average", ui.num(row["effective_average"]),
                  f"vs {ui.num(base)} top-32 average" if base is not None and pd.notna(base) else "")
-        + "</div>", unsafe_allow_html=True)
+        + "</div></div>", unsafe_allow_html=True)
 
 
 def _breakdown(row: pd.Series) -> None:
@@ -136,31 +138,25 @@ def _breakdown(row: pd.Series) -> None:
     st.markdown(f"<div style='max-width:760px;padding-bottom:20px'>{html}</div>", unsafe_allow_html=True)
     if base is not None and pd.notna(base):
         with st.expander("How to read the breakdown"):
-            steps = [f"<b>Base</b>: an average top-32 player (the mean of the 32 strongest players), with a 3-dart "
-                     f"average of {ui.num(base)}.",
-                     "<b>Gap</b>: each row compares the player with them, as a difference in 3-dart-average points "
-                     "(▲ better, ▼ worse).",
-                     f"<b>Result</b>: base + all gaps = Effective Average {ui.num(row['effective_average'])}, which "
-                     f"gives the PI {ui.num(row['pi'], 2)}."]
+            eff, pi = ui.num(row["effective_average"]), ui.num(row["pi"], 2)
+            steps = [f"<b>Start:</b> an average top-32 player throws <b>{ui.num(base)}</b>.",
+                     "<b>Each row:</b> what the player's difference in that input is worth, in 3-dart-average points "
+                     "(▲ adds, ▼ takes away).",
+                     f"<b>Result:</b> {ui.num(base)} + all rows = Effective Average <b>{eff}</b>, which gives the "
+                     f"<b>PI {pi}</b>."]
             used = [p for p in coef.index if p in INPUTS]
             inputs = "".join(f"<li><b>{INPUTS[p][0]}</b>: {INPUTS[p][2]}</li>" for p in used)
             log = data.versioned("pi_selection_log")
             tested = ([p for p in dict.fromkeys(log["predictor"]) if p not in coef.index] if len(log) else [])
-            others = "".join(f"<li>{escape(ui.predictor_name(p))}</li>" for p in tested)
+            others = ", ".join(escape(ui.predictor_name(p)) for p in tested)
             right = (f"<div style='border-top:1px solid {ui.GRID};margin-top:10px;padding-top:10px'>"
-                     f"<div>Tested, not in the PI:</div><ul style='margin:0 0 6px'>{others}</ul>"
-                     "<div>Why each one was left out: see Methodology.</div></div>") if tested else ""
-            st.markdown(f"<div style='color:{ui.TEXT_2};font-size:0.88em;line-height:1.55'><ol style='margin:0 0 6px'>"
-                        + "".join(f"<li>{t}</li>" for t in steps) + "</ol>"
-                        f"<div style='margin-top:8px'>The inputs of the PI:</div><ul style='margin:0 0 6px'>{inputs}</ul>"
+                     f"Tested but left out (reasons on the Methodology page): {others}.</div>") if tested else ""
+            st.markdown(f"<div style='color:{ui.TEXT_2};font-size:0.88em;line-height:1.55'>"
+                        + "".join(f"<div style='margin-bottom:4px'>{t}</div>" for t in steps)
+                        + f"<div style='margin-top:10px'>The inputs of the PI:</div><ul style='margin:0 0 6px'>{inputs}</ul>"
                         f"{right}"
                         f"<div style='margin-top:8px'><b>Performance Index</b>: {escape(ui.PI_HELP.split(': ', 1)[1])}</div>"
-                        "<div style='margin-top:4px'>How a gap in ranking or momentum is converted into points: see "
-                        "Methodology.</div></div>", unsafe_allow_html=True)
-    stage = row.get("stage_delta")
-    if stage is not None and pd.notna(stage):
-        st.caption(f"Stage Delta {stage:+.2f} · information only, not part of the PI: average on stage events minus "
-                   "floor events over the last 24 months.")
+                        "</div>", unsafe_allow_html=True)
 
 
 def _recent_form(row: pd.Series, info_all: pd.DataFrame) -> None:
@@ -175,18 +171,20 @@ def _recent_form(row: pd.Series, info_all: pd.DataFrame) -> None:
     for m in recent.itertuples():
         won = m.result == "W"
         score = str(m.score).replace("-", " – ") if isinstance(m.score, str) else ""
-        me = (f"<div style='flex:1;text-align:right;color:{ui.WIN if won else ui.TEXT_2};font-weight:{700 if won else 400}'>"
-              f"{escape(m.player_name)}{ui.avatar(photos.get(m.player_key), 36, name=m.player_name)}</div>")
-        opp = (f"<div style='flex:1;color:{ui.TEXT_2 if won else ui.WIN};font-weight:{400 if won else 700}'>"
-               f"{ui.avatar(photos.get(m.opponent_key), 36, name=m.opponent_name)}{escape(str(m.opponent_name))}</div>")
+        me = (f"<div class='vs-side'>{ui.avatar(photos.get(m.player_key), 36, name=m.player_name)}"
+              f"<div class='nm' style='color:{ui.WIN if won else ui.TEXT_2};font-weight:{700 if won else 400}'>"
+              f"{escape(m.player_name)}</div></div>")
+        opp = (f"<div class='vs-side'>{ui.avatar(photos.get(m.opponent_key), 36, name=m.opponent_name)}"
+               f"<div class='nm' style='color:{ui.TEXT_2 if won else ui.WIN};font-weight:{400 if won else 700}'>"
+               f"{escape(str(m.opponent_name))}</div></div>")
         stats = " · ".join(s for s in (f"average {ui.num(m.average, 2)}" if pd.notna(m.average) else "",
                                        f"checkout {ui.num(m.checkout_pct)} %" if pd.notna(m.checkout_pct) else "") if s)
         cards.append(
             f"<div style='border:2px solid {ui.WIN if won else ui.LOSS};border-radius:10px;padding:10px 14px;margin:8px 0'>"
             f"<div style='color:{ui.TEXT_2};font-size:0.8em;margin-bottom:6px'>{'✓ Won' if won else '✗ Lost'} · "
             f"{pd.Timestamp(m.match_date):%d %b %Y} · {escape(str(m.tournament_name))} · {escape(str(m.round))}</div>"
-            f"<div style='display:flex;align-items:center;gap:10px'>{me}"
-            f"<div style='min-width:80px;text-align:center;font-size:1.3em;font-weight:700;color:{ui.TEXT}'>{score}</div>{opp}</div>"
+            f"<div style='display:flex;align-items:center;gap:8px'>{me}"
+            f"<div class='vs-centre' style='font-size:1.3em;font-weight:700;color:{ui.TEXT}'>{score}</div>{opp}</div>"
             f"<div style='text-align:center;color:{ui.TEXT_2};font-size:0.8em;margin-top:6px'>{stats}</div></div>")
     st.markdown("".join(cards), unsafe_allow_html=True)
 

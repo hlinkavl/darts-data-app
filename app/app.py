@@ -21,20 +21,22 @@ PAGES = {
 if data.MODE == "public":  # Genie needs the Databricks workspace
     PAGES.pop("ask")
 st.session_state["pages"] = PAGES  # lets a page switch to another one (st.switch_page)
-pages = st.navigation(list(PAGES.values()))
+pages = st.navigation(list(PAGES.values()), position="top")
 
+st.markdown(ui.CSS, unsafe_allow_html=True)
+# On a phone Streamlit folds the top menu into the sidebar, so a row of pills (shown on phones only, ui.CSS) keeps
+# the pages one tap away.
+SHORT = {"tournaments": "🏆 Tournaments", "player": "👤 Player", "leaderboard": "📊 Leaderboard", "ask": "🔎 Ask",
+         "methodology": "📖 Methodology", "health": "⚙️ Health"}
+current = next(k for k, p in PAGES.items() if p.url_path == pages.url_path)
+target = st.session_state.pop("nav_target", None)
+if target and target != SHORT[current]:
+    st.switch_page(PAGES[next(k for k, v in SHORT.items() if v == target)])
+st.session_state["mobile_nav"] = SHORT[current]
+with st.container(key="mobile_nav_row"):
+    st.pills("Pages", [SHORT[k] for k in PAGES], key="mobile_nav", label_visibility="collapsed",
+             on_change=lambda: st.session_state.update(nav_target=st.session_state["mobile_nav"]))
 with st.sidebar:
-    st.markdown("### 🎯 Darts Performance Analyzer")
-    s = data.data_status()
-    st.markdown(f"**Health:** {ui.status_label(s['status'])}")
-    if s["data_until"] is not None:
-        st.caption(f"Results until {pd.Timestamp(s['data_until']):%d %b %Y}")
-    if s["checked_at"] is not None:
-        st.caption(f"Last refresh {pd.Timestamp(s['checked_at']):%d %b %Y %H:%M} UTC")
-    if s["mode"] == "local":
-        st.caption("🧪 Local snapshot")
-    elif s["mode"] == "public":
-        st.caption("Public copy, updated after every refresh (daily during majors).")
-    st.caption(ui.CREDITS)
+    st.markdown(ui.sidebar_status(data.data_status()), unsafe_allow_html=True)
 
 pages.run()

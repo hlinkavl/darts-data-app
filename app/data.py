@@ -35,7 +35,8 @@ def _connection():
                        credentials_provider=lambda: cfg.authenticate)
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+# The public copy's files change only with a redeploy (which restarts the app), so it caches them for good.
+@st.cache_data(ttl=None if MODE == "public" else 600, show_spinner=False)
 def table(name: str, where: str | None = None) -> pd.DataFrame:
     """A whole gold table (or silver.players), optionally filtered with a SQL condition."""
     if MODE != "databricks":
