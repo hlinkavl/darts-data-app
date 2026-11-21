@@ -1,237 +1,111 @@
 # Maintenance
 
-Everything needed to keep the app running and to fix it: how the refresh works, what to do when it breaks, tokens,
-setup from scratch, development and deploy, the data model, and the decisions behind the design.
-What the app is and how it is built: [README](../README.md). How the numbers are made: [METHODOLOGY](METHODOLOGY.md).
+Where to find things, how to start the private app, and what to do when something breaks. Code changes are made
+with Claude Code in this repository; this page does not repeat technical commands.
 
-**Contents:**
-[1. How the refresh works](#1-how-the-refresh-works) ·
-[2. When something breaks](#2-when-something-breaks) ·
-[3. Common fixes](#3-common-fixes) ·
-[4. Tokens and their renewal](#4-tokens-and-their-renewal) ·
-[5. Develop, test, deploy](#5-develop-test-deploy) ·
-[6. Setup from scratch](#6-setup-from-scratch) ·
-[7. Data model](#7-data-model) ·
-[8. Decisions and known limits](#8-decisions-and-known-limits)
+**Contents:** [Links](#links) · [Databricks](#where-to-find-things-in-databricks) ·
+[Daily refresh](#how-the-daily-refresh-works) · [When something breaks](#when-something-breaks) ·
+[Tokens](#tokens) · [Data model](#data-model) · [Decisions](#decisions-and-limits) · [Setup](#setup-from-scratch)
 
-## Quick links
+## Links
 
-| | |
+| What | Where |
 |---|---|
-| **Public copy** (anyone, always on) | [darts-performance-analyzer.streamlit.app](https://darts-performance-analyzer.streamlit.app), runs on Streamlit Community Cloud from the `public-app` branch |
-| **Full Databricks app** (with "Ask the data") | [darts-performance-analyzer](https://darts-performance-analyzer-7474646547340845.aws.databricksapps.com), Databricks sign-in. Stopped unless started: [Actions → start-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml) → Run workflow → Run workflow; ready in ~3 min, stops after 24 h. Without GitHub: Databricks → Compute → Apps → darts-performance-analyzer → Start. |
-| **Refresh by hand** | [Actions → refresh](https://github.com/hlinkavl/darts-data-app/actions/workflows/refresh.yml) → Run workflow (runs on its own daily during majors) |
-| **Republish the public copy** | [Actions → publish-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/publish-app.yml) → Run workflow (runs on its own after every refresh) |
+| Public app | [darts-performance-analyzer.streamlit.app](https://darts-performance-analyzer.streamlit.app) (always on; admin: [share.streamlit.io](https://share.streamlit.io)) |
+| Private app (with "Ask the data") | [darts-performance-analyzer](https://darts-performance-analyzer-7474646547340845.aws.databricksapps.com), Databricks sign-in |
+| **Start the private app** | GitHub: [start-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml) → **Run workflow** → **Run workflow**. Ready in ~3 min, stops by itself after 24 h. |
+| Refresh the data now | GitHub: [refresh](https://github.com/hlinkavl/darts-data-app/actions/workflows/refresh.yml) → **Run workflow** (runs by itself every day during majors) |
+| Republish the public app | GitHub: [publish-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/publish-app.yml) → **Run workflow** (runs by itself after every refresh) |
 
 [![refresh](https://github.com/hlinkavl/darts-data-app/actions/workflows/refresh.yml/badge.svg)](https://github.com/hlinkavl/darts-data-app/actions/workflows/refresh.yml)
 [![publish-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/publish-app.yml/badge.svg)](https://github.com/hlinkavl/darts-data-app/actions/workflows/publish-app.yml)
 [![start-app](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml/badge.svg)](https://github.com/hlinkavl/darts-data-app/actions/workflows/start-app.yml)
 
-Why the Databricks app is not always on: a running app costs Free Edition quota every hour (about 3 DBU a day, twice
-the daily refresh). The public copy needs no Databricks compute at all.
+The private app is off by default: running all day it costs about 3 DBU, twice the daily refresh, and the Free
+Edition quota is limited. The public app needs no Databricks compute at all.
 
-Quick facts: Databricks CLI profile `darts`, catalog `workspace`, SQL warehouse `c7c519d783971c09`, app
-`darts-performance-analyzer`, Genie space `01f1ddf6938b1cb19ccfe38d51512b61`, job `darts_refresh` (bundle target `dev`).
+## Where to find things in Databricks
 
----
+Workspace: [dbc-2318ef7e-ac1e.cloud.databricks.com](https://dbc-2318ef7e-ac1e.cloud.databricks.com)
 
-## 1. How the refresh works
-
-1. **GitHub Actions `refresh`** starts every day (cron 03:23 UTC; GitHub actually starts it around 10:30–12:00 UTC).
-   The gate `scripts/should_refresh.py` reads the majors' Wikipedia pages: outside a major (or the day before one) the
-   run ends in under a minute and uses no Databricks compute.
-2. During a major: `python -m ingestion.run --upload` fetches, through official APIs only, Wikipedia (Order of Merit,
-   the majors' pages with draws and results incl. 3-dart averages, player background and photos) and the PDC news
-   feed, and uploads JSONL files to the Volume `/Volumes/workspace/darts_bronze/raw`. Silver turns the draws into
-   match results and upcoming matches (`src/analytics/wiki_results.py`).
-3. `scripts/run_refresh_job.py` runs the Databricks job `darts_refresh` (~6 min):
-   `bronze → silver → quality → pi_model → performance_index → narratives + tournaments → health`. The health task
-   ends by exporting the app's tables as parquet to `/Volumes/workspace/darts_bronze/raw/app_snapshot`
-   (`src/analytics/snapshot.py`), red report included.
-4. **GitHub Actions `publish-app`** runs after every refresh (and on app changes in main, and by hand): it downloads
-   the snapshot (Files API, no compute) and force-pushes the app code plus the snapshot to the branch `public-app`
-   (one commit, only if something changed). Streamlit Community Cloud redeploys the public copy on that push.
-5. The Databricks app is not started automatically: a running app costs Free Edition quota every hour (about 3 DBU a day, twice
-   the daily job; the quota ran out on 19 Nov 2026 with the app running through the Grand Slam). Start it with
-   Actions → **start-app** → Run workflow (or Databricks → Apps → Start); it stops after 24 h. Refresh by hand with
-   Actions → **refresh** → Run workflow, or with **Refresh data now** on the app's Data & Health page.
-   Daily usage per product: `SELECT usage_date, billing_origin_product, sum(usage_quantity) FROM system.billing.usage
-   GROUP BY ALL ORDER BY 1`.
-
-Compute is saved on purpose (Free Edition has a fair-use quota): the PI model refits every 28 days (job parameter
-`refit=force` refits now; `refit=approve` also activates a refit whose predictors changed), otherwise only Elo is updated; backtests of finished majors and past monthly PI snapshots
-are reused while the model and the tracked players stay the same; AI summaries are regenerated only when their input
-changes.
-
-## 2. When something breaks
-
-The refresh is built to fail loudly and never to show wrong numbers:
-
-- **Each source on its own.** One failing source does not stop the others; the run's manifest records rows and
-  errors per source.
-- **Quality gate before the gold tables.** Hard checks (duplicates, impossible averages, empty tables) stop the job
-  before any model or prediction is computed, so the app keeps the last good data.
-- **Model promotion gate.** A refit becomes active only if it passes the test; otherwise the previous model stays.
-- **Health report** (app → Data & Health), every problem with a "What to do". **Red fails the job** and sends two
-  e-mails (Databricks job, GitHub workflow). Red means: a source failed or blocks us, the Order of Merit came back
-  empty, no model, or **a match of a running major's draw still has no result 2 days after its round** (the
-  Wikipedia page changed or the parser broke). **Yellow** shows only in the app: a draw format we don't parse (e.g.
-  a group stage), a refit that was not activated, many players without results.
-- A failed job never empties the app: it keeps showing the last good data. (`run_refresh_job.py --start-app` can
-  still start the app after a run, also after a failure; the scheduled run does not use it.)
-
-What to do when the e-mail arrives:
-
-1. Open the failed run (link in the e-mail) and Data & Health in the app: the red check says what broke.
-2. A one-off error (timeout, Databricks quota: "please try again later" or "Triggering new runs ... is currently
-   disabled temporarily"): wait, then Refresh in the app or "Run workflow" on GitHub. Check the usage (section 1).
-3. A source changed its page, or a new tournament format: open Claude Code in the repo, paste the error and the health
-   message, fix, test (section 5), deploy, Refresh.
-4. A source blocks us (HTTP 401/403/418): don't work around it; find a replacement source.
-5. An expired token: section 4.
-
-Expect a few fixes a year, mostly when a season starts or a format changes. Never edit code in the Databricks
-workspace: `bundle deploy` overwrites it.
-
-## 3. Common fixes
-
-| Symptom (health report) | Fix |
+| What | Where |
 |---|---|
-| A new major | Add it to `config/majors.yml` (name, Wikipedia title pattern) and deploy the bundle. |
-| Tracked players without results (name matching) | A different spelling between sources: create `config/player_aliases.yml` with `names: {"Spelling in source": <player_key>}`. |
-| Draw missing for a running major | The Wikipedia bracket format is new: extend `src/analytics/bracket.py` (tests in `tests/test_tournament.py`). Known and accepted: the 2026 Grand Slam group stage (predictions start from the last 16). |
-| Order of Merit empty | Wikipedia's `Module:DartsRankings/data/PDC Rankings` changed: `ingestion/wikipedia.py`. |
-| Overdue results (red) | Compare the event's Wikipedia page with `darts_silver.upcoming_matches`: scores on the page but not parsed means the bracket format changed (`src/analytics/bracket.py`, `wiki_results.py`). |
-| Refit not activated | Review `darts_gold.pi_selection_log` and `pi_model_registry`; to force a refit: `databricks bundle run darts_refresh -t dev --profile darts --params refit=force`. |
-| AI summary wrong or missing | Model in `config/ai.yml`. Compare models: `--only narratives --params compare_models=<m1>,<m2>` (writes `darts_gold.player_narrative_trials`, 20 players each). |
-| Public copy out of date or down | Actions → **publish-app**: a failed run says why (snapshot missing in the Volume: the health task did not run; rerun it with `--only health`). Down on Streamlit's side: share.streamlit.io → the app → Reboot. |
-| Genie answers badly | Edit `config/genie/space.yml` (instructions, example SQL: run each on the warehouse first), then `DATABRICKS_CONFIG_PROFILE=darts python scripts/genie_space.py`. |
+| Tables (browse, columns, sample rows) | **Catalog** → `workspace` → [darts_silver](https://dbc-2318ef7e-ac1e.cloud.databricks.com/explore/data/workspace/darts_silver) (clean data) or [darts_gold](https://dbc-2318ef7e-ac1e.cloud.databricks.com/explore/data/workspace/darts_gold) (index, predictions, health) |
+| Raw downloaded files and the public app's snapshot | **Catalog** → `darts_bronze` → Volumes → [raw](https://dbc-2318ef7e-ac1e.cloud.databricks.com/explore/data/volumes/workspace/darts_bronze/raw) |
+| Your own queries | [SQL Editor](https://dbc-2318ef7e-ac1e.cloud.databricks.com/sql/editor), warehouse "Serverless Starter Warehouse" (starts by itself, stops after 10 min) |
+| Refresh runs (what ran, what failed) | **Jobs & Pipelines** → [darts_refresh](https://dbc-2318ef7e-ac1e.cloud.databricks.com/jobs/685270245201923) |
+| The private app (start, stop, logs) | **Compute** → **Apps** → [darts-performance-analyzer](https://dbc-2318ef7e-ac1e.cloud.databricks.com/apps/darts-performance-analyzer) |
+| "Ask the data" space | **Genie** → [Darts](https://dbc-2318ef7e-ac1e.cloud.databricks.com/genie/rooms/01f1ddf6938b1cb19ccfe38d51512b61) |
+| Health of the data | App → **Data & Health**, or table `darts_gold.health_report` |
+| Quota usage | SQL Editor, table `system.billing.usage` (usage per day and product) |
 
-## 4. Tokens and their renewal
+## How the daily refresh works
 
-Two tokens keep the refresh running without a Mac. Neither is stored in the repo.
+1. Every day GitHub checks the majors' Wikipedia pages. No major on: it stops within a minute, no Databricks cost.
+2. During a major it downloads the new data (Wikipedia, PDC news) and uploads it to Databricks.
+3. The Databricks job (~6 min) processes it: bronze → silver → quality check → model → index → tournaments and AI
+   summaries → health report. The model is refitted only every 28 days, to save quota.
+4. GitHub then publishes the new data to the public app.
 
-| Token | Used by | Stored in | Expires |
+## When something breaks
+
+A failed refresh sends an e-mail (from GitHub and from Databricks). The apps keep showing the last good data, so
+nothing wrong is ever shown.
+
+1. Open **Data & Health** in the app: the red check says what broke and what to do.
+2. A one-off problem (timeout, Databricks quota: "try again later", "Triggering new runs … disabled temporarily"):
+   wait and run the refresh again from GitHub.
+3. Anything else: open Claude Code in this repository, paste the e-mail or the health message and ask for a fix.
+4. A source blocks us (HTTP 401, 403, 418): don't work around it; look for another official source.
+
+| Typical problem | What it means |
+|---|---|
+| Draw missing for a running major | Wikipedia uses a new bracket layout; the parser needs to learn it |
+| Overdue results (red) | A match has no result 2 days after its round: usually the same as above |
+| Tracked players without results | A name is spelled differently between sources; an alias fixes it |
+| A new major in the calendar | It needs to be added to the list of majors |
+| Refit not activated | The new model did not pass the test; the previous one stays, nothing to do unless it repeats |
+| Public app out of date | Run publish-app; if the app itself is down: share.streamlit.io → the app → Reboot |
+
+## Tokens
+
+| Token | Used for | Expires | Where to renew |
 |---|---|---|---|
-| Databricks access token "github-actions" | GitHub Actions (`refresh`, `start-app`): upload data, run the job, start the app | GitHub secret `DATABRICKS_TOKEN` (with `DATABRICKS_HOST`) | **9 Nov 2027** |
-| GitHub fine-grained token `darts-app-refresh` (repo `darts-data-app`, Actions: read and write) | The app's **Refresh data now** button | Databricks secret scope `darts`, key `github_token` | about one year from 9 Nov 2026; exact date at github.com/settings/personal-access-tokens |
+| Databricks token "github-actions" | GitHub refresh and start-app | **9 Nov 2027** | Databricks → Settings → Developer → Access tokens → new token (365 days); then GitHub → repo → Settings → Secrets → Actions → `DATABRICKS_TOKEN` → Update |
+| GitHub token "darts-app-refresh" | Refresh button in the private app | about Nov 2027 ([check](https://github.com/settings/personal-access-tokens)) | Regenerate on GitHub, then ask Claude to store it in the Databricks secret scope `darts` (key `github_token`) and restart the app |
 
-An expired token shows up as a failed `refresh` run or as an error after pressing Refresh. Renew a week ahead.
+An expired token shows up as a failed refresh. Renew a week ahead.
 
-**Databricks token**
-1. Databricks → Settings → Developer → Access tokens → **Generate new token**: comment `github-actions`, 365 days.
-2. GitHub → repo → Settings → Secrets and variables → Actions → `DATABRICKS_TOKEN` → **Update**, paste the token.
-3. Revoke the old token in Databricks.
-4. Check: Actions → **start-app** → Run workflow; it must start the app or report "already running".
+## Data model
 
-**GitHub token**
-1. github.com/settings/personal-access-tokens → `darts-app-refresh` → **Regenerate token** (one year).
-2. `databricks secrets put-secret darts github_token --profile darts`, paste the token.
-3. Restart the app (it reads secrets at start): `databricks apps stop darts-performance-analyzer --profile darts`,
-   then `databricks apps start darts-performance-analyzer --profile darts`.
+Catalog `workspace`, three schemas:
 
-**CLI login** on the Mac is OAuth and expires after some idle time: `databricks auth login --profile darts`.
-
-## 5. Develop, test, deploy
-
-```bash
-make setup                                          # local venv (.venv)
-.venv/bin/python -m pytest -q                       # unit tests, incl. the Python 3.11 syntax check for the app
-python scripts/build_local_snapshot.py              # local Parquet snapshot of the data
-cd app && DARTS_DATA=local streamlit run app.py     # app on the snapshot, http://localhost:8501
-# or the public copy's exact data (app/snapshot/ is git-ignored; while it exists the app starts in public mode)
-DATABRICKS_CONFIG_PROFILE=darts python scripts/download_snapshot.py app/snapshot
-```
-
-Deploy:
-
-```bash
-databricks bundle deploy -t dev --profile darts     # job, notebooks, configs, app settings
-# app code: smoke-test against the warehouse first, then deploy the source
-DATABRICKS_CONFIG_PROFILE=darts DATABRICKS_WAREHOUSE_ID=c7c519d783971c09 python scripts/smoke_app.py databricks
-databricks bundle run darts_app -t dev --profile darts
-```
-
-Rules that save quota and trouble:
-- Run single tasks while developing: `databricks bundle run darts_refresh -t dev --profile darts --only <task>`.
-  Avoid repeated full runs on the same day.
-- Databricks Apps run Python 3.11 (no backslashes or quotes inside f-string expressions); the warehouse returns
-  time-zone-aware timestamps and Decimals (`app/data.py` converts them).
-- The app is stopped outside majors; `bundle run darts_app` starts it.
-- The public copy needs no deploy: a push to main that touches `app/` runs `publish-app`, which republishes it
-  within minutes. App code must also work in public mode (`data.MODE == "public"`: no Genie, no refresh button).
-- `app/requirements.txt` pins `databricks-sdk`: the Apps runtime preinstalls an old one (0.33), which keeps an
-  unpinned requirement and lacks newer APIs (Genie broke on that). Local tests use the pinned version too.
-
-## 6. Setup from scratch
-
-1. Tools: `brew tap databricks/tap && brew install databricks`, Python 3.11+, `make setup`.
-2. Databricks Free Edition (databricks.com/learn/free-edition), then "Verify identity" (raises some limits).
-3. `databricks auth login --host https://<workspace>.cloud.databricks.com --profile darts`.
-4. Optional, for Claude Code: `databricks aitools install --agents claude-code --scope global`.
-5. `./scripts/bootstrap_databricks.sh` (schemas `darts_bronze/silver/gold`, Volume `darts_bronze.raw`), then
-   `databricks bundle deploy -t dev --profile darts`.
-6. First data: `make ingest`, then `databricks bundle run darts_refresh -t dev --profile darts`.
-7. GitHub secrets `DATABRICKS_HOST` and `DATABRICKS_TOKEN`; the GitHub token into the secret scope (section 4).
-8. Grant the app's service principal `USE CATALOG` on `workspace`, `USE SCHEMA` + `SELECT` on `darts_gold` and
-   `SELECT` on `darts_silver.players`; create the Genie space (`scripts/genie_space.py`) and put its id into
-   `resources/app.yml`; deploy the app (section 5).
-9. Public copy: run Actions → **publish-app** once (creates the branch `public-app`), then on
-   [share.streamlit.io](https://share.streamlit.io) sign in with GitHub → Create app → "Deploy a public app from
-   GitHub": repository `hlinkavl/darts-data-app`, branch `public-app`, main file `app/app.py`, URL
-   `darts-performance-analyzer`; Advanced settings: Python 3.12. No secrets needed. Community Cloud puts an app to
-   sleep after days without visitors; the first visitor wakes it up in about a minute.
-
-## 7. Data model
-
-Unity Catalog `workspace`. Raw files: `/Volumes/workspace/darts_bronze/raw/<source>/<run>/<dataset>.jsonl`.
-
-| Layer | Tables |
+| Layer | Main tables |
 |---|---|
-| bronze | one table per source dataset, loaded 1:1 with `_run_date`, `_source_file`, `_ingested_at` |
-| silver | `players` (`is_tracked` = Order of Merit top 150, background, photo), `player_crosswalk` (one `player_key` across sources), `events`, `majors`, `matches`, `player_matches` (one row per player and match, with both names as in `players`) + view `player_matches_v` (averages), `rankings` (Order of Merit snapshots), `tournament_pages`, `upcoming_matches` |
-| gold: PI | `performance_index` (monthly snapshots, `is_current`), `pi_model_registry`, `pi_coefficients`, `pi_benchmark`, `pi_selection_log`, `elo_history`, `player_recent_matches` (view) |
-| gold: tournaments | `majors_calendar`, `tournament_predictions`, `tournament_draw_matches`, `tournament_backtest_matches`, `tournament_backtest_summary`, `upcoming_matches`, `player_titles` |
-| gold: AI | `player_news`, `player_narratives`, `player_narrative_trials` |
-| gold: operations | `health_report` (latest), `health_history` |
+| `darts_bronze` | raw data as downloaded, one table per source |
+| `darts_silver` | `players`, `matches`, `player_matches` (one row per player and match, with names), `rankings`, `events`, `upcoming_matches` |
+| `darts_gold` | `performance_index` (current and monthly history), `pi_coefficients`, `pi_benchmark`, `tournament_predictions`, `tournament_draw_matches`, `tournament_backtest_summary`, `player_narratives`, `player_news`, `health_report` |
 
-Saved queries for the workspace: `sql/queries/*.sql` (`scripts/sync_queries.py`).
+## Decisions and limits
 
-## 8. Decisions and known limits
+- **Sources (14 Nov 2026):** official APIs only. Darts Orakel and Mastercaller blocked automated access, so their
+  data is one-time history; blocks are never worked around. Since then only majors' knockout matches are added.
+- **Model (14 Nov 2026):** only inputs that stay fresh with majors-only data: average on majors, Order of Merit rank
+  and its momentum. Details: [Methodology](METHODOLOGY.md).
+- **Public app (20 Nov 2026):** Databricks apps always need a sign-in, so the public app runs on Streamlit Community
+  Cloud from a daily snapshot. "Ask the data" stays in the private app only.
+- **Not covered:** group stages (Grand Slam: predictions start from the last 16), the Premier League (a league), the
+  UK Open draw and the 96-player World Championships up to 2025.
+- **Free Edition limits:** one small SQL warehouse, apps stop after 24 h, a fair-use compute quota.
+- **AI summaries:** Qwen3 Next 80B, chosen on 11 Nov 2026 from three models.
 
-- **Sources: history once, then official APIs only (decided 14 Nov 2026).** Scraped sites block automated clients
-  sooner or later, so they serve as one-time history and the ongoing refresh uses official APIs only:
-  - Darts Orakel (2021 – 28 Oct 2026, exact points and darts): blocked our client on 30 Oct 2026. Never work around
-    it and don't contact them; the data is kept and deleted only if they ask.
-  - Mastercaller (Oct – 9 Nov 2026, 3-dart averages, darts estimated from legs, validated against Orakel within ±0.24
-    points for 95 % of players): answers HTTP 418 to GitHub-hosted runners since 11 Nov 2026 (a home connection
-    still gets 200). Not worked around: no proxy, no other host. Kept as history.
-  - Ongoing: Wikipedia via the MediaWiki API (Order of Merit, the majors' draws with scores and 3-dart averages,
-    player background), Wikidata, PDC news RSS. Only the majors' knockout matches are added from now on; Players
-    Championships, European Tour and group stages are not.
-  - Excluded: DartsDatabase (robots.txt disallows AI agents), pdc.tv data API (needs authentication), bookmaker odds
-    (no free legal source reachable from the Czech Republic).
-- **Public copy on Streamlit Community Cloud (20 Nov 2026).** Databricks Apps always require a workspace sign-in,
-  so the public copy runs on Streamlit Community Cloud ($0) from a parquet snapshot of the gold tables on the
-  `public-app` branch. It needs no Databricks credentials or compute and survives quota blocks; "Ask the data" stays
-  in the Databricks app only (Genie needs the workspace). The snapshot holds only what the app shows (incl. each player's
-  recent matches), not the raw source files (`data/` is never published).
-- **Ingestion runs on GitHub Actions**, not in Databricks: Free Edition restricts outbound internet. No Airflow: GitHub
-  Actions plus a Databricks job cost nothing.
-- **Free Edition limits:** serverless only, one 2X-Small SQL warehouse, up to 3 apps (each stops after 24 h), 5
-  concurrent job tasks, a fair-use compute quota (when exceeded, jobs, the warehouse and apps cannot start for a
-  while; data is kept), no SLA, non-commercial use.
-- **Model: only inputs that stay fresh (14 Nov 2026).** With only majors added, the old inputs (average and form over
-  the last 30/10 matches of any event, Elo) would go stale and no longer match what the model was trained on. The
-  live model chooses from 11 inputs computed from majors only (3-dart average over the last 20 major matches, the
-  World Grand Prix left out as it is double-in; form; Big-Stage Elo; experience; quarter-finals, results points and
-  titles) and from the Order of Merit (rank, best rank, momentum, time in the top 32). Selected (v2026-11-14): the
-  average on majors, the rank and its 12-month momentum. It still learns from every historical match. Details and the key test: METHODOLOGY. Predictor selection requires
-  stability in 80 % of bootstrap samples; re-tested on every refit. A tracked player needs 5 major matches for a PI.
-- **Tournament formats.** The 2026 Grand Slam group stage (16 groups of 3) is not simulated; predictions start from
-  the last 16. Revisit if more events adopt group stages. The 96-player World Championship format (2024, 2025) has
-  no parser. The PC Finals sections (which repeat the quarter-finals of the finals bracket) are parsed since
-  20 Nov 2026.
-- **AI summaries:** Qwen3 Next 80B (chosen on 11 Nov 2026 over Llama 3.3 70B and Llama 4 Maverick), for the PI top 32
-  plus players with recent news.
-- **Ideas:** a "day form" spread in the simulation to temper heavy favourites in long formats.
+## Setup from scratch
+
+What a new setup needs (Claude Code can do the technical steps from this repository):
+
+1. A Databricks Free Edition workspace and a GitHub repository with this code.
+2. GitHub secrets `DATABRICKS_HOST` and `DATABRICKS_TOKEN`.
+3. The job, the app and the Genie space deployed from the repository's bundle; read access for the app.
+4. First data load and a first refresh.
+5. The public app: run publish-app once, then on share.streamlit.io create an app from branch `public-app`, file
+   `app/app.py`, Python 3.12.

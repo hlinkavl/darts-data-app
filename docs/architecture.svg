@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 540" width="1000" height="540" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a897f"/>
+    </marker>
+  </defs>
+
+  <rect width="1000" height="540" rx="18" fill="#1a1a19"/>
+
+  <!-- step labels -->
+  <g font-size="13" font-weight="700" fill="#c3c2b7" letter-spacing="1.5">
+    <text x="125" y="44" text-anchor="middle">1 · COLLECT</text>
+    <text x="375" y="44" text-anchor="middle">2 · SCHEDULE</text>
+    <text x="625" y="44" text-anchor="middle">3 · PROCESS &amp; MODEL</text>
+    <text x="875" y="44" text-anchor="middle">4 · SHOW</text>
+  </g>
+
+  <!-- 1 sources -->
+  <rect x="25" y="70" width="200" height="380" rx="14" fill="#262624" stroke="#383835"/>
+  <text x="125" y="104" text-anchor="middle" font-size="19" font-weight="700" fill="#f0efec">Data sources</text>
+  <g font-size="15" fill="#f0efec">
+    <rect x="45" y="126" width="160" height="58" rx="10" fill="#1f1f1e" stroke="#383835"/>
+    <text x="125" y="151" text-anchor="middle" font-weight="600">Wikipedia API</text>
+    <text x="125" y="171" text-anchor="middle" font-size="12.5" fill="#c3c2b7">ranking, draws, results</text>
+    <rect x="45" y="196" width="160" height="58" rx="10" fill="#1f1f1e" stroke="#383835"/>
+    <text x="125" y="221" text-anchor="middle" font-weight="600">PDC news</text>
+    <text x="125" y="241" text-anchor="middle" font-size="12.5" fill="#c3c2b7">latest headlines</text>
+  </g>
+  <line x1="55" y1="282" x2="195" y2="282" stroke="#383835" stroke-dasharray="4 4"/>
+  <g font-size="12.5" fill="#c3c2b7" text-anchor="middle">
+    <text x="125" y="308" font-weight="700" fill="#f0efec" font-size="13.5">History, collected once</text>
+    <text x="125" y="330">Darts Orakel 2021–2026</text>
+    <text x="125" y="350">Mastercaller 2026</text>
+    <text x="125" y="378">97,000 player matches</text>
+  </g>
+
+  <!-- 2 github actions -->
+  <rect x="275" y="150" width="200" height="220" rx="14" fill="#262624" stroke="#383835"/>
+  <text x="375" y="186" text-anchor="middle" font-size="19" font-weight="700" fill="#f0efec">GitHub Actions</text>
+  <g font-size="14" fill="#c3c2b7" text-anchor="middle">
+    <text x="375" y="222">runs every day</text>
+    <text x="375" y="244">while a major is on</text>
+    <rect x="303" y="268" width="144" height="34" rx="17" fill="#1f1f1e" stroke="#383835"/>
+    <text x="375" y="290" fill="#f0efec" font-weight="600">fetch → upload</text>
+    <text x="375" y="336" font-size="12.5">no work outside majors</text>
+  </g>
+
+  <!-- 3 databricks -->
+  <rect x="525" y="70" width="200" height="380" rx="14" fill="#262624" stroke="#e0393e" stroke-width="1.5"/>
+  <text x="625" y="104" text-anchor="middle" font-size="19" font-weight="700" fill="#f0efec">Databricks</text>
+  <g font-size="15" font-weight="600" fill="#1a1a19" text-anchor="middle">
+    <rect x="545" y="124" width="160" height="48" rx="10" fill="#c08a52"/>
+    <text x="625" y="145">Bronze</text>
+    <text x="625" y="163" font-size="11.5" font-weight="500">raw files</text>
+    <rect x="545" y="184" width="160" height="48" rx="10" fill="#b9b9b4"/>
+    <text x="625" y="205">Silver</text>
+    <text x="625" y="223" font-size="11.5" font-weight="500">clean, one id per player</text>
+    <rect x="545" y="244" width="160" height="92" rx="10" fill="#d9b44a"/>
+    <text x="625" y="267">Gold</text>
+    <text x="625" y="287" font-size="12" font-weight="500">Performance Index</text>
+    <text x="625" y="305" font-size="12" font-weight="500">tournament simulations</text>
+    <text x="625" y="323" font-size="12" font-weight="500">AI form summaries</text>
+  </g>
+  <g fill="#c3c2b7" font-size="12.5" text-anchor="middle">
+    <path d="M625 172 v12 M625 232 v12" stroke="#1a1a19" stroke-width="2"/>
+    <text x="625" y="372">quality gate before Gold</text>
+    <text x="625" y="392">health check, e-mail if red</text>
+    <text x="625" y="424" font-size="12">serverless · Free Edition</text>
+  </g>
+
+  <!-- 4 apps -->
+  <rect x="775" y="96" width="200" height="150" rx="14" fill="#1f2733" stroke="#3987e5" stroke-width="1.5"/>
+  <text x="875" y="130" text-anchor="middle" font-size="19" font-weight="700" fill="#f0efec">Public app</text>
+  <g font-size="13.5" fill="#c3c2b7" text-anchor="middle">
+    <text x="875" y="156">Streamlit Community Cloud</text>
+    <text x="875" y="182" fill="#f0efec" font-weight="600">anyone · no sign-in</text>
+    <text x="875" y="204">phone-friendly</text>
+    <text x="875" y="226">reads a daily snapshot</text>
+  </g>
+  <rect x="775" y="276" width="200" height="150" rx="14" fill="#262624" stroke="#383835"/>
+  <text x="875" y="310" text-anchor="middle" font-size="19" font-weight="700" fill="#f0efec">Private app</text>
+  <g font-size="13.5" fill="#c3c2b7" text-anchor="middle">
+    <text x="875" y="336">Databricks App</text>
+    <text x="875" y="362" fill="#f0efec" font-weight="600">+ "Ask the data" (Genie)</text>
+    <text x="875" y="384">Databricks sign-in</text>
+    <text x="875" y="406">started on demand</text>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#8a897f" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <path d="M227 260 H271"/>
+    <path d="M477 260 H521"/>
+    <path d="M727 250 C750 250 750 171 771 171"/>
+    <path d="M727 300 C750 300 750 351 771 351"/>
+  </g>
+
+  <!-- footer -->
+  <text x="500" y="500" text-anchor="middle" font-size="14" fill="#c3c2b7">Everything runs on free tiers · cost $0</text>
+</svg>

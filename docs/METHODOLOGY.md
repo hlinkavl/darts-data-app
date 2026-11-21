@@ -4,7 +4,7 @@ How the app's numbers are made. One model gives three answers:
 
 1. **How strong is a player?** The 0–10 Performance Index ([Part 1](#part-1-performance-index-pi)).
 2. **Who wins this match?** Two PIs give the head-to-head chance, converted to the match's format in legs or sets ([How to read the PI](#how-to-read-the-pi), [Part 2, section 1](#part-2-tournament-predictions)).
-3. **Who wins the tournament?** 10,000 simulations of the draw, match by match, give every player's chance to reach each round and to win the title, before and during the event; checked on 10 past majors ([Part 2](#part-2-tournament-predictions)).
+3. **Who wins the tournament?** 10,000 simulations of the draw, match by match, give every player's chance to reach each round and to win the title, before and during the event; checked on 11 past majors ([Part 2](#part-2-tournament-predictions)).
 
 ## Part 1: Performance Index (PI)
 
@@ -479,9 +479,9 @@ During majors the data is refreshed daily ("tournament mode"); otherwise on dema
 
 ### 5. Backtests
 
-Every finished major with a supported draw is backtested automatically: strengths as of the event's first day, weights refitted on earlier matches only, and the full draw simulated *before* any match was played. Results are stored in `darts_gold.tournament_backtest_summary` and `darts_gold.tournament_backtest_matches`. Numbers below: model `v2026-11-14` (inputs from the majors only), run 15 Nov 2026.
+Every finished major with a supported draw is backtested automatically: strengths as of the event's first day, weights refitted on earlier matches only, and the full draw simulated *before* any match was played. Results are stored in `darts_gold.tournament_backtest_summary` and `darts_gold.tournament_backtest_matches`. Numbers below: model `v2026-11-14` (inputs from the majors only), run 21 Nov 2026.
 
-**Ten majors, 388 matches (2025–2026):**
+**Eleven majors, 451 matches (2025–2026):**
 
 | Event | Matches | Favourite won | Log loss | Champion | Champion's pre-event title chance (rank) | Model's favourite |
 |---|---|---|---|---|---|---|
@@ -495,18 +495,19 @@ Every finished major with a supported draw is backtested automatically: strength
 | World Series Finals 2025 | 31 | 68 % | 0.572 | Michael van Gerwen | 3.0 % (10) | Littler 32.5 % |
 | World Grand Prix 2025 | 31 | 68 % | 0.595 | Luke Littler | 30.6 % (1) | Littler 30.6 % |
 | World Matchplay 2025 | 31 | 74 % | 0.594 | Luke Littler | 30.1 % (1) | Littler 30.1 % |
+| Players Championship Finals 2025 | 63 | 68 % | 0.595 | Luke Littler | 23.7 % (1) | Littler 23.7 % |
 
-**All 388 matches together:**
+**All 451 matches together:**
 
 | | Round format | As typical matches |
 |---|---|---|
-| Pre-match favourite won | 70.6 % | 70.6 % |
-| Log loss | **0.581** | 0.593 |
-| Brier score | **0.199** | 0.203 |
+| Pre-match favourite won | 70.3 % | 70.3 % |
+| Log loss | **0.583** | 0.595 |
+| Brier score | **0.199** | 0.204 |
 
 Converting each match to its round's format improves both scores. (The previous model, with inputs from every event: favourite won 68.8 %, log loss 0.579.)
 
-**Calibration (388 matches, 5 groups by the favourite's predicted chance):**
+**Calibration (the first ten events, 388 matches, 5 groups by the favourite's predicted chance):**
 
 | Predicted | 53 % | 59 % | 65 % | 72 % | 83 % |
 |---|---|---|---|---|---|
@@ -514,14 +515,14 @@ Converting each match to its round's format improves both scores. (The previous 
 
 Each group has about 78 matches, so ±5 points are within chance. If anything, the favourites won slightly more often than predicted.
 
-**Titles:** the model's favourite won 5 of the 10 events, against 3.27 expected wins from its title probabilities. Ten events are too few to judge title probabilities; every finished major adds one.
+**Titles:** the model's favourite won 6 of the 11 events. Eleven events are too few to judge title probabilities; every finished major adds one.
 
 ---
 
 ### Limitations
 
 - **Strong favourites may be rated slightly too high in long formats.** Treating legs as independent assumes a player's level is the same in every leg. In reality players have good and bad days, so legs within a match are correlated and long matches favour the stronger player less than the formula says. For one match the effect is small (the backtest confirms the format conversion helps), but over 7 rounds it compounds. Planned fix: estimate a "day form" spread from the data and add it to the simulation. Bookmaker odds are not available as a benchmark (no free, legal source reachable from the Czech Republic), so validation uses baselines such as seeding.
-- **Ten backtested events** are not enough to judge title probabilities. Each finished major with a supported draw adds a backtest automatically.
+- **Eleven backtested events** are not enough to judge title probabilities. Each finished major with a supported draw adds a backtest automatically.
 - **Throw advantage and "two clear legs"** are ignored.
 - **Unsupported formats** (see section 3) have no simulation yet; their matches still get head-to-head cards.
 

@@ -10,7 +10,7 @@ Sources, official APIs only (since 14 Nov 2026):
 
 Historical sources, fetched once and kept in the Volume as training data: Darts Orakel (2021 - 28 Oct 2026, it
 blocked our client on 30 Oct 2026) and Mastercaller (Oct - 9 Nov 2026, it started refusing GitHub-hosted runners
-on 11 Nov 2026). Neither is fetched any more; see docs/MAINTENANCE.md, section 8.
+on 11 Nov 2026). Neither is fetched any more; see docs/MAINTENANCE.md, Decisions and limits.
 
 Every run writes its own folder, so a run never overwrites an earlier one:
 raw/<source>/<run_id>/<dataset>.jsonl, run_id = YYYY-MM-DDTHHMMSS (sortable).

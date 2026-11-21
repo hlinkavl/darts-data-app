@@ -24,7 +24,7 @@ resources:
           default: ""
       # Serverless compute: notebook tasks need no cluster definition.
       # Raw files are uploaded to the Volume by `python -m ingestion.run --upload` on GitHub Actions
-      # (docs/MAINTENANCE.md, section 1).
+      # (docs/MAINTENANCE.md, How the daily refresh works).
       tasks:
         - task_key: bronze
           notebook_task:

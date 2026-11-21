@@ -39,7 +39,7 @@ if os.path.exists("../../config/player_aliases.yml"):
 MAJOR_KEYS = "(" + ", ".join(str(k) for k in MAJORS) + ")"
 TRACKED_PLAYERS = 150
 ESTIMATED_LEGS_PER_SET = 4.0        # sets are first to 3 legs
-DARTS_PER_LEG_AT_AVG = 1503.0       # darts per leg ~ 3 * 501 / average (validated on Orakel data, docs/MAINTENANCE.md, section 8)
+DARTS_PER_LEG_AT_AVG = 1503.0       # darts per leg ~ 3 * 501 / average (validated on Orakel data: within 0.24 points for 95 % of players)
 NEW_KEY_BASE = 900_000_000          # keys for players unknown to Orakel
 MC_KEY_BASE = 1_000_000_000_000     # match/event keys for Mastercaller rows (Orakel keys are < 10^7)
 WIKI_KEY_BASE = 2_000_000_000_000   # match/event keys for results from Wikipedia draws
