@@ -1,8 +1,6 @@
 """Methodology: how the numbers are made, shown with the live numbers of the active model. Short texts, mostly
 charts; the full write-up is docs/METHODOLOGY.md."""
 
-from html import escape
-
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -21,15 +19,15 @@ CONVERSION = {"avg_major": "1 average point = 1 point", "avg_l30": "1 average po
               "oom_momentum": "halving the rank number within a year = {v:.2f} average points"}
 
 
-def _cards(items: list[tuple[str, str, str]]) -> str:
-    """A responsive row of cards: (kicker, title, text)."""
-    cells = "".join(
-        f"<div style='border:1px solid {ui.GRID};border-radius:12px;padding:14px 16px;background:#20201f'>"
-        f"<div style='color:{ui.TEXT_2};font-size:0.75em;text-transform:uppercase;letter-spacing:.05em'>{k}</div>"
-        f"<div style='color:{ui.TEXT};font-weight:700;font-size:1.15em;margin:4px 0 6px'>{t}</div>"
-        f"<div style='color:{ui.TEXT_2};font-size:0.88em;line-height:1.5'>{x}</div></div>" for k, t, x in items)
-    return (f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;"
-            f"margin:4px 0 18px'>{cells}</div>")
+def _weights_chart(coef: pd.DataFrame) -> go.Figure:
+    c = coef.sort_values("weight_pct")
+    fig = go.Figure(go.Bar(
+        x=c["weight_pct"] / 100, y=[ui.predictor_name(p).replace(" (L20)", "") for p in c["predictor"]],
+        orientation="h", marker=dict(color=ui.SERIES[0], line=dict(color=ui.SURFACE, width=2)),
+        text=[f"{w:.0f} %" for w in c["weight_pct"]], textposition="outside", textfont=dict(color=ui.TEXT_2),
+        cliponaxis=False, hovertemplate="%{y}: %{x:.0%} of the index<extra></extra>"))
+    fig = ui.layout(fig, height=60 + 52 * len(c), xaxis=dict(visible=False, range=[0, c["weight_pct"].max() / 100 * 1.25]))
+    return fig.update_layout(margin=dict(l=8, r=8, t=8, b=8))
 
 
 def _format_chart() -> go.Figure:
@@ -89,30 +87,34 @@ def _backtest_chart(bt: pd.DataFrame) -> go.Figure:
 
 def render() -> None:
     st.title("📖 Methodology")
-    st.markdown(_cards([
-        ("1 · Player", "How strong is a player?", "The <b>Performance Index</b> (0–10) = 10 × the chance to beat an average "
-         "top-32 player in a typical match. 5 = a typical top-32 player."),
-        ("2 · Match", "Who wins it?", "Two PIs give the head-to-head chance, then adjusted to the match length: longer "
-         "matches favour the stronger player."),
-        ("3 · Tournament", "Who lifts the trophy?", "Every match of the draw gets its chance; 10,000 simulations give "
-         "each player's chance to reach every round.")]), unsafe_allow_html=True)
-
     coef = data.versioned("pi_coefficients")
     if coef.empty:
         st.warning("No model yet.")
         return
-
-    st.subheader("What the PI is made of")
-    items = []
+    inputs = []
     for r in coef.sort_values("weight_pct", ascending=False).itertuples():
         factor = r.avg_points_per_unit * (100 if r.predictor in ("elo", "major_elo")
                                           else 0.693 if r.predictor in ("oom_rank", "oom_momentum") else 1)
-        items.append((f"{r.weight_pct:.0f} % of the index", escape(ui.predictor_name(r.predictor)),
-                      CONVERSION.get(r.predictor, "{v:.2f}").format(v=factor)))
-    st.markdown(_cards(items), unsafe_allow_html=True)
-    st.caption(f"Model {data.active_version()}: chosen from 11 tested inputs, weighted by a logistic regression. In a "
-               "player's PI breakdown each input is compared with an average top-32 player and converted with these "
-               "rates into 3-dart-average points.")
+        inputs.append(f"- **{ui.predictor_name(r.predictor)}**, {r.weight_pct:.0f} % of the index "
+                      f"<span style='color:{ui.TEXT_2}'>({CONVERSION.get(r.predictor, '{v:.2f}').format(v=factor)})</span>")
+    text, chart = st.columns([3, 2], gap="large")
+    text.markdown(
+        "The **Performance Index (PI)** rates every top player from 0 to 10: ten times the chance to beat an average "
+        "top-32 player in a typical match (first to 6 legs). 5 is an average top-32 player, 7 wins 70 % against one. "
+        "It is made of three inputs:\n\n" + "\n".join(inputs) + "\n\n"
+        "The weights come from a logistic regression on every match between the top 150 players since 2021 (about "
+        "16,000 matches); the inputs are computed from major matches only, because new results now come only from the "
+        "majors.\n\n"
+        "From the PI the app computes:\n\n"
+        "- **Head to head:** the chance of any match from the two players' PIs, adjusted to its length: longer "
+        "matches favour the stronger player.\n"
+        "- **Tournament chances:** each player's chance to reach every round and win the title, from 10,000 "
+        "simulations of the draw; during an event the played matches are fixed.\n"
+        "- **Effective Average:** the whole strength as one 3-dart average, shown in each player's PI breakdown.",
+        unsafe_allow_html=True)
+    with chart:
+        st.plotly_chart(_weights_chart(coef), width="stretch", config={"displayModeBar": False})
+        st.caption(f"Share of the index. Model {data.active_version()}, chosen from 11 tested inputs.")
     with st.expander("Why is the average top-32 Order of Merit rank #13, not #16?"):
         st.markdown("The model reads the rank on a log scale: #1 → #2 counts as much as #10 → #20, because at the top "
                     "one place means a lot. On that scale ranks 1 to 32 average to about #13 (their geometric mean).")
