@@ -498,7 +498,7 @@ def _match_details(matches: pd.DataFrame, photos: dict, event_key: str, info: di
     labels = [f"{icon.get(x, '🔴' if ' of ' in x else '🗓️')} {r.round_name} · {x}"
               for r, x in zip(rounds.itertuples(), status)]
     current = next((i for i, x in enumerate(status) if x == "next" or " of " in x), len(labels) - 1)
-    choice = st.selectbox("Round", range(len(labels)), index=current, format_func=lambda i: labels[i],
+    choice = st.selectbox("Round", range(len(labels)), index=current, format_func=lambda i: labels[i], filter_mode=None,
                           key=f"draw_round_{event_key}")  # own default per event
     rnd = matches[matches["round_order"] == rounds["round_order"].iloc[choice]].sort_values("slot")
     r = rounds.iloc[choice]
@@ -529,7 +529,7 @@ def _season(cal: pd.DataFrame) -> None:
         st.info("No calendar yet.")
         return
     seasons = sorted(cal["season"].dropna().unique(), reverse=True)
-    season = st.selectbox("Season", seasons, index=0, key="season")
+    season = st.selectbox("Season", seasons, index=0, key="season", filter_mode=None)
     rows = cal[cal["season"] == season].copy()
     # Upcoming first, then newest to oldest; events without dates yet go to the top.
     rows["_when"] = pd.to_datetime(rows["start_date"]).fillna(pd.to_datetime(rows["end_date"]))
@@ -569,7 +569,8 @@ def render() -> None:
         if not events:
             st.info("No majors in the calendar yet.")
         else:
-            i = st.selectbox("Tournament", range(len(events)), index=_default_event(events), key="event",
+            # filter_mode=None: pick from the list only, no typing (on a phone no keyboard, so the list opens downwards)
+            i = st.selectbox("Tournament", range(len(events)), index=_default_event(events), key="event", filter_mode=None,
                              format_func=lambda k: events[k]["label"])
             ev = events[i]
             if ev["mode"] == NO_DRAW:

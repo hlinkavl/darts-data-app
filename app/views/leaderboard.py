@@ -120,7 +120,7 @@ def render() -> None:
     c1, c2, c3 = st.columns([3, 3, 3])
     a = c1.selectbox("Player A", names, index=0, key="h2h_a")
     b = c2.selectbox("Player B", names, index=min(1, len(names) - 1), key="h2h_b")
-    fmt = c3.selectbox("Format", list(FORMATS), key="h2h_format")
+    fmt = c3.selectbox("Format", list(FORMATS), key="h2h_format", filter_mode=None)
     ra, rb = pi[pi["player_name"] == a].iloc[0], pi[pi["player_name"] == b].iloc[0]
     first_to, unit = FORMATS[fmt]
     official_rank = dict(zip(official["player_key"], official["prize_money_rank"]))

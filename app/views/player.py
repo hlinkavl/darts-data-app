@@ -294,10 +294,19 @@ def render() -> None:
     names = pi.sort_values("rank")["player_name"].tolist()
     wanted = st.session_state.pop("open_player", None)  # set by the leaderboard before switching here
     if wanted in names:
-        st.session_state["player"] = wanted
-    if st.session_state.get("player") not in names:
-        st.session_state["player"] = names[0]
-    name = st.selectbox("Player", names, key="player", placeholder="Type a name…")
+        st.session_state["player_shown"] = wanted
+    if st.session_state.get("player_shown") not in names:
+        st.session_state["player_shown"] = names[0]
+
+    def _pick() -> None:
+        # The search box stays empty: a pick becomes the shown player and the box is cleared again, so the next click
+        # starts from an empty field (suggestions appear after the first letter, ui.CSS).
+        if st.session_state.get("player"):
+            st.session_state["player_shown"] = st.session_state["player"]
+        st.session_state["player"] = None
+
+    st.selectbox("Player", names, index=None, key="player", placeholder="Type a name…", on_change=_pick)
+    name = st.session_state["player_shown"]
     row = pi[pi["player_name"] == name].iloc[0]
     info_all = data.players()
     info = info_all[info_all["player_key"] == row["player_key"]]
