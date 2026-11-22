@@ -14,7 +14,7 @@ OPEN_ICON = "↗"
 JUMP_CONTEXT = 4  # rows shown above a searched player
 HIGHLIGHT = "background-color: rgba(57, 135, 229, 0.30); font-weight: 700"
 TABLE_FORMATS = {"oom": "{:.0f}", "rank": "{:.0f}", "pi": "{:.2f}", "change": "{:+.2f}", "effective_average": "{:.1f}",
-                 "avg_major": "{:.2f}", "form_major": "{:+.2f}"}
+                 "avg_major": "{:.2f}", "recent_form": "{:+.2f}"}
 # Ranking choice -> (first column = sort key, second column shown next to the name)
 ORDERS = {"PDC Order of Merit": ("oom", "rank"), "Performance Index": ("rank", "oom")}
 FORMATS = {"Typical match (first to 6 legs)": (6, "legs")} | {f"First to {n} legs": (n, "legs") for n in (3, 4, 5, 7, 8, 10, 11, 16, 18)} \
@@ -68,7 +68,9 @@ def render() -> None:
     board = board.sort_values([first, second], na_position="last").reset_index(drop=True)
     board["open"] = OPEN_ICON
     # The ranking, the name and the PI first: that is what fits a phone screen.
-    columns = ["open", first, "player_name", "pi", second, "change", "effective_average", "avg_major", "form_major"]
+    form = "form_major_l3" if "form_major_l3" in board.columns else "form_major"  # recent form since 22 Nov 2026
+    board = board.rename(columns={form: "recent_form"})
+    columns = ["open", first, "player_name", "pi", second, "change", "effective_average", "avg_major", "recent_form"]
     shown = board
     # A click on a name first reruns once with the row highlighted, then opens the profile (see below).
     opening = st.session_state.pop("lb_opening", None)
@@ -96,8 +98,8 @@ def render() -> None:
             "effective_average": st.column_config.NumberColumn("Effective Average", format="%.1f", help=ui.EFFECTIVE_AVERAGE_HELP),
             "avg_major": st.column_config.NumberColumn("3-Dart Avg on majors (L20)", format="%.2f",
                                                        help="3-dart average over the last 20 matches on majors"),
-            "form_major": st.column_config.NumberColumn("Form on majors", format="%+.2f",
-                                                        help="Last 6 major matches minus the last 20")},
+            "recent_form": st.column_config.NumberColumn("Recent form", format="%+.2f",
+                                                        help="Average of the last 3 major matches minus the last 20")},
         on_select="rerun", selection_mode="single-cell", key="lb_table")
     if opening:
         time.sleep(0.35)  # long enough to see the highlighted row
@@ -134,7 +136,7 @@ def render() -> None:
     rows = [("PI", ui.num(ra["pi"], 2), ui.num(rb["pi"], 2)),
             ("Effective Average", ui.num(ra["effective_average"]), ui.num(rb["effective_average"])),
             ("3-Dart Average on majors (L20)", ui.num(ra["avg_major"], 2), ui.num(rb["avg_major"], 2)),
-            ("Form on majors", ui.signed(ra["form_major"]), ui.signed(rb["form_major"])),
+            ("Recent form", ui.signed(ra.get(form)), ui.signed(rb.get(form))),
             ("Order of Merit", _oom(ra), _oom(rb))]
     short = ui.surnames([a, b])
     grid = "display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:8px;padding:8px 4px;align-items:center"

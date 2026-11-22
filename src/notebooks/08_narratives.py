@@ -51,9 +51,9 @@ print(f"{len(articles.drop_duplicates('link'))} articles, {len(mentions)} mentio
 # COMMAND ----------
 
 current = spark.sql("""
-    SELECT player_key, player_name, rank, pi, avg_major, form_major, effective_average
-    FROM darts_gold.performance_index WHERE is_current
-""").toPandas().merge(tracked[["player_key", "oom"]], on="player_key", how="left")
+    SELECT * FROM darts_gold.performance_index WHERE is_current
+""").toPandas()[lambda d: [c for c in ["player_key", "player_name", "rank", "pi", "avg_major", "form_major",
+                                       "form_major_l3", "effective_average"] if c in d.columns]].merge(tracked[["player_key", "oom"]], on="player_key", how="left")
 recent = spark.sql("SELECT * FROM darts_gold.player_recent_matches WHERE recency <= 5").toPandas()
 prompts = narratives.build_prompts(current, recent, mentions, today)
 

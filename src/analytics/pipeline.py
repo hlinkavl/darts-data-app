@@ -56,6 +56,15 @@ def fit(player_matches: pd.DataFrame, matches: pd.DataFrame, version: str,
     kept, corr = model.step1a_correlation(split, candidates, scale, log)
     kept = model.step1b_significance(split, kept, scale, log)
     selected, share = model.step1c_bootstrap(split, kept, scale, log)
+    # Inputs approved by a person after the key test (features.APPROVED_PREDICTORS) join the selected ones; their
+    # bootstrap share comes from the model with them, for the record.
+    approved = [c for c in features.APPROVED_PREDICTORS if c in candidates and c not in selected]
+    if approved:
+        _, share_with = model.step1c_bootstrap(split, selected + approved, scale, model.SelectionLog())
+        for c in approved:
+            share[c] = share_with[c]
+            log.add(c, "approved", "kept", features.APPROVED_PREDICTORS[c])
+        selected = selected + approved
 
     # From here on only the selected predictors are needed. Matches from sources without detailed stats
     # (Mastercaller: no first-9, checkout, 180s) lack some candidates but have every selected predictor,

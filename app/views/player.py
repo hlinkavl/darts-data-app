@@ -23,6 +23,8 @@ INPUTS = {
     "avg_major": ("3-Dart Average on majors (L20)", lambda v: f"{v:.2f}", "Points per 3 darts over the last 20 matches on majors"),
     "form_major": ("Form on majors (L6 vs L20)", lambda v: f"{v:+.2f}",
                    "Average of the last 6 major matches minus the last 20"),
+    "form_major_l3": ("Recent form on majors (L3 vs L20)", lambda v: f"{v:+.2f}",
+                      "Average of the last 3 major matches minus the last 20: how the player throws right now"),
     "major_elo": ("Big-Stage Elo", lambda v: f"{v:.0f}", "Elo rating from matches on majors only"),
     "avg_l30": ("3-Dart Average (L30)", lambda v: f"{v:.2f}", "Points per 3 darts over the last 30 matches"),
     "form": ("Form (L10 vs L30)", lambda v: f"{v:+.2f}",

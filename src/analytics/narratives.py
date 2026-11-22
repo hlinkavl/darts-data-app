@@ -28,14 +28,17 @@ def _fmt(x, digits: int = 1, sign: bool = False) -> str:
 
 
 def prompt(player: pd.Series, recent: pd.DataFrame, news: pd.DataFrame) -> str:
-    """player: player_name, rank, pi, avg_major, form_major, effective_average, oom (official rank or NaN).
+    """player: player_name, rank, pi, avg_major, form_major_l3 (or form_major), effective_average, oom (official
+    rank or NaN).
     recent: the last matches (match_date, tournament_name, round, opponent_name, result, score, average).
     news: relevant articles (published, title, snippet), newest first."""
     lines = [INSTRUCTIONS, "", f"Player: {player['player_name']}",
              f"PDC Order of Merit: #{int(player['oom'])}" if pd.notna(player.get("oom")) else "PDC Order of Merit: unranked",
              f"PI: {_fmt(player['pi'], 2)} (#{int(player['rank'])} of tracked players; 5 = an average top-32 player)",
              f"3-dart average, last 20 matches on majors: {_fmt(player.get('avg_major'), 2)}",
-             f"Form on majors (average of last 6 minus last 20): {_fmt(player.get('form_major'), 2, sign=True)}",
+             (f"Recent form on majors (average of the last 3 minus the last 20): "
+              f"{_fmt(player.get('form_major_l3'), 2, sign=True)}" if pd.notna(player.get("form_major_l3"))
+              else f"Form on majors (average of last 6 minus last 20): {_fmt(player.get('form_major'), 2, sign=True)}"),
              "", "Last matches (newest first):"]
     for m in recent.itertuples():
         avg = f", average {_fmt(m.average, 2)}" if pd.notna(m.average) else ""

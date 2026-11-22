@@ -14,7 +14,8 @@ tables:
       rank: {description: "Position by PI among tracked players (1 = best)", synonyms: [PI rank]}
       effective_average: {description: "The player's whole strength in 3-dart-average points", synonyms: [EA]}
       avg_major: {description: "3-dart average over the last 20 matches on majors (the PI's average input)", synonyms: [average, 3-dart average]}
-      form_major: {description: "Average of the last 6 major matches minus the last 20", synonyms: [form]}
+      form_major: {description: "Average of the last 6 major matches minus the last 20 (not in the PI)"}
+      form_major_l3: {description: "Recent form: average of the last 3 major matches minus the last 20 (in the PI since 22 Nov 2026)", synonyms: [form, recent form, current form]}
       avg_l30: {description: "3-dart average over the last 30 matches of any event; frozen since Nov 2026 (only majors are added since then)"}
       elo: {description: "Opponent-Weighted Elo rating", synonyms: [Elo]}
   - identifier: workspace.darts_gold.player_recent_matches

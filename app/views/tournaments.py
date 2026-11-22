@@ -226,7 +226,8 @@ def _momentum(as_of) -> pd.DataFrame:
     then_d = when[when <= now_d - pd.DateOffset(months=RISING_MONTHS)].max() if pd.notna(now_d) else pd.NaT
     if pd.isna(now_d) or pd.isna(then_d):
         return pd.DataFrame(columns=["player_key", "pi_change", "form"])
-    form = "form_major" if "form_major" in hist.columns else "form"  # the model's form input since Nov 2026
+    # the model's form input: recent form (L3) since 22 Nov 2026, before that the L6 form on majors
+    form = next(c for c in ("form_major_l3", "form_major", "form") if c in hist.columns)
     now = hist[when == now_d][["player_key", "pi", form]].rename(columns={form: "form"})
     then = hist[when == then_d][["player_key", "pi"]].rename(columns={"pi": "pi_then"})
     m = now.merge(then, on="player_key")

@@ -14,6 +14,7 @@ BENCH_LABELS = {"walk-forward majors": "Majors, quarter by quarter", "walk-forwa
                 "test majors": "2026 majors", "test": "2026 all matches"}
 CONVERSION = {"avg_major": "1 average point = 1 point", "avg_l30": "1 average point = 1 point",
               "form_major": "1 point of form = {v:.2f} average points", "form": "1 point of form = {v:.2f} average points",
+              "form_major_l3": "1 point of recent form = {v:.2f} average points",
               "elo": "100 Elo = {v:.2f} average points", "major_elo": "100 Elo = {v:.2f} average points",
               "oom_rank": "halving the rank number (#20 → #10) = {v:.2f} average points",
               "oom_momentum": "halving the rank number within a year = {v:.2f} average points"}
@@ -78,21 +79,26 @@ def render() -> None:
     if coef.empty:
         st.warning("No model yet.")
         return
+    # The inputs from the long term to right now; any other input of a future model goes last.
+    horizon = {"oom_rank": "Long-term record", "oom_momentum": "Trend over 12 months", "avg_major": "Current level",
+               "form_major_l3": "Form right now"}
+    order = {p: i for i, p in enumerate(horizon)}
     inputs = []
-    for r in coef.sort_values("weight_pct", ascending=False).itertuples():
+    for r in sorted(coef.itertuples(), key=lambda r: order.get(r.predictor, len(order))):
         factor = r.avg_points_per_unit * (100 if r.predictor in ("elo", "major_elo")
                                           else 0.693 if r.predictor in ("oom_rank", "oom_momentum") else 1)
-        inputs.append(f"- **{ui.predictor_name(r.predictor)}**, {r.weight_pct:.0f} % of the index "
+        what = f"{horizon[r.predictor]}: " if r.predictor in horizon else ""
+        inputs.append(f"- {what}**{ui.predictor_name(r.predictor)}**, {r.weight_pct:.0f} % "
                       f"<span style='color:{ui.TEXT_2}'>({CONVERSION.get(r.predictor, '{v:.2f}').format(v=factor)})</span>")
     text, chart = st.columns([3, 2], gap="large")
     text.markdown(
         "The **Performance Index (PI)** rates every top player from 0 to 10: ten times the chance to beat an average "
         "top-32 player in a typical match (first to 6 legs). 5 is an average top-32 player, 7 wins 70 % against one. "
-        "It is made of three inputs:\n\n" + "\n".join(inputs) + "\n\n"
+        f"It combines {len(inputs)} inputs, from the long term to right now:\n\n" + "\n".join(inputs) + "\n\n"
         "**The weights** (how much each input matters) are learned from **all matches** between the top 150 players "
-        "since 2021, about 16,000 at every PDC event. **A player's numbers** come from **major matches** (the last 20) "
-        "plus the official ranking, which counts prize money from all events. New results now come only from the "
-        "majors, so these inputs always stay up to date.\n\n"
+        "since 2021, about 16,000 at every PDC event. **A player's numbers** come from **major matches** plus the "
+        "official ranking, which counts prize money from all events. New results now come only from the majors, so "
+        "these inputs always stay up to date.\n\n"
         "From the PI the app computes:\n\n"
         "- **Head to head:** the chance of any match from the two players' PIs, adjusted to its length: longer "
         "matches favour the stronger player.\n"
@@ -102,7 +108,7 @@ def render() -> None:
         unsafe_allow_html=True)
     with chart:
         st.plotly_chart(_weights_chart(coef), width="stretch", config={"displayModeBar": False})
-        st.caption(f"Share of the index. Model {data.active_version()}, chosen from 11 tested inputs.")
+        st.caption(f"Share of the index. Model {data.active_version()}, chosen from 12 tested inputs.")
     with st.expander("Why is the average top-32 Order of Merit rank #13, not #16?"):
         st.markdown("The model reads the rank on a log scale: #1 → #2 counts as much as #10 → #20, because at the top "
                     "one place means a lot. On that scale ranks 1 to 32 average to about #13 (their geometric mean).")

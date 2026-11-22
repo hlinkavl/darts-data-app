@@ -95,7 +95,8 @@ def form_chips(results: list[str]) -> str:
 DISPLAY_NAMES = {
     "avg_l30": "3-Dart Average (L30)", "form": "Form (L10 vs L30)", "elo": "Opponent-Weighted Elo",
     "oom_rank": "PDC Order of Merit", "experience": "Experience", "big_stage_delta": "Big-Stage Delta",
-    "stage_delta": "Stage Delta", "avg_major": "3-Dart Average on Majors (L20)", "form_major": "Form on Majors",
+    "stage_delta": "Stage Delta", "avg_major": "3-Dart Average on Majors (L20)", "form_major": "Form on Majors (L6)",
+    "form_major_l3": "Recent Form on Majors (L3)",
     "major_elo": "Big-Stage Elo", "major_experience": "Big-Stage Experience",
     "oom_momentum": "Order of Merit Momentum", "major_qf_12m": "Major Quarter-finals (12 months)",
     "major_points_12m": "Major Results Points", "major_titles_24m": "Major Titles (24 months)",

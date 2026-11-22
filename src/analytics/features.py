@@ -38,6 +38,8 @@ CANDIDATES = {
     # covers the majors only, so the live model may use only inputs that stay fresh (decided before testing).
     "avg_major": "3-Dart Average on Majors (L20)",
     "form_major": "Form on Majors (L6 vs L20)",
+    # Tested 22 Nov 2026 (immediate form: the last few major matches, usually the current or the last event):
+    "form_major_l3": "Recent Form on Majors (L3 vs L20)",
     # Added 2026-11-14 (recent results on majors and long-term quality, decided before testing):
     "major_qf_12m": "Major Quarter-finals (12 months)",
     "major_points_12m": "Major Results Points (12 months)",
@@ -48,9 +50,16 @@ CANDIDATES = {
 }
 # The candidates the live model may choose from: inputs that new data (majors from Wikipedia, the Order of Merit)
 # keeps up to date. The others are kept for the published history of the selection.
-LIVE_CANDIDATES = ["avg_major", "form_major", "major_elo", "major_experience", "oom_rank", "major_qf_12m",
+LIVE_CANDIDATES = ["avg_major", "form_major", "form_major_l3", "major_elo", "major_experience", "oom_rank", "major_qf_12m",
                    "major_points_12m", "major_titles_24m", "top32_share_5y", "oom_best_3y", "oom_momentum"]
 # The predictor in 3-dart-average points that anchors the Effective Average (first one present wins).
+# Inputs a person approved after the key test although the automatic rules dropped them; kept in every refit and
+# logged as such (pipeline.fit). Each entry says why.
+APPROVED_PREDICTORS = {
+    "form_major_l3": "approved 22 Nov 2026: tied on the 2025 validation period (rule 1b), but in the walk-forward "
+                     "test it improves predictions on majors (+0.0019 log loss, p = 0.022) and on all matches "
+                     "(+0.0016, p < 0.001); uncorrelated with the other inputs (|r| <= 0.06)",
+}
 AVERAGE_PREDICTORS = ["avg_major", "avg_l30"]
 # Pair-specific predictors: they describe a match-up, not a player, so they never enter a player's PI; they
 # adjust the probability of that particular match (see analytics.model.PAIR_ONLY).
@@ -60,6 +69,7 @@ LONG_WINDOW, SHORT_WINDOW = 30, 10
 MIN_LONG, MIN_SHORT = 10, 5
 MAJOR_LONG, MAJOR_SHORT = 20, 6    # majors-only windows (a top player plays ~20-30 major matches a year)
 MIN_MAJOR_LONG, MIN_MAJOR_SHORT = 5, 3
+MAJOR_RECENT = 3                    # immediate form: the last 3 major matches (all 3 needed)
 # Majors whose format lowers the 3-dart average for everyone: the World Grand Prix is double-in (87.4 on average
 # 2021-2026 vs 92.6-97.6 at the other majors). Left out of the majors-only averages; results and Elo still count.
 # Keys as in config/majors.yml.
@@ -169,10 +179,13 @@ def _major_states(pm: pd.DataFrame) -> pd.DataFrame:
                     / drt.rolling(MAJOR_LONG, min_periods=MIN_MAJOR_LONG).sum())
         short_avg = (3 * pts.rolling(MAJOR_SHORT, min_periods=MIN_MAJOR_SHORT).sum()
                      / drt.rolling(MAJOR_SHORT, min_periods=MIN_MAJOR_SHORT).sum())
+        recent_avg = (3 * pts.rolling(MAJOR_RECENT, min_periods=MAJOR_RECENT).sum()
+                      / drt.rolling(MAJOR_RECENT, min_periods=MAJOR_RECENT).sum())
         out.append(pd.DataFrame({"date": g["match_date"].to_numpy(), "player_key": key,
-                                 "avg_major": long_avg.to_numpy(), "form_major": (short_avg - long_avg).to_numpy()}))
+                                 "avg_major": long_avg.to_numpy(), "form_major": (short_avg - long_avg).to_numpy(),
+                                 "form_major_l3": (recent_avg - long_avg).to_numpy()}))
     if not out:
-        return pd.DataFrame(columns=["date", "player_key", "avg_major", "form_major"])
+        return pd.DataFrame(columns=["date", "player_key", "avg_major", "form_major", "form_major_l3"])
     states = pd.concat(out, ignore_index=True)
     return states.groupby(["player_key", "date"], sort=False).tail(1)  # the state at the end of each day
 
@@ -288,7 +301,7 @@ def point_in_time_features(player_matches: pd.DataFrame, elo_history: pd.DataFra
     out = out.drop(columns=["_res", "_n", "opp_elo"])
 
     states = _major_states(pm)
-    for col in ("avg_major", "form_major"):
+    for col in ("avg_major", "form_major", "form_major_l3"):
         out[col] = _as_of(out, states, col).to_numpy() if len(states) else np.nan
 
     if rankings is not None and len(rankings):
