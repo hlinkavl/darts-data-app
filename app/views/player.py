@@ -273,7 +273,7 @@ OTHER_MAJOR_ICON = "🎯"
 
 def _titles(player_key: int, info: pd.Series) -> None:
     """Majors won over the whole career (Wikipedia infobox) merged with the major titles in our results (since
-    2021, so the newest ones count even before Wikipedia is updated); other titles since 2021 one click away."""
+    2021, so the newest ones count even before Wikipedia is updated)."""
     st.subheader("🏆 Majors won")
     t = data.table("player_titles")
     t = t[t["player_key"] == player_key] if len(t) else t
@@ -307,11 +307,6 @@ def _titles(player_key: int, info: pd.Series) -> None:
     else:
         st.caption("No major title yet.")
 
-    others = t[~t["is_major"]].sort_values("event_date", ascending=False) if len(t) else t
-    if len(others):
-        with st.expander(f"Other titles since 2021 ({len(others)})"):
-            st.markdown("\n".join(f"- {pd.Timestamp(r.event_date):%b %Y} · {r.tournament_name}"
-                                   for r in others.itertuples()))
 
 
 def render() -> None:
