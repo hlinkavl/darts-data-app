@@ -195,7 +195,11 @@ CSS = f"""
 .side-card .kv b {{color:{TEXT};font-weight:600;text-align:right}}
 .side-card .note {{color:{TEXT_2};font-size:0.78em;margin-top:8px;line-height:1.45}}
 .side-credits {{color:{TEXT_2};font-size:0.72em;line-height:1.5;margin-top:14px;opacity:0.85}}
-.st-key-mobile_nav_row, .st-key-mobile_status {{display:none}}
+.st-key-mobile_nav_row {{display:none}}
+/* the status tag at the top of the page is for phones; wider screens have the sidebar card */
+@media (min-width: 641px) {{
+  .st-key-status_tag {{display:none}}
+}}
 .mc-grid {{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin-bottom:8px}}
 .mc-grid-2 {{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:8px}}
 .mc-row {{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:0.92em}}
@@ -206,7 +210,6 @@ CSS = f"""
 .vs-centre {{min-width:84px;text-align:center}}
 @media (max-width: 640px) {{
   .st-key-mobile_nav_row {{display:block;margin-bottom:-0.4rem}}
-  .st-key-mobile_status {{display:block}}
   [data-testid="stSidebarNav"] {{display:none !important}}
   .st-key-mobile_nav_row [data-testid="stButtonGroup"] > div {{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
                                                               padding-bottom:2px}}
@@ -237,13 +240,15 @@ CSS = f"""
 
 
 def status_line(status: dict) -> str:
-    """The phone's status line under the page pills: a health dot and when the data was refreshed."""
+    """The phone's status line under the page pills: the time of the last refresh on a price-tag shape, whose hole
+    is the health dot (green, yellow, red)."""
     _, _, fg = HEADLINE.get(status["status"], HEADLINE["green"])
     when = status["checked_at"]
-    text = f"Updated {pd.Timestamp(when):%d %b, %H:%M} UTC" if when is not None and pd.notna(when) else "Not refreshed yet"
-    return (f"<div style='display:inline-flex;align-items:center;gap:8px;border:1px solid {GRID};border-radius:999px;"
-            f"padding:4px 12px;background:#20201f;color:{TEXT};font-size:0.85em;font-weight:600'>"
-            f"<span style='width:9px;height:9px;border-radius:50%;background:{fg};display:inline-block'></span>"
+    text = f"{pd.Timestamp(when):%b %-d, %H:%M} UTC" if when is not None and pd.notna(when) else "Not refreshed yet"
+    return (f"<div style='display:inline-flex;align-items:center;gap:7px;color:{TEXT};font-size:0.8em;"
+            f"font-weight:600;background:#363633;padding:3px 12px 3px 15px;margin-top:4px;border-radius:0 5px 5px 0;"
+            f"clip-path:polygon(9px 0,100% 0,100% 100%,9px 100%,0 50%)'>"
+            f"<span style='width:7px;height:7px;border-radius:50%;background:{fg};display:inline-block'></span>"
             f"{text}</div>")
 
 

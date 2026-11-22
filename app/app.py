@@ -54,10 +54,10 @@ st.session_state["mobile_nav"] = SHORT[current]
 with st.container(key="mobile_nav_row"):
     st.pills("Pages", [SHORT[k] for k in PAGES], key="mobile_nav", label_visibility="collapsed",
              on_change=lambda: st.session_state.update(nav_target=st.session_state["mobile_nav"]))
-# Data status: the full card in the sidebar; on a phone also a line under the page pills with the health dot and
-# the refresh time (the sidebar's page menu is hidden there, ui.CSS: the pills replace it).
+# Data status: the full card in the sidebar; on a phone also the refresh time as a tag at the top of every page
+# (ui.CSS), where the sidebar's page menu is hidden because the pills replace it.
 status = data.data_status()
-with st.container(key="mobile_status"):
+with st.container(key="status_tag"):
     st.markdown(ui.status_line(status), unsafe_allow_html=True)
 with st.sidebar:
     st.markdown(ui.sidebar_status(status), unsafe_allow_html=True)

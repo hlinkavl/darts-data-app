@@ -93,7 +93,8 @@ Catalog `workspace`, three schemas:
 - **Sources (14 Nov 2026):** official APIs only. Darts Orakel and Mastercaller blocked automated access, so their
   data is one-time history; blocks are never worked around. Since then only majors' knockout matches are added.
 - **Model (14 Nov 2026):** only inputs that stay fresh with majors-only data: average on majors, Order of Merit rank
-  and its momentum. Details: [Methodology](METHODOLOGY.md).
+  and its momentum. **22 Nov 2026:** recent form (last 3 major matches vs the last 20) added by an approved
+  exception: tied on the validation rule, significant in the walk-forward test. Details: [Methodology](METHODOLOGY.md).
 - **Public app (20 Nov 2026):** Databricks apps always need a sign-in, so the public app runs on Streamlit Community
   Cloud from a daily snapshot. "Ask the data" stays in the private app only.
 - **Not covered:** group stages (Grand Slam: predictions start from the last 16), the Premier League (a league), the

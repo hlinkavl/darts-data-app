@@ -83,6 +83,13 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
                 f"<span style='color:{ui.TEXT_2};font-size:0.78em'>{label}</span>"
                 f"<b style='color:{ui.TEXT};font-size:1.05em'>{value}</b></span>")
 
+    # Recent form (last 3 major matches vs the last 20): an arrow in the win/loss colour, the number in text colour.
+    form = row.get("form_major_l3")
+    form_chip = ""
+    if form is not None and pd.notna(form):
+        arrow = f"<span style='color:{ui.WIN if form >= 0 else ui.LOSS}'>{'▲' if form >= 0 else '▼'}</span>"
+        form_chip = chip("Recent form", f"{arrow} {form:+.2f}")
+
     # One HTML card (flexbox), so the photo, the name and both numbers share one vertical centre line. On a phone
     # (ui.CSS) the photo sits next to the name and the two numbers share a row below.
     st.markdown(
@@ -94,7 +101,7 @@ def _header(name: str, row: pd.Series, info: pd.Series) -> None:
         f"<div class='big' style='font-size:2.1em;font-weight:700;line-height:1.2;color:{ui.TEXT}'>{escape(name)}</div>"
         f"<div style='color:{ui.TEXT_2};margin-top:4px'>{' · '.join(s for s in sub if s)}</div>"
         f"<div style='display:flex;flex-wrap:wrap;gap:8px;margin-top:10px'>"
-        + chip("PDC Order of Merit", oom_txt) + chip("PI ranking", f"#{int(row['rank'])}") + "</div></div>"
+        + chip("PDC Order of Merit", oom_txt) + chip("PI ranking", f"#{int(row['rank'])}") + form_chip + "</div></div>"
         f"<div class='ph-metrics' style='display:flex;flex:0 0 auto'>"
         + metric("Performance Index", ui.num(row["pi"], 2), "5.0 = average top-32 player")
         + metric("Effective Average", ui.num(row["effective_average"]),
@@ -170,6 +177,11 @@ def _breakdown(row: pd.Series) -> None:
 
 def _recent_form(row: pd.Series, info_all: pd.DataFrame) -> None:
     st.subheader("Recent form")
+    form, usual = row.get("form_major_l3"), row.get("avg_major")
+    if form is not None and pd.notna(form) and usual is not None and pd.notna(usual):
+        st.markdown(f"Last 3 major matches: **{usual + form:.1f}** average, **{form:+.1f}** "
+                    f"{'above' if form >= 0 else 'below'} the usual {usual:.1f} (last 20 major matches). "
+                    "This recent form is part of the PI.")
     recent = data.table("player_recent_matches")
     recent = recent[recent["player_key"] == row["player_key"]].sort_values("recency").head(5)
     if recent.empty:

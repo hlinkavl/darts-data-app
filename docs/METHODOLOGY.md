@@ -7,7 +7,7 @@ One model gives three answers:
 3. **Who wins a tournament?** 10,000 simulations of the draw.
 
 All numbers are recomputed on every refit and stored in Databricks; the app's Methodology page shows them live.
-This page describes model `v2026-11-14`.
+This page describes model `v2026-11-22`.
 
 **Contents:** [1. Performance Index](#1-performance-index) · [2. Head to head](#2-head-to-head) ·
 [3. Tournaments](#3-tournament-predictions) · [Limitations](#limitations)
@@ -43,11 +43,17 @@ Sources: Darts Orakel (all matches, 2021 – 28 Oct 2026), Mastercaller (until 9
 
 ### What the PI is made of
 
-| Input | Share of the index | In 3-dart-average points |
-|---|---|---|
-| **3-dart average on majors**, last 20 major matches | 55 % | 1 point = 1 point |
-| **PDC Order of Merit rank** | 35 % | halving the rank number (#20 → #10) = 1.3 points |
-| **Order of Merit momentum**, rank change over 12 months | 10 % | halving the rank number within a year = 0.6 points |
+Four inputs, from the long term to right now:
+
+| | Input | Share of the index | In 3-dart-average points |
+|---|---|---|---|
+| Long-term record | **PDC Order of Merit rank** (two years of prize money) | 30 % | halving the rank number (#20 → #10) = 1.3 points |
+| Trend | **Order of Merit momentum**, rank change over 12 months | 8 % | halving the rank number within a year = 0.5 points |
+| Current level | **3-dart average on majors**, last 20 major matches | 48 % | 1 point = 1 point |
+| Form right now | **Recent form on majors**: average of the last 3 major matches minus the last 20 | 14 % | 1 point = 0.3 points |
+
+The four barely overlap (correlations of 0.25 or less, except rank and average at 0.77), so each adds its own
+information: momentum is the trend of the ranking over a year, recent form how the player throws this week.
 
 The World Grand Prix is left out of the average (it is double-in, which lowers everyone's average). A player needs
 5 major matches to get a PI, so about 110 of the 150 tracked players have one.
@@ -57,7 +63,7 @@ plus each input's advantage converted into average points. The PI breakdown in a
 
 ### How the inputs were chosen
 
-Eleven candidates were defined before testing. A candidate stays only if it passes three filters:
+Twelve candidates were defined before testing. A candidate stays only if it passes three filters:
 
 1. **Not a duplicate:** of two inputs measuring almost the same thing (correlation above 0.8), the better one stays.
 2. **Significant and useful:** a positive effect (p < 0.05) that also improves predictions on unseen matches.
@@ -66,9 +72,17 @@ Eleven candidates were defined before testing. A candidate stays only if it pass
 | Candidate | Result |
 |---|---|
 | 3-dart average on majors, Order of Merit rank, Order of Merit momentum | **kept** |
+| Recent form on majors (last 3 vs last 20) | **kept by a person's decision**, see below |
 | Big-stage Elo, big-stage experience, major results points, best rank in 3 years | duplicates of a kept input |
-| Form on majors, major quarter-finals | not significant |
+| Form on majors (last 6 vs last 20), major quarter-finals | not significant |
 | Major titles, time in the top 32 | negative effect next to the rank: the ranking lags, and momentum covers that |
+
+**Recent form, an approved exception (22 Nov 2026).** The last 3 major matches against the last 20 is a real
+effect (p < 0.000001 over all matches; 5 points above the usual level lift a 50 % chance to 53 %) and is stable in
+98 % of resampled datasets. It missed filter 2 only by a tie: on the 2025 validation period the model predicted
+exactly as well with it as without it. The stronger quarterly walk-forward test (2023–2026) shows a small but
+significant gain on majors (+0.0019 in log loss, p = 0.02) and on all matches (+0.0016, p < 0.001), so it was added
+by a documented decision rather than by the rules. It replaces the 6-match form, which it beats. A variant that counts only the last 60 days (older form set to 0) was weaker (+0.0014 on majors, 75 % stable): on average even an older recent form still tells something.
 
 <details>
 <summary>The earlier model (31 Oct 2026, inputs from every event)</summary>
@@ -88,9 +102,9 @@ quarter since July 2023 on earlier matches only and predict the next quarter.
 
 | Test | Matches | PI | Order of Merit | Result |
 |---|---|---|---|---|
-| **Majors** | 1,653 | log loss 0.638 | 0.651 | **PI significantly better** (p < 0.001) |
-| All matches | 12,785 | 0.659 | 0.668 | PI significantly better (p < 0.001) |
-| 2026 majors only | 399 | 0.624 | 0.630 | same direction, too few matches to be sure |
+| **Majors** | 1,665 | log loss 0.637 | 0.651 | **PI significantly better** (p < 0.001) |
+| All matches | 12,797 | 0.657 | 0.668 | PI significantly better (p < 0.001) |
+| 2026 majors only | 411 | 0.627 | 0.632 | same direction, too few matches to be sure |
 
 Log loss: lower is better. The probabilities are also honest: on 2026 matches never used for fitting, matches
 predicted at 60 % are won about 60 % of the time, and so on.
@@ -135,8 +149,8 @@ stages, the Premier League (a league), the UK Open draw and the 96-player World 
 Every finished major is predicted again as if before its first dart: strengths and weights from earlier matches
 only. Eleven majors of 2025–2026, 451 matches:
 
-- the pre-match favourite won **70.3 %** of matches;
-- adjusting to each round's format makes the chances more accurate (log loss 0.595 → 0.583);
+- the pre-match favourite won **70.1 %** of matches;
+- adjusting to each round's format makes the chances more accurate (log loss 0.595 → 0.584);
 - the title favourite won **6 of the 11** events.
 
 <details>
@@ -144,17 +158,17 @@ only. Eleven majors of 2025–2026, 451 matches:
 
 | Event | Matches | Favourite won | Champion | Champion's chance before the event (rank) |
 |---|---|---|---|---|
-| World Championship 2026 | 126 | 74 % | Luke Littler | 43.3 % (1) |
-| European Championship 2026 | 31 | 58 % | Ross Smith | 3.6 % (8) |
-| World Grand Prix 2026 | 31 | 74 % | Luke Humphries | 16.2 % (2) |
-| World Series Finals 2026 | 31 | 74 % | Ross Smith | 2.0 % (12) |
-| World Matchplay 2026 | 30 | 77 % | Luke Littler | 23.3 % (1) |
-| Players Championship Finals 2025 | 63 | 68 % | Luke Littler | 23.7 % (1) |
-| Grand Slam 2025 (knockout stage) | 15 | 73 % | Luke Littler | 38.9 % (1) |
-| European Championship 2025 | 31 | 58 % | Gian van Veen | 3.8 % (7) |
-| World Series Finals 2025 | 31 | 68 % | Michael van Gerwen | 3.0 % (10) |
-| World Grand Prix 2025 | 31 | 68 % | Luke Littler | 30.6 % (1) |
-| World Matchplay 2025 | 31 | 74 % | Luke Littler | 30.1 % (1) |
+| World Championship 2026 | 126 | 75 % | Luke Littler | 48.6 % (1) |
+| European Championship 2026 | 31 | 61 % | Ross Smith | 3.6 % (9) |
+| World Grand Prix 2026 | 31 | 74 % | Luke Humphries | 15.7 % (2) |
+| World Series Finals 2026 | 31 | 74 % | Ross Smith | 1.9 % (11) |
+| World Matchplay 2026 | 30 | 73 % | Luke Littler | 27.5 % (1) |
+| Players Championship Finals 2025 | 63 | 70 % | Luke Littler | 23.8 % (1) |
+| Grand Slam 2025 (knockout stage) | 15 | 73 % | Luke Littler | 35.8 % (1) |
+| European Championship 2025 | 31 | 58 % | Gian van Veen | 3.4 % (9) |
+| World Series Finals 2025 | 31 | 65 % | Michael van Gerwen | 2.7 % (10) |
+| World Grand Prix 2025 | 31 | 65 % | Luke Littler | 29.2 % (1) |
+| World Matchplay 2025 | 31 | 71 % | Luke Littler | 29.8 % (1) |
 </details>
 
 ---
