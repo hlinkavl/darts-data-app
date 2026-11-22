@@ -266,8 +266,13 @@ def _form_and_news(player_key: int) -> None:
         st.caption("Source: pdc.tv news")
 
 
-# Majors in the order shown; the two most prestigious get their own icon and colour.
-MAJOR_STYLE = {"World Championship": ("🏆", "#d9b44a"), "Premier League": ("⭐", "#b9b9b4")}
+# The two most prestigious majors come first, with a coloured frame; every major has its own icon.
+MAJOR_STYLE = {"World Championship": ("🎄", "#d9b44a"),   # played over Christmas at Alexandra Palace
+               "Premier League": ("⭐", "#b9b9b4")}
+MAJOR_ICON = {"UK Open": "🇬🇧", "World Matchplay": "🏖️",          # summer by the sea in Blackpool
+              "World Grand Prix": "🏁", "European Championship": "🇪🇺",
+              "Grand Slam": "🐺",                                     # Wolverhampton
+              "Players Championship Finals": "🏅", "World Series of Darts Finals": "🌐", "Masters": "🎖️"}
 OTHER_MAJOR_ICON = "🎯"
 
 
@@ -290,7 +295,7 @@ def _titles(player_key: int, info: pd.Series) -> None:
         rows = ""
         for major in [m for m in order if m in wins]:
             years = sorted(wins[major])
-            icon, accent = MAJOR_STYLE.get(major, (OTHER_MAJOR_ICON, ui.GRID))
+            icon, accent = MAJOR_STYLE.get(major, (MAJOR_ICON.get(major, OTHER_MAJOR_ICON), ui.GRID))
             top = major in MAJOR_STYLE
             rows += (f"<div style='display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px solid "
                      f"{accent if top else ui.GRID};border-radius:10px;background:{'#262624' if top else 'transparent'}'>"
