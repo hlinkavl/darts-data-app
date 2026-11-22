@@ -489,15 +489,17 @@ def _round_status(rnd: pd.DataFrame) -> str:
 
 
 def _match_details(matches: pd.DataFrame, photos: dict, event_key: str, info: dict) -> None:
-    """One round at a time, in playing order; opens on the round being played (finished events: the final).
+    """One round at a time, the final first; opens on the round being played (finished events: the final).
     info: upcoming matches by pair of names; their day goes into the round's chips."""
+    # The final at the top, the first round at the bottom (like the tournament list: the latest first).
     rounds = (matches[["round_order", "round_name", "first_to", "unit"]].drop_duplicates("round_order")
-              .sort_values("round_order"))
+              .sort_values("round_order", ascending=False))
     status = [_round_status(matches[matches["round_order"] == o]) for o in rounds["round_order"]]
     icon = {"played": "✅"}
     labels = [f"{icon.get(x, '🔴' if ' of ' in x else '🗓️')} {r.round_name} · {x}"
               for r, x in zip(rounds.itertuples(), status)]
-    current = next((i for i, x in enumerate(status) if x == "next" or " of " in x), len(labels) - 1)
+    # Open on the earliest round still to finish (the lowest one in the list); a finished event on the final.
+    current = max((i for i, x in enumerate(status) if x == "next" or " of " in x), default=0)
     choice = st.selectbox("Round", range(len(labels)), index=current, format_func=lambda i: labels[i], filter_mode=None,
                           key=f"draw_round_{event_key}")  # own default per event
     rnd = matches[matches["round_order"] == rounds["round_order"].iloc[choice]].sort_values("slot")

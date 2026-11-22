@@ -196,10 +196,10 @@ CSS = f"""
 .side-card .note {{color:{TEXT_2};font-size:0.78em;margin-top:8px;line-height:1.45}}
 .side-credits {{color:{TEXT_2};font-size:0.72em;line-height:1.5;margin-top:14px;opacity:0.85}}
 .st-key-mobile_nav_row {{display:none}}
-/* Player pickers: Streamlit lists every name as soon as the box opens; show suggestions only after the first letter
-   (the open list is hidden while the focused input is empty). */
-body:has(.st-key-player input:focus[value=""]) [data-testid="stSelectboxVirtualDropdown"],
-body:has(.st-key-lb_find input:focus[value=""]) [data-testid="stSelectboxVirtualDropdown"] {{display:none !important}}
+/* Player pickers: Streamlit opens the full list on the first touch (before the input is focused); show suggestions
+   only after the first letter: the list is hidden while this picker is open with an empty input. */
+body:has(.st-key-player input[aria-expanded="true"][value=""]) [data-testid="stSelectboxVirtualDropdown"],
+body:has(.st-key-lb_find input[aria-expanded="true"][value=""]) [data-testid="stSelectboxVirtualDropdown"] {{display:none !important}}
 
 .mc-grid {{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin-bottom:8px}}
 .mc-grid-2 {{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:8px}}

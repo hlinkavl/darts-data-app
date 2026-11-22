@@ -407,6 +407,9 @@ if ranking_sources:
     QUALIFY row_number() OVER (PARTITION BY r.snapshot_date, x.player_key ORDER BY r._run_date DESC, r.rank) = 1
     """)
 
+# Career majors from the players' Wikipedia infobox (JSON string; in the background files since 22 Nov 2026)
+major_wins = ("b.major_wins" if "major_wins" in spark.table("darts_bronze.wiki_player_background").columns
+              else "CAST(NULL AS STRING)")
 orakel_profile = f"""
   SELECT player_key, country, to_date(dob) AS date_of_birth
   FROM {dedup("orakel_rankings", "player_key")}"""
@@ -422,7 +425,8 @@ seen AS (
 names AS (SELECT player_key, max_by(player_name, match_date) AS player_name FROM seen GROUP BY player_key),
 wiki AS (
   SELECT coalesce(b.player_key, x.player_key) AS player_key, b.wikidata_id, b.enwiki_title, b.description, b.intro,
-         get(b.nickname, 0) AS nickname, get(b.image, 0) AS image_file, get(b.citizenship, 0) AS citizenship_qid
+         get(b.nickname, 0) AS nickname, get(b.image, 0) AS image_file, get(b.citizenship, 0) AS citizenship_qid,
+         {major_wins} AS major_wins
   FROM darts_bronze.wiki_player_background b
   LEFT JOIN xw x ON x.source = 'wikipedia' AND x.source_id = b.name
   QUALIFY row_number() OVER (PARTITION BY coalesce(b.player_key, x.player_key) ORDER BY b._run_date DESC) = 1
@@ -433,7 +437,7 @@ SELECT
   o.country, o.date_of_birth,
   c.prize_money_2y, c.rank AS prize_money_rank,
   coalesce(c.rank <= {TRACKED_PLAYERS}, false) AS is_tracked,
-  w.nickname, w.wikidata_id, w.enwiki_title, w.description, w.intro, w.image_file, w.citizenship_qid
+  w.nickname, w.wikidata_id, w.enwiki_title, w.description, w.intro, w.image_file, w.citizenship_qid, w.major_wins
 FROM names n
 FULL OUTER JOIN current_rank c ON c.player_key = n.player_key
 LEFT JOIN ({orakel_profile}) o ON o.player_key = coalesce(n.player_key, c.player_key)

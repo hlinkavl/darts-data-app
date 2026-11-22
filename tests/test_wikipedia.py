@@ -67,3 +67,14 @@ def test_scheduled_refresh_runs_during_a_major_the_day_before_and_the_day_after(
     assert refresh_today(date(2026, 11, 13), gs) and refresh_today(date(2026, 11, 22), gs)
     assert refresh_today(date(2026, 11, 23), gs)  # the night after the final brings its result
     assert not refresh_today(date(2026, 11, 24), gs)
+
+
+def test_major_wins_from_the_player_infobox():
+    from ingestion.wikipedia import parse_major_wins
+    infobox = """{{Infobox darts player
+| world_championship  = '''Winner (2):''' [[2020 PDC World Darts Championship|2020]], [[2022 PDC World Darts Championship|2022]]
+| grand_slam          = Runner-up: [[2017 Grand Slam of Darts|2017]]
+| premier_league      = '''Winner (1):''' [[2024 Premier League Darts|2024]]<br />Runner-up: [[2025 Premier League Darts|2025]]
+| matchplay           = Quarter-finals: 2019
+}}"""
+    assert parse_major_wins(infobox) == {"World Championship": [2020, 2022], "Premier League": [2024]}

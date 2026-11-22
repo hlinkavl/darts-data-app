@@ -1,5 +1,6 @@
 """Wikipedia / Wikidata: tournament pages (draws, results) and player background. Content is CC BY-SA."""
 
+import json
 import re
 import unicodedata
 from datetime import date
@@ -140,6 +141,11 @@ def fetch_player_background(client: PoliteClient, name: str) -> dict:
         )
         page = next(iter(extract.get("query", {}).get("pages", {}).values()), {})
         record["intro"] = page.get("extract")
+        # Career majors from the infobox (the results data only goes back to 2021), as a JSON string so the bronze
+        # schema stays simple.
+        lead = client.get_json(WIKI_API, {"action": "parse", "page": wiki_title, "prop": "wikitext", "section": 0,
+                                          "format": "json", "formatversion": 2, "redirects": 1})
+        record["major_wins"] = json.dumps(parse_major_wins(lead.get("parse", {}).get("wikitext", "")))
         if not record["image"] and page.get("pageimage"):
             record["image"], record["image_source"] = [page["pageimage"]], "wikipedia"
 
@@ -151,6 +157,33 @@ def fetch_player_background(client: PoliteClient, name: str) -> dict:
     return record
 
 
+# Infobox fields of a darts player with the PDC majors (and their names in config/majors.yml).
+INFOBOX_MAJORS = {
+    "world_championship": "World Championship", "masters": "Masters", "UK_open": "UK Open",
+    "premier_league": "Premier League", "matchplay": "World Matchplay", "world_series_finals": "World Series of Darts Finals",
+    "grand_prix": "World Grand Prix", "European": "European Championship", "grand_slam": "Grand Slam",
+    "pc_finals": "Players Championship Finals",
+}
+
+
+def parse_major_wins(wikitext: str) -> dict[str, list[int]]:
+    """Years of every PDC major a player won, from the infobox of their Wikipedia article, e.g. the field
+    `world_championship = Winner (2): [[2020 PDC World Darts Championship|2020]], [[2022 ...|2022]]`
+    (bold markup around 'Winner' left out here). Only the 'Winner' part counts: the same field may go on with
+    runner-up years."""
+    wins = {}
+    for field, major in INFOBOX_MAJORS.items():
+        m = re.search(rf"\|\s*{field}\s*=([^\n]*)", wikitext or "")
+        if not m or "winner" not in m.group(1).lower():
+            continue
+        part = m.group(1)[m.group(1).lower().index("winner"):]
+        part = re.split(r"(?i)runner|semi|quarter|last \d|<br", part)[0]
+        years = sorted({int(y) for y in re.findall(r"\b(19[7-9]\d|20\d\d)\b", part)})
+        if years:
+            wins[major] = years
+    return wins
+
+
 def draw_players(wikitext: str) -> set[str]:
     """Player names in a tournament page's draw templates ({{PDCFlag|Name|..}})."""
     return {m.strip() for m in re.findall(r"PDCFlag\s*\|\s*([^|}]+)", wikitext or "") if m.strip()}
@@ -159,6 +192,8 @@ def draw_players(wikitext: str) -> set[str]:
 def needs_background(previous: dict | None, today: date, retry_days: int = 30) -> bool:
     """Fetch when the player is new or was matched by an older matcher; retry players without a photo monthly."""
     if previous is None or previous.get("matcher", 1) < MATCHER_VERSION:
+        return True
+    if previous.get("enwiki_title") and "major_wins" not in previous:  # career majors, added 22 Nov 2026
         return True
     if previous.get("image"):
         return False

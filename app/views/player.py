@@ -1,5 +1,6 @@
 """Player Profile: photo, Order of Merit and PI, the PI breakdown, PI over time, recent form, profile, titles."""
 
+import json
 import re
 from datetime import date
 from html import escape
@@ -265,24 +266,52 @@ def _form_and_news(player_key: int) -> None:
         st.caption("Source: pdc.tv news")
 
 
-def _titles(player_key: int) -> None:
-    st.subheader("🏆 Titles")
+# Majors in the order shown; the two most prestigious get their own icon and colour.
+MAJOR_STYLE = {"World Championship": ("🏆", "#d9b44a"), "Premier League": ("⭐", "#b9b9b4")}
+OTHER_MAJOR_ICON = "🎯"
+
+
+def _titles(player_key: int, info: pd.Series) -> None:
+    """Majors won over the whole career (Wikipedia infobox) merged with the major titles in our results (since
+    2021, so the newest ones count even before Wikipedia is updated); other titles since 2021 one click away."""
+    st.subheader("🏆 Majors won")
     t = data.table("player_titles")
-    t = t[t["player_key"] == player_key].sort_values("event_date", ascending=False) if len(t) else t
-    if t.empty:
-        st.caption("No titles in our data (PDC events since 2021).")
-        return
+    t = t[t["player_key"] == player_key] if len(t) else t
+    wins: dict[str, set[int]] = {}
+    raw = info.get("major_wins") if len(info) else None
+    if isinstance(raw, str) and raw.strip():
+        for major, years in json.loads(raw).items():
+            wins.setdefault(major, set()).update(years)
+    for r in (t[t["is_major"]].itertuples() if len(t) else []):
+        wins.setdefault(r.tournament_name, set()).add(pd.Timestamp(r.event_date).year)
 
-    def line(r) -> str:
-        major = " · **Major**" if r.title_group == "Major" else f" · {r.title_group}"
-        return f"- {pd.Timestamp(r.event_date):%b %Y} · {r.tournament_name}{major}"
+    if wins:
+        order = list(MAJOR_STYLE) + sorted((m for m in wins if m not in MAJOR_STYLE), key=lambda m: (-len(wins[m]), m))
+        rows = ""
+        for major in [m for m in order if m in wins]:
+            years = sorted(wins[major])
+            icon, accent = MAJOR_STYLE.get(major, (OTHER_MAJOR_ICON, ui.GRID))
+            top = major in MAJOR_STYLE
+            rows += (f"<div style='display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px solid "
+                     f"{accent if top else ui.GRID};border-radius:10px;background:{'#262624' if top else 'transparent'}'>"
+                     f"<span style='font-size:{1.4 if top else 1.1}em'>{icon}</span>"
+                     f"<span style='flex:1;min-width:0'><b style='color:{ui.TEXT}'>{escape(major)}</b>"
+                     f"<span style='color:{ui.TEXT_2};font-size:0.85em'> · {', '.join(map(str, years))}</span></span>"
+                     f"<b style='color:{accent if top else ui.TEXT};font-size:{1.3 if top else 1.05}em'>"
+                     f"{len(years)}×</b></div>")
+        total = sum(len(y) for y in wins.values())
+        st.markdown(f"<div style='display:flex;flex-direction:column;gap:6px;max-width:640px'>{rows}</div>",
+                    unsafe_allow_html=True)
+        st.caption(f"{total} major title{'s' if total != 1 else ''} in the career. Source: Wikipedia and our results "
+                   "data.")
+    else:
+        st.caption("No major title yet.")
 
-    majors = int((t["title_group"] == "Major").sum())
-    st.caption(f"{len(t)} titles since 2021, {majors} of them majors.")
-    st.markdown("\n".join(line(r) for r in t.head(5).itertuples()))
-    if len(t) > 5:
-        with st.expander(f"All {len(t)} titles"):
-            st.markdown("\n".join(line(r) for r in t.itertuples()))
+    others = t[~t["is_major"]].sort_values("event_date", ascending=False) if len(t) else t
+    if len(others):
+        with st.expander(f"Other titles since 2021 ({len(others)})"):
+            st.markdown("\n".join(f"- {pd.Timestamp(r.event_date):%b %Y} · {r.tournament_name}"
+                                   for r in others.itertuples()))
 
 
 def render() -> None:
@@ -324,4 +353,4 @@ def render() -> None:
     _recent_form(row, info_all)
     _form_and_news(int(row["player_key"]))
     _profile(info)
-    _titles(int(row["player_key"]))
+    _titles(int(row["player_key"]), info)
