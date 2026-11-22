@@ -41,8 +41,10 @@ Workspace: [dbc-2318ef7e-ac1e.cloud.databricks.com](https://dbc-2318ef7e-ac1e.cl
 
 ## How the daily refresh works
 
-1. Every day GitHub checks the majors' Wikipedia pages. No major on: it stops within a minute, no Databricks cost.
-2. During a major it downloads the new data (Wikipedia, PDC news) and uploads it to Databricks.
+1. Every night at 01:17 Prague time GitHub checks the majors' Wikipedia pages (GitHub often starts it a few hours
+   late). It works during a major, the day before it and the day after it (for the final's result); otherwise it
+   stops within a minute, with no Databricks cost.
+2. Then it downloads the new data (Wikipedia, PDC news) and uploads it to Databricks.
 3. The Databricks job (~6 min) processes it: bronze → silver → quality check → model → index → tournaments and AI
    summaries → health report. The model is refitted only every 28 days, to save quota.
 4. GitHub then publishes the new data to the public app.

@@ -71,15 +71,15 @@ def _refreshes() -> None:
     if data.MODE == "local":
         st.caption("Local mode (snapshot). Refresh with `make ingest` and `python scripts/build_local_snapshot.py`.")
     elif data.MODE == "public":
-        st.caption("This public copy is updated after every refresh: daily while a major is running.")
+        st.caption("This public copy is updated after every refresh: every night during majors.")
         return
     elif refresh.can_trigger():
         if st.button("🔄 Refresh data now", type="primary"):
             ok, msg = refresh.trigger()
             (st.success if ok else st.error)(msg)
-        st.caption("Runs automatically every day during majors.")
+        st.caption("Runs automatically every night during majors.")
     else:
-        st.caption(f"Automatic refresh runs daily during majors. To refresh now, start the "
+        st.caption(f"Automatic refresh runs every night during majors. To refresh now, start the "
                    f"[refresh workflow on GitHub]({refresh.ACTIONS_URL}) (\"Run workflow\").")
     runs = refresh.recent_runs()
     if runs:

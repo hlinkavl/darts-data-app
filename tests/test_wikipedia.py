@@ -58,11 +58,12 @@ def test_draw_players_and_bracket_names():
     assert ui.initials("Michael van Gerwen") == "MG" and ui.initials("Rowby-John Rodriguez") == "RR"
 
 
-def test_scheduled_refresh_runs_during_a_major_and_the_day_before():
+def test_scheduled_refresh_runs_during_a_major_the_day_before_and_the_day_after():
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
     from should_refresh import refresh_today
 
     gs = [(date(2026, 11, 14), date(2026, 11, 22)), (None, None)]
     assert not refresh_today(date(2026, 11, 12), gs)
     assert refresh_today(date(2026, 11, 13), gs) and refresh_today(date(2026, 11, 22), gs)
-    assert not refresh_today(date(2026, 11, 23), gs)
+    assert refresh_today(date(2026, 11, 23), gs)  # the night after the final brings its result
+    assert not refresh_today(date(2026, 11, 24), gs)

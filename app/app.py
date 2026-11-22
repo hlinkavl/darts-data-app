@@ -42,8 +42,8 @@ st.session_state["pages"] = PAGES  # lets a page switch to another one (st.switc
 pages = st.navigation(list(PAGES.values()), position="top")
 
 st.markdown(ui.CSS, unsafe_allow_html=True)
-# On a phone Streamlit folds the top menu into the sidebar, so a row of pills (shown on phones only, ui.CSS) keeps
-# the pages one tap away.
+# On a phone Streamlit folds the top menu into the sidebar, which is hidden there; a row of pills (phones only,
+# ui.CSS) keeps the pages one tap away.
 SHORT = {"tournaments": "🏆 Tournaments", "player": "👤 Player", "leaderboard": "📊 Leaderboard", "ask": "🔎 Ask",
          "methodology": "📖 Methodology", "health": "⚙️ Health"}
 current = next(k for k, p in PAGES.items() if p.url_path == pages.url_path)
@@ -54,7 +54,13 @@ st.session_state["mobile_nav"] = SHORT[current]
 with st.container(key="mobile_nav_row"):
     st.pills("Pages", [SHORT[k] for k in PAGES], key="mobile_nav", label_visibility="collapsed",
              on_change=lambda: st.session_state.update(nav_target=st.session_state["mobile_nav"]))
+# Data status: in the sidebar on a wide screen; on a phone (no sidebar there, ui.CSS) a line under the page pills
+# that shows when the data was refreshed and opens to the full card.
+status = data.data_status()
+with st.container(key="mobile_status"):
+    with st.expander(ui.status_line(status)):
+        st.markdown(ui.sidebar_status(status), unsafe_allow_html=True)
 with st.sidebar:
-    st.markdown(ui.sidebar_status(data.data_status()), unsafe_allow_html=True)
+    st.markdown(ui.sidebar_status(status), unsafe_allow_html=True)
 
 pages.run()

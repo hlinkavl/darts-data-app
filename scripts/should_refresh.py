@@ -1,4 +1,5 @@
-"""Decide whether the scheduled refresh should run today: only while a major is running or starts tomorrow.
+"""Decide whether the scheduled refresh should run today: while a major is running, the day before it starts and
+the day after it ends (the refresh runs at night, so the last day's results, the final included, arrive then).
 Prints run=true|false to $GITHUB_OUTPUT (or stdout). Manual runs (workflow_dispatch) skip this check.
 
 The dates come straight from the majors' Wikipedia pages (infobox), the same source as gold.majors_calendar,
@@ -21,8 +22,9 @@ from ingestion.run import major_pages  # noqa: E402
 
 
 def refresh_today(today: date, date_ranges: list[tuple[date | None, date | None]]) -> bool:
-    """True if a major runs today or starts tomorrow."""
-    return any(start and end and start <= today + timedelta(days=1) and end >= today for start, end in date_ranges)
+    """True if a major runs today, starts tomorrow or ended yesterday."""
+    return any(start and end and start <= today + timedelta(days=1) and end + timedelta(days=1) >= today
+               for start, end in date_ranges)
 
 
 def main() -> None:

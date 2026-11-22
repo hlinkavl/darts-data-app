@@ -194,7 +194,7 @@ CSS = f"""
 .side-card .kv b {{color:{TEXT};font-weight:600;text-align:right}}
 .side-card .note {{color:{TEXT_2};font-size:0.78em;margin-top:8px;line-height:1.45}}
 .side-credits {{color:{TEXT_2};font-size:0.72em;line-height:1.5;margin-top:14px;opacity:0.85}}
-.st-key-mobile_nav_row {{display:none}}
+.st-key-mobile_nav_row, .st-key-mobile_status {{display:none}}
 .mc-grid {{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin-bottom:8px}}
 .mc-grid-2 {{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:8px}}
 .mc-row {{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:0.92em}}
@@ -205,6 +205,8 @@ CSS = f"""
 .vs-centre {{min-width:84px;text-align:center}}
 @media (max-width: 640px) {{
   .st-key-mobile_nav_row {{display:block;margin-bottom:-0.4rem}}
+  .st-key-mobile_status {{display:block}}
+  [data-testid="stSidebar"], [data-testid="stExpandSidebarButton"] {{display:none !important}}
   .st-key-mobile_nav_row [data-testid="stButtonGroup"] > div {{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
                                                               padding-bottom:2px}}
   .st-key-mobile_nav_row [data-testid="stButtonGroup"] button {{flex:0 0 auto;max-width:none}}
@@ -233,6 +235,14 @@ CSS = f"""
 """
 
 
+def status_line(status: dict) -> str:
+    """One line for the phone: health and when the data was refreshed (the details open below it)."""
+    icon, _, _ = STATUS.get(status["status"], ("⚪", "", ""))
+    label = HEADLINE.get(status["status"], HEADLINE["green"])[0]
+    when = status["checked_at"]
+    return f"{icon} {label}" + (f" · updated {pd.Timestamp(when):%d %b, %H:%M} UTC" if when is not None and pd.notna(when) else "")
+
+
 def sidebar_status(status: dict) -> str:
     """The sidebar card: health as a pill, then when the data ends and when it was refreshed."""
     label, bg, fg = HEADLINE.get(status["status"], HEADLINE["green"])
@@ -243,7 +253,7 @@ def sidebar_status(status: dict) -> str:
     rows = [("Results until", when(status["data_until"], "%d %b %Y")),
             ("Updated", when(status["checked_at"], "%d %b, %H:%M") + (" UTC" if status["checked_at"] is not None else "")),
             ("Model", status["model_version"] or "–")]
-    note = {"public": "Public copy, refreshed daily while a major is running.",
+    note = {"public": "Public copy, refreshed every night during majors.",
             "local": "🧪 Local snapshot (development)."}.get(status["mode"], "")
     return (f"<div class='side-card'><div class='brand'>🎯 Darts Performance Analyzer</div>"
             + "".join(f"<div class='kv'><span>{k}</span><b>{v}</b></div>" for k, v in rows)

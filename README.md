@@ -4,7 +4,7 @@ A data app that rates every top PDC darts player and predicts their matches and 
 
 ### **▶ [Open the app](https://darts-performance-analyzer.streamlit.app)**
 
-No sign-in needed, works on a phone. Updated every day while a major is being played.
+No sign-in needed, works on a phone. Updated every night while a major is being played.
 
 ## What it answers
 
@@ -23,7 +23,7 @@ favourite won 70 % of 451 matches.
 
 1. **Collect.** Results, rankings and news come from official sources (Wikipedia API, PDC news). Five years of
    history were loaded once at the start.
-2. **Schedule.** GitHub Actions checks every day whether a major is on, and only then fetches new data.
+2. **Schedule.** GitHub Actions checks every night whether a major is on, and only then fetches new data.
 3. **Process and model.** Databricks cleans the data in three layers (bronze, silver, gold), checks its quality,
    recalculates the index, simulates the tournaments and writes short AI summaries of each player's form.
 4. **Show.** A public Streamlit app for everyone, and a private Databricks app that can also answer questions in
