@@ -207,7 +207,7 @@ CSS = f"""
 @media (max-width: 640px) {{
   .st-key-mobile_nav_row {{display:block;margin-bottom:-0.4rem}}
   .st-key-mobile_status {{display:block}}
-  [data-testid="stSidebar"], [data-testid="stExpandSidebarButton"] {{display:none !important}}
+  [data-testid="stSidebarNav"] {{display:none !important}}
   .st-key-mobile_nav_row [data-testid="stButtonGroup"] > div {{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
                                                               padding-bottom:2px}}
   .st-key-mobile_nav_row [data-testid="stButtonGroup"] button {{flex:0 0 auto;max-width:none}}
@@ -237,11 +237,14 @@ CSS = f"""
 
 
 def status_line(status: dict) -> str:
-    """One line for the phone: health and when the data was refreshed (the details open below it)."""
-    icon, _, _ = STATUS.get(status["status"], ("⚪", "", ""))
-    label = HEADLINE.get(status["status"], HEADLINE["green"])[0]
+    """The phone's status line under the page pills: a health dot and when the data was refreshed."""
+    _, _, fg = HEADLINE.get(status["status"], HEADLINE["green"])
     when = status["checked_at"]
-    return f"{icon} {label}" + (f" · updated {pd.Timestamp(when):%d %b, %H:%M} UTC" if when is not None and pd.notna(when) else "")
+    text = f"Updated {pd.Timestamp(when):%d %b, %H:%M} UTC" if when is not None and pd.notna(when) else "Not refreshed yet"
+    return (f"<div style='display:inline-flex;align-items:center;gap:8px;border:1px solid {GRID};border-radius:999px;"
+            f"padding:4px 12px;background:#20201f;color:{TEXT};font-size:0.85em;font-weight:600'>"
+            f"<span style='width:9px;height:9px;border-radius:50%;background:{fg};display:inline-block'></span>"
+            f"{text}</div>")
 
 
 def sidebar_status(status: dict) -> str:
