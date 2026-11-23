@@ -11,7 +11,7 @@ from databricks.sdk import WorkspaceClient
 from start_app import start_app
 
 JOB_SUFFIX = "darts_refresh"
-WAIT_MINUTES = 45  # a run takes ~6 min (~25 min with a monthly refit); measured 2026-11-09
+WAIT_MINUTES = 100  # usually ~6 min; after a major ~45 min (new top 150 rescores the PI history + backtest), ~70 with a refit too (measured 2026-11-23)
 
 
 def main() -> None:
