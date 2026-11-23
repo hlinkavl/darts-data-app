@@ -45,7 +45,7 @@ Workspace: [dbc-2318ef7e-ac1e.cloud.databricks.com](https://dbc-2318ef7e-ac1e.cl
    late). It works during a major, the day before it and the day after it (for the final's result); otherwise it
    stops within a minute, with no Databricks cost.
 2. Then it downloads the new data (Wikipedia, PDC news) and uploads it to Databricks.
-3. The Databricks job (~6 min) processes it: bronze → silver → quality check → model → index → tournaments and AI
+3. The Databricks job (~6 min; up to ~45 min the day after a major) processes it: bronze → silver → quality check → model → index → tournaments and AI
    summaries → health report. The model is refitted only every 28 days, to save quota.
 4. GitHub then publishes the new data to the public app.
 
@@ -67,6 +67,7 @@ nothing wrong is ever shown.
 | Tracked players without results | A name is spelled differently between sources; an alias fixes it |
 | A new major in the calendar | It needs to be added to the list of majors |
 | Refit not activated | The new model did not pass the test; the previous one stays, nothing to do unless it repeats |
+| "timed out" in the GitHub e-mail | GitHub stopped waiting, but the job may still have finished: check the run in Databricks (darts_refresh); if it succeeded, nothing to do |
 | Public app out of date | Run publish-app; if the app itself is down: share.streamlit.io → the app → Reboot |
 
 ## Tokens
