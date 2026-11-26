@@ -69,6 +69,19 @@ def test_scheduled_refresh_runs_during_a_major_the_day_before_and_the_day_after(
     assert not refresh_today(date(2026, 11, 24), gs)
 
 
+def test_refresh_catches_up_a_missed_end_and_wakes_before_a_major():
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from should_refresh import refresh_today, wake_check_today
+    gs = [(date(2026, 11, 14), date(2026, 11, 22))]
+    # the night after the final was refused (workspace asleep): the next nights catch up until a run succeeds
+    assert refresh_today(date(2026, 11, 25), gs, last_success=date(2026, 11, 21))
+    assert not refresh_today(date(2026, 11, 25), gs, last_success=date(2026, 11, 23))
+    assert not refresh_today(date(2026, 11, 25), gs)  # unknown last run: no catch-up
+    assert not refresh_today(date(2027, 1, 30), gs, last_success=date(2026, 11, 21))  # too old
+    pcf = [(date(2026, 11, 27), date(2026, 11, 29))]
+    assert [wake_check_today(date(2026, 11, d), pcf) for d in (23, 24, 25, 26)] == [False, True, True, False]
+
+
 def test_major_wins_from_the_player_infobox():
     from ingestion.wikipedia import parse_major_wins
     infobox = """{{Infobox darts player

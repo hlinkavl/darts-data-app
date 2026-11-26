@@ -9,16 +9,16 @@ from datetime import timedelta
 from databricks.sdk import WorkspaceClient
 
 from start_app import start_app
+from workspace import asleep_message, is_asleep, refresh_job
 
-JOB_SUFFIX = "darts_refresh"
 WAIT_MINUTES = 100  # usually ~6 min; after a major ~45 min (new top 150 rescores the PI history + backtest), ~70 with a refit too (measured 2026-11-23)
 
 
 def main() -> None:
     w = WorkspaceClient()
-    job = next((j for j in w.jobs.list() if j.settings.name.endswith(JOB_SUFFIX)), None)
+    job = refresh_job(w)
     if job is None:
-        sys.exit(f"no job named *{JOB_SUFFIX} found: deploy the bundle first")
+        sys.exit("no darts_refresh job found: deploy the bundle first")
     print(f"starting {job.settings.name} ({job.job_id})")
     state = "NOT STARTED"
     try:
@@ -34,6 +34,8 @@ def main() -> None:
         print("result:", state, run.run_page_url)
     except Exception as exc:  # e.g. the Free Edition quota: "Triggering new runs ... is currently disabled temporarily"
         print("could not run the job:", str(exc).splitlines()[0][:300])
+        if is_asleep(str(exc)):
+            print("::error::" + asleep_message())
     if "--start-app" in sys.argv:
         # Also after a failure: the gold tables keep the last good data.
         try:

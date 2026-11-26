@@ -43,7 +43,7 @@ Workspace: [dbc-2318ef7e-ac1e.cloud.databricks.com](https://dbc-2318ef7e-ac1e.cl
 
 1. Every night at 01:17 Prague time GitHub checks the majors' Wikipedia pages (GitHub often starts it a few hours
    late). It works during a major, the day before it and the day after it (for the final's result); otherwise it
-   stops within a minute, with no Databricks cost.
+   stops within a minute, with no Databricks cost. If the end of a major was missed, it catches up the next night.
 2. Then it downloads the new data (Wikipedia, PDC news) and uploads it to Databricks.
 3. The Databricks job (~6 min; up to ~45 min the day after a major) processes it: bronze → silver → quality check → model → index → tournaments and AI
    summaries → health report. The model is refitted only every 28 days, to save quota.
@@ -55,10 +55,14 @@ A failed refresh sends an e-mail (from GitHub and from Databricks). The apps kee
 nothing wrong is ever shown.
 
 1. Open **Data & Health** in the app: the red check says what broke and what to do.
-2. A one-off problem (timeout, Databricks quota: "try again later", "Triggering new runs … disabled temporarily"):
-   wait and run the refresh again from GitHub.
-3. Anything else: open Claude Code in this repository, paste the e-mail or the health message and ask for a fix.
-4. A source blocks us (HTTP 401, 403, 418): don't work around it; look for another official source.
+2. **"The Databricks workspace is asleep"** (or "Triggering new runs … disabled temporarily"): the Free Edition
+   workspace sleeps after about 4–5 days without anyone signing in through the browser; the refresh itself does not
+   count. Sign in to Databricks (any page wakes it), then run the refresh again from GitHub. Two and three days before
+   every major the refresh checks this and e-mails you, so you can sign in in time. **During a long major (the World
+   Championship) sign in every few days.**
+3. A one-off problem (timeout, quota: "try again later"): wait and run the refresh again from GitHub.
+4. Anything else: open Claude Code in this repository, paste the e-mail or the health message and ask for a fix.
+5. A source blocks us (HTTP 401, 403, 418): don't work around it; look for another official source.
 
 | Typical problem | What it means |
 |---|---|
@@ -100,7 +104,8 @@ Catalog `workspace`, three schemas:
   Cloud from a daily snapshot. "Ask the data" stays in the private app only.
 - **Not covered:** group stages (Grand Slam: predictions start from the last 16), the Premier League (a league), the
   UK Open draw and the 96-player World Championships up to 2025.
-- **Free Edition limits:** one small SQL warehouse, apps stop after 24 h, a fair-use compute quota.
+- **Free Edition limits:** one small SQL warehouse, apps stop after 24 h, a fair-use compute quota, and the
+  workspace sleeps after ~4–5 days without a browser sign-in (seen 14 and 26 Nov 2026).
 - **AI summaries:** Qwen3 Next 80B, chosen on 11 Nov 2026 from three models.
 
 ## Setup from scratch
