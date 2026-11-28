@@ -1,0 +1,128 @@
+"""Data access: gold tables from the Databricks SQL warehouse, or a snapshot of them as parquet files.
+
+DARTS_DATA=databricks (default inside a Databricks App): SQL warehouse via the app's service principal
+(DATABRICKS_WAREHOUSE_ID from the app resource).
+DARTS_DATA=public (default when app/snapshot/ exists): the public copy on Streamlit Community Cloud, reading the
+snapshot the daily job exports (src/analytics/snapshot.py, published by the publish-app workflow).
+DARTS_DATA=local: data/app_snapshot/*.parquet built by scripts/build_local_snapshot.py, for development.
+"""
+
+import os
+from decimal import Decimal
+from pathlib import Path
+
+import pandas as pd
+import streamlit as st
+
+PUBLIC_SNAPSHOT = Path(__file__).resolve().parent / "snapshot"
+MODE = os.getenv("DARTS_DATA", "databricks" if os.getenv("DATABRICKS_APP_NAME") else
+                 "public" if PUBLIC_SNAPSHOT.is_dir() else "local")
+CATALOG = os.getenv("DARTS_CATALOG", "workspace")
+SNAPSHOT = Path(os.getenv("DARTS_SNAPSHOT", PUBLIC_SNAPSHOT if MODE == "public" else
+                          Path(__file__).resolve().parent.parent / "data" / "app_snapshot"))
+
+SCHEMA = {"players": "darts_silver"}  # everything else lives in darts_gold
+
+
+@st.cache_resource(ttl=300)
+def _connection():
+    from databricks import sql
+    from databricks.sdk.core import Config
+
+    cfg = Config()
+    return sql.connect(server_hostname=cfg.host,
+                       http_path=f"/sql/1.0/warehouses/{os.getenv('DATABRICKS_WAREHOUSE_ID')}",
+                       credentials_provider=lambda: cfg.authenticate)
+
+
+def table(name: str, where: str | None = None) -> pd.DataFrame:
+    """A whole gold table (or silver.players), optionally filtered with a SQL condition."""
+    if MODE != "databricks":
+        path = SNAPSHOT / f"{name}.parquet"
+        if not path.exists():
+            return pd.DataFrame()
+        return _snapshot_table(str(path), path.stat().st_mtime, where)
+    return _warehouse_table(name, where)
+
+
+# The file's modification time is part of the cache key: Streamlit Community Cloud swaps the snapshot files on a
+# redeploy without restarting the app, and a new file must not be served from the old cache.
+@st.cache_data(show_spinner=False, max_entries=200)
+def _snapshot_table(path: str, mtime: float, where: str | None) -> pd.DataFrame:
+    df = pd.read_parquet(path)
+    return df.query(_pandas_condition(where)) if where else df
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _warehouse_table(name: str, where: str | None) -> pd.DataFrame:
+    query = f"SELECT * FROM {CATALOG}.{SCHEMA.get(name, 'darts_gold')}.{name}" + (f" WHERE {where}" if where else "")
+    try:
+        with _connection().cursor() as cur:
+            cur.execute(query)
+            return _like_snapshot(cur.fetchall_arrow().to_pandas(date_as_object=False))
+    except Exception as exc:  # a table that doesn't exist yet (e.g. no draw parsed) must not break a page
+        st.session_state.setdefault("data_errors", {})[name] = str(exc)[:300]
+        return pd.DataFrame()
+
+
+def _like_snapshot(df: pd.DataFrame) -> pd.DataFrame:
+    """Warehouse types made to match the local snapshot, so pages behave the same in both modes: timestamps
+    without a time zone (UTC), decimals as floats."""
+    for col in df.columns:
+        if isinstance(df[col].dtype, pd.DatetimeTZDtype):
+            df[col] = df[col].dt.tz_convert("UTC").dt.tz_localize(None)
+        elif df[col].dtype == object:
+            sample = df[col].dropna()
+            if len(sample) and isinstance(sample.iloc[0], Decimal):
+                df[col] = df[col].astype(float)
+    return df
+
+
+def _pandas_condition(where: str) -> str:
+    """The few SQL conditions the app uses, translated for DataFrame.query."""
+    return where.replace(" = ", " == ").replace(" AND ", " and ").replace(" OR ", " or ")
+
+
+# ------------------------------------------------------------------------------------------------ helpers
+
+def active_version() -> str | None:
+    reg = table("pi_model_registry")
+    if reg.empty:
+        return None
+    active = reg[reg["status"] == "active"].sort_values("decided_at")
+    return active["version"].iloc[-1] if len(active) else None
+
+
+def versioned(name: str) -> pd.DataFrame:
+    """Rows of the active model version of a versioned table (pi_coefficients, pi_benchmark, ...)."""
+    df = table(name)
+    v = active_version()
+    return df[df["version"] == v] if v and "version" in df.columns else df
+
+
+def current_pi() -> pd.DataFrame:
+    df = table("performance_index")
+    return df[df["is_current"]].sort_values("rank") if len(df) else df
+
+
+def players() -> pd.DataFrame:
+    return table("players")
+
+
+def data_status() -> dict:
+    """When the data was last refreshed and how healthy it is (for the sidebar)."""
+    report = table("health_report")
+    status = "green"
+    if len(report):
+        order = {"green": 0, "yellow": 1, "red": 2}
+        status = max(report["status"], key=order.get)
+    info = table("snapshot_info") if MODE == "local" else pd.DataFrame()
+    pi = current_pi()
+    return {
+        "mode": MODE,
+        "status": status,
+        "checked_at": report["checked_at"].max() if len(report) else None,
+        "data_until": (info["data_until"].iloc[0] if len(info) else
+                       (pd.to_datetime(pi["as_of_date"]).max() - pd.Timedelta(days=1) if len(pi) else None)),
+        "model_version": active_version(),
+    }

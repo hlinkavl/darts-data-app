@@ -1,0 +1,15 @@
+command:
+  - streamlit
+  - run
+  - app.py
+env:
+  - name: DARTS_DATA
+    value: databricks
+  - name: DARTS_CATALOG
+    value: workspace
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: GITHUB_TOKEN
+    valueFrom: github-token
+  - name: GENIE_SPACE_ID
+    valueFrom: genie-space
